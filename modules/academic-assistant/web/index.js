@@ -5,12 +5,9 @@ const examples = ['核对本周未完成的作业，结合截止时间和课表�
 
 export async function mount(container, context) {
   const e = context.ui.escape;
-  const stylesheet = document.createElement('link');
-  stylesheet.rel = 'stylesheet';
-  stylesheet.href = new URL('./styles.css',import.meta.url);
-  document.head.append(stylesheet);
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   let timer, busy = false, profileDirty = false;
-  const cleanup = () => {clearTimeout(timer);stylesheet.remove();};
+  const cleanup = () => {clearTimeout(timer);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai;
   try { [history,profile,ai] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings()]); }

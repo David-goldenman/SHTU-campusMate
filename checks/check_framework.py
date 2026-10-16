@@ -90,6 +90,10 @@ async def check(root):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:17666") as client:
             initial = (await client.get("/api/v1/bootstrap")).json()
             assert [item["id"] for item in initial["categories"]] == ["settings"]
+            health = (await client.get("/api/v1/health")).json()
+            assert health == {"application": "campus-framework", "version": initial["version"], "launch_id": app.state.launch_id}
+            assert "csrf_token" not in health and len(health["launch_id"]) == 32
+            assert (await client.get("/api/v1/health", headers={"Host": "other.example"})).status_code == 403
             assert initial["modules"] == []
             assert all(not item["has_password"] and not item["has_session"] for item in (await client.get("/api/v1/auth/providers")).json()["providers"])
             assert (await client.get("/api/v1/ai/settings")).json() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}

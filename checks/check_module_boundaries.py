@@ -82,7 +82,7 @@ async def check(root):
                 entry = manager.entries[module_id]
                 if entry.app:
                     assert (await manager.call_api(module_id, "/openapi.json")).status_code == 200
-                    route = "/context" if module_id == "assistant" else "/modes" if module_id == "education" else "/snapshot"
+                    route = "/profile" if module_id == "academic-assistant" else "/context" if module_id == "assistant" else "/modes" if module_id == "education" else "/snapshot"
                     response = await manager.call_api(module_id, route)
                     assert response.status_code in {200, 404, 409}, (module_id, response.status_code, response.text)
                 await toggle(module_id, False)
