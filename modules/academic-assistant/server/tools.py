@@ -29,6 +29,7 @@ class Task:
         self.owner, self.school_owner = account_revision(context), profile_owner(context)
         self.references, self.activity, self.navigation = {}, [], None
         self.answer = None
+        self.emit = lambda event: None
 
     def check(self):
         if account_revision(self.context) != self.owner:

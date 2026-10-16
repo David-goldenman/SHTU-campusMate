@@ -64,6 +64,7 @@ export async function mount(container, context) {
   }
   function selectTab(id) {
     selectedTab = id;
+    history.replaceState(null,'','#settings?tab=' + id);
     tabs.querySelectorAll('button').forEach(button => {const selected = button.dataset.settingsTab === id;button.setAttribute('aria-selected',String(selected));button.tabIndex = selected ? 0 : -1;});
     groups.forEach(([key]) => {container.querySelector('#settings-pane-' + key).hidden = key !== id;});
   }
@@ -74,7 +75,8 @@ export async function mount(container, context) {
       if (offset) {event.preventDefault();const target = tabs.children[(index + offset + groups.length) % groups.length];target.click();target.focus();}
     };
   });
-  selectTab(selectedTab);
+  const requestedTab = new URLSearchParams(location.hash.split('?')[1]).get('tab');
+  selectTab(groups.some(([id]) => id === requestedTab) ? requestedTab : selectedTab);
 
   container.querySelector('#settings-reload').onclick = safeAction(container.querySelector('#settings-reload'),context.reload);
   container.querySelectorAll('[data-module-toggle]').forEach(toggle => {

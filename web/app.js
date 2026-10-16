@@ -113,7 +113,7 @@ async function render() {
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
   const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
   const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
-  const requested = location.hash.slice(1);
+  const requested = location.hash.slice(1).split('?')[0];
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
   document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>').join('');

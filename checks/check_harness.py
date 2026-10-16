@@ -29,6 +29,8 @@ async def check(directory):
     shutil.copytree(PROJECT / "modules" / "academic-assistant" / "harness", study / "harness")
     (study / "module.json").write_text(json.dumps({**manifest, "id": "study", "name": "学习工具"}), encoding="utf-8")
     requests, workspaces, started, release = [], [], threading.Event(), threading.Event()
+    live, streamed, streaming = [], threading.Event(), False
+    cancelling, release_cancel = False, threading.Event()
     items = [{"id": "late", "title": "实验", "due_at": "2026-10-21T12:00:00+08:00"},
              {"id": "early", "title": "阅读", "due_at": "2026-10-20T12:00:00+08:00"}]
 
@@ -73,6 +75,13 @@ async def check(directory):
                 chunk = {"id": "synthetic", "object": "chat.completion.chunk", "model": body["model"],
                          "choices": [{"index": 0, "delta": change, "finish_reason": reason}]}
                 self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+                self.wfile.flush()
+                if streaming and study_task and not first and reason is None:
+                    if cancelling:
+                        release_cancel.wait(15)
+                        return
+                    else:
+                        assert streamed.wait(10), 'Live frame must arrive before the model response ends'
             self.wfile.write(b"data: [DONE]\n\n")
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Model)
@@ -138,14 +147,39 @@ async def check(directory):
                     (plugin.parent / "outside.js").write_text("export function apply() {}", encoding="utf-8")
                     refreshed = (await client.post("/api/v1/modules/reload")).json()["modules"]
                     assert refreshed[0]["status"] == "error" and "harness 目录" in refreshed[0]["error"]
-                    result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'],
+                    streaming = True
+
+                    def on_event(frame):
+                        live.append(frame)
+                        if frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta':
+                            streamed.set()
+
+                    result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'], on_event=on_event,
                                                     plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
                     assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
                     assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
                     assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_finish'}
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
+                    assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)
+                    cancelling, cancelled = True, threading.Event()
+
+                    def cancel_on_text(frame):
+                        if frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta':
+                            cancelled.set()
+
+                    try:
+                        await asyncio.wait_for(asyncio.to_thread(app.state.ai.run, prompt='停止合成流式任务', plugins=['study'],
+                            on_event=cancel_on_text, cancel_event=cancelled,
+                            plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'}), 12)
+                        raise AssertionError('Cancelled runtime must stop')
+                    except Exception as error:
+                        assert getattr(error, 'status_code', None) == 409, repr(error)
+                    finally:
+                        release_cancel.set()
+                    assert cancelled.is_set() and not any(path.exists() for path in workspaces)
     finally:
+        release_cancel.set()
         release.set()
         server.shutdown()
         server.server_close()
