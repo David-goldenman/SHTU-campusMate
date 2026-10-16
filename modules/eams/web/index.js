@@ -37,8 +37,8 @@ export async function mount(container, context) {
       ? '<div class="campus-list">' + state.exams.map(item => '<article class="campus-item"><h4>' + e(item.title) + '</h4><p>' + e([item.date, item.window, item.location].filter(Boolean).join(' · ')) + '</p><p class="field-hint">' + e([item.exam_kind, item.status, item.note].filter(Boolean).join(' · ')) + '</p></article>').join('') + '</div>'
       : '<p class="field-hint">' + BLANK + '</p>';
     return '<section class="panel eams-panel"><h3>考试安排</h3><div class="campus-toolbar"><label>学期<select data-semester>' + options(state.semesters, state.semester_id) + '</select></label>' +
-      (state.batches.length ? segments('exam-batch', '考试批次', batchOptions(), state.batch_id) : '') +
-      '<span class="field-hint">' + e([state.semester, state.batches.length ? '' : state.batch].filter(Boolean).join(' · ')) + '</span><span data-exam-status role="status"></span></div><div data-exams>' + list + '</div></section>';
+      (state.batches.length > 1 ? segments('exam-batch', '考试批次', batchOptions(), state.batch_id) : '') +
+      '<span class="field-hint">' + e([state.semester, state.batches.length > 1 ? '' : state.batch].filter(Boolean).join(' · ')) + '</span><span data-exam-status role="status"></span></div><div data-exams>' + list + '</div></section>';
   }
 
   function gradeRow(item) {
