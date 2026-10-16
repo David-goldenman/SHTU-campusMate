@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -24,6 +25,11 @@ class Generate(Selection):
 
 class Chat(Selection):
     message: str = Field(min_length=1, max_length=8000)
+
+
+class Run(Selection):
+    prompt: str = Field(min_length=1, max_length=8000)
+    plugins: list[str] = Field(min_length=1, max_length=16)
 
 
 class Label(BaseModel):
@@ -77,6 +83,21 @@ def create_router(context):
     def history(course_id):
         saved = context.store.read("chat", {}).get(course_id or "all", {})
         return saved.get("messages", []) if saved.get("owner") == account_revision(context) else []
+
+    @router.post("/run")
+    async def run(body: Run):
+        selected = await build_context(context, body.course_id, body.context_ids)
+        if not selected["items"]:
+            return empty_answer(selected)
+        result = await run_in_threadpool(context.ai.run, prompt=INSTRUCTION + "\n按需调用所选插件工具。用户请求：" + body.prompt,
+                                         context=selected["text"], plugins=body.plugins)
+        if account_revision(context) != selected["account_revision"]:
+            raise HTTPException(409, "账号已更新，请重新选择资料。")
+        try:
+            content = json.loads(result["content"])
+        except (TypeError, ValueError):
+            raise SourceError("AI 插件回答需要包含有效的 JSON 结果，请重试。") from None
+        return {**checked({**result, "content": content}, selected), "tools": result["tools"]}
 
     @router.get("/chat")
     def get_chat(course_id: str | None = None):

@@ -58,7 +58,11 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | PUT | `/ai/settings` | `{enabled, model, api_key?, delete_key?}` → 安全配置状态 |
 | POST | `/ai/generate` | `{prompt, context?:string, format?:"text"\|"json"}` |
 | POST | `/ai/chat` | `{messages:[{role,content}], format?:"text"\|"json"}` |
+| GET | `/ai/plugins` | `{plugins:[ModuleInfo]}`，提供原生插件的模块及状态 |
+| POST | `/ai/run` | `{prompt,context?:string,plugins:[模块ID]}` → `{content,model,session_id,tools:[{id,name,is_error}]}` |
 
 生成和对话返回 `{content, model, usage:{prompt_tokens,completion_tokens,total_tokens}}`，`content` 按格式为文本或 JSON 对象。模型为 `deepseek-flash` 或 `deepseek-v4-pro`。启用 AI 前保存 Key；不填 Key 表示保留，删除 Key 时单独设置 `delete_key:true` 并关闭 AI。`generate` 的 prompt 最长 16000 字符，context 最长 120000 字符；chat 最多 100 条消息，消息合计最长 120000 字符。
 
 AI 处理调用方明确提供的文本，不会自动读取模块缓存或登录资料。需要聊天历史、来源引用、分类规则或报告保存时，由对应业务模块管理并提供上下文。详见 [AI 文档](AI.md)。
+
+`run` 通过官方 Harness 的原生 Cordis 插件执行任务。prompt 最长 16000 字符，context 最长 120000 字符；显式选择 1–16 个唯一插件 ID，模块管理负责启停和刷新。执行中的插件模块保持活动请求，生命周期操作按现有约定返回 409。原生插件、依赖安装和临时会话的说明见 [AI 插件接口](AI.md#原生-harness-插件)。

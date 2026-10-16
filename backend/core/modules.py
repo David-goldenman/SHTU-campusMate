@@ -6,6 +6,7 @@ import sys
 import threading
 import types
 import uuid
+from contextlib import contextmanager
 from urllib.parse import unquote
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +39,7 @@ class Entry:
     package: types.ModuleType | None = None
     app: FastAPI | None = None
     requests: int = 0
+    harness: dict | None = None
 
 
 class ModuleManager:
@@ -87,11 +89,22 @@ class ModuleManager:
                 raise ValueError("reload 是框架保留的模块标识。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
-            for path in (frontend, backend):
+            plugin = folder / "harness" / "package.json"
+            for path in (frontend, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
                     raise ValueError("模块入口必须位于自己的目录内。")
-            if not frontend.is_file() and not backend.is_file():
-                raise ValueError("模块至少需要 web/index.js 或 server/__init__.py 入口。")
+            if plugin.is_file():
+                package = json.loads(plugin.read_text(encoding="utf-8"))
+                if not isinstance(package.get("name"), str) or not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", package["name"]):
+                    raise ValueError("Harness package.json 需要合法的 npm 包名。")
+                bundle = package.get("dsh", {}).get("bundle", {}).get("patch")
+                target = (plugin.parent / (bundle or package.get("main", "index.js"))).resolve()
+                if not target.is_relative_to(plugin.parent.resolve()) or not target.is_file():
+                    raise ValueError("Harness 插件入口必须位于自己的 harness 目录内。")
+                entry.harness = {"name": package["name"], "folder": plugin.parent.resolve(), "bundle": bool(bundle)}
+            info["harness"] = entry.harness is not None
+            if not frontend.is_file() and not backend.is_file() and not entry.harness:
+                raise ValueError("模块需要 web/index.js、server/__init__.py 或 harness/package.json 入口。")
             info["enabled"] = self.store.read("modules", {}).get(manifest.id, True)
             if not info["enabled"]:
                 info["status"] = "disabled"
@@ -210,6 +223,20 @@ class ModuleManager:
     def _end_request(self, entry):
         with self.lock:
             entry.requests -= 1
+
+    @contextmanager
+    def use_plugins(self, module_ids):
+        with self.lock:
+            entries = [self.entries.get(module_id) for module_id in module_ids]
+            if any(not entry or not entry.harness or entry.info["status"] != "ready" for entry in entries):
+                raise HTTPException(404, "所选 AI 插件未启用或尚未安装。")
+            for entry in entries:
+                entry.requests += 1
+        try:
+            yield entries
+        finally:
+            for entry in entries:
+                self._end_request(entry)
 
     async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None):
         """Call a module's public HTTP API with lifecycle tracking."""

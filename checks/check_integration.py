@@ -15,11 +15,13 @@ async def check(directory):
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://127.0.0.1:18666') as client:
             bootstrap = (await client.get('/api/v1/bootstrap')).json()
-            assert len(bootstrap['modules']) == 11 and all(item['status'] == 'ready' for item in bootstrap['modules'])
+            assert len(bootstrap['modules']) == 12 and all(item['status'] == 'ready' for item in bootstrap['modules'])
             client.headers['X-Framework-Token'] = bootstrap['csrf_token']
             for module in bootstrap['modules']:
-                assert (await client.get(module['frontend_url'])).status_code == 200
-                assert (await client.get('/api/v1/modules/' + module['id'] + '/openapi.json')).status_code == 200
+                if module['frontend_url']:
+                    assert (await client.get(module['frontend_url'])).status_code == 200
+                    assert (await client.get('/api/v1/modules/' + module['id'] + '/openapi.json')).status_code == 200
+            assert (await client.get('/api/v1/ai/plugins')).json()['plugins'][0]['id'] == 'deadlines'
             assert (await client.get('/api/v1/modules/notifications/snapshot')).json()['items'] == []
             courses = (await client.get('/api/v1/modules/courses/snapshot')).json()
             assert len(courses['data']['courses']) == 1 and len(courses['data']['courses'][0]['sources']) == 5
@@ -52,6 +54,10 @@ async def check(directory):
             assert file.status_code == 200 and file.content == PDF
             answer = await client.post('/api/v1/modules/assistant/chat',json={'message':'本周课程有哪些需要注意的事项？'})
             assert answer.status_code == 200 and answer.json()['citations']
+            assert (await client.put('/api/v1/modules/deadlines',json={'enabled':False})).status_code == 200
+            assert (await client.get('/api/v1/modules/assistant/chat')).status_code == 200
+            assert (await client.get('/api/v1/ai/plugins')).json()['plugins'][0]['status'] == 'disabled'
+            assert (await client.put('/api/v1/modules/deadlines',json={'enabled':True})).status_code == 200
             notices = await client.post('/api/v1/modules/notifications/generate')
             assert notices.status_code == 200 and len(notices.json()['items']) == 1
             notice_id = notices.json()['items'][0]['id']
@@ -70,7 +76,7 @@ async def check(directory):
             assert (await client.get('/api/v1/modules/mail/snapshot')).json()['data']['messages'] == []
             assert (await client.get('/api/v1/modules/mail/agent/pending',headers=bearer)).status_code == 401
             assert (await client.get('/api/v1/modules/assistant/chat')).json()['messages'] == []
-    print('integration: 11 modules, six synthetic source APIs, course joins, protected writes, details, downloads, AI, background toggling, reload and account isolation passed')
+    print('integration: 12 modules, six synthetic source APIs, course joins, protected writes, details, downloads, AI plugins, background toggling, reload and account isolation passed')
 
 
 if __name__ == '__main__':

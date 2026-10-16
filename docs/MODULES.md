@@ -23,7 +23,7 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
-`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js` 与 `server/__init__.py` 至少提供一个。模块可以只提供页面或后端服务；配置能力放在自己的页面或模块 API 内。
+`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
 
 ## 前端入口
 
@@ -50,6 +50,7 @@ export async function mount(container, context) {
 | `context.services.ai.settings()` | 读取共享 AI 启用状态 |
 | `context.services.ai.generate(body)` | 调用通用文本处理 |
 | `context.services.ai.chat(body)` | 调用通用对话 |
+| `context.services.ai.plugins()`、`.run(body)` | 列出原生插件，调用所选插件执行任务 |
 | `context.ui` | 公共 UI helper，组件约定见 [设计文档](DESIGN.md) |
 | `context.navigate(category)` | 切换框架分类 |
 | `context.signal` | 当前挂载的 AbortSignal，用于 fetch 与 DOM 监听器 |
@@ -85,7 +86,7 @@ def create_router(context):
 | `context.secrets.get(key)`、`.save(key, dict)`、`.delete(key)` | 管理本模块 DPAPI 加密秘密，缺失返回 `{}` |
 | `context.data_dir` | 本模块 `.private/modules/<id>/`，存放持久文件 |
 | `context.auth` | 共享认证服务，提供已登录 HTTP 客户端 |
-| `context.ai` | 共享 AI，提供 `generate`、`chat` 和安全配置状态 |
+| `context.ai` | 共享 AI，提供 `generate`、`chat`、`run` 和安全配置状态 |
 | `await context.api(module_id, path="/snapshot", method="GET", body=None)` | 调用其他模块公开 HTTP API，返回 `httpx.Response`；停用或未安装返回 404，跨模块写操作按公开接口协作 |
 
 每个模块的状态和秘密按模块 ID 分开。账号、密码、Cookie、Key、token 一律交给共享认证或 `context.secrets`，普通配置与缓存放在自己的 store，文件放在自己的 data_dir。模块通过公开 HTTP API 读取其他模块提供的数据；需要跨模块聚合时由集成人员确定公开请求/响应，调用方不得直接访问对方的数据库、文件或私有代码。
@@ -101,6 +102,8 @@ def create_router(context):
 5. 移除模块时先停用，再删除其代码目录并刷新。用户数据按模块 ID 保留；需要清除时在设置中选择模块数据清除，包含已移除模块留下的数据。
 
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
+
+原生 AI 插件位于 `harness/`，使用标准 npm package.json 与 Cordis 接口，也支持官方 `dsh.bundle.patch`。模块清单响应的 `harness: true` 表示该模块提供原生插件；它与模块共用启停和刷新。`context.ai.run(..., plugins=[模块ID])` 在独立官方运行时中加载所选插件，并在结束时释放。执行期间插件所属模块保持活动请求计数。详见 [AI 与插件文档](AI.md#原生-harness-插件)。
 
 模块属于受信任本地代码，运行权限与框架一致。目录分层和注入上下文用于团队分工与状态隔离；安装模块前审核其代码及外部访问行为。
 
