@@ -1,0 +1,3 @@
+[data-module-id="assistant"] .assistant-context { display:grid; gap:10px; max-height:280px; overflow:auto; margin:16px 0; }
+[data-module-id="assistant"] .assistant-messages { display:grid; gap:14px; margin:20px 0; }
+[data-module-id="assistant"] [data-result] { margin-top:24px; }
