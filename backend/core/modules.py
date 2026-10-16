@@ -77,7 +77,7 @@ class ModuleManager:
             entry.package = None
 
     def _load(self, folder):
-        info = {"id": folder.name, "name": folder.name, "version": "", "category": "dashboard", "enabled": False, "status": "error", "frontend_url": None}
+        info = {"id": folder.name, "name": folder.name, "version": "", "category": "dashboard", "enabled": False, "status": "error", "has_frontend": False, "frontend_url": None}
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
@@ -93,6 +93,7 @@ class ModuleManager:
             for path in (frontend, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
                     raise ValueError("模块入口必须位于自己的目录内。")
+            info["has_frontend"] = frontend.is_file()
             if plugin.is_file():
                 package = json.loads(plugin.read_text(encoding="utf-8"))
                 if not isinstance(package.get("name"), str) or not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", package["name"]):

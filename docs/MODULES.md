@@ -30,6 +30,8 @@ modules/notes/
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
 
+模块列表的 `has_frontend` 表示代码目录提供了页面入口，独立于启停和加载状态；侧栏据此保留已启用页面的加载错误入口。`frontend_url` 仅在页面就绪时提供可导入的地址。
+
 ## 前端入口
 
 ```javascript
@@ -101,7 +103,7 @@ def create_router(context):
 ## 热插拔流程
 
 1. 将完整模块目录放入 `modules/`，在设置中选择刷新模块。新发现模块默认启用，启停状态由框架保存。
-2. 分类页面挂载该分类中已启用且就绪的前端模块。一个分类可同时挂载多个模块，加载错误单独显示。
+2. 侧栏显示存在已启用界面模块的分类，启停后立即更新；同分类的最后一个页面停用时隐藏入口。一个分类可同时挂载多个模块，加载错误保留入口并单独显示；纯后台与 AI 插件在设置中管理。设置始终可访问。
 3. 更新模块代码后刷新模块。后端先停止并释放，再重新导入；前端获得新的版本地址重新挂载。刷新会释放全部模块，启停一个模块只切换该模块。
 4. 停用模块后其后端和静态资源停止服务。已有接口请求需先结束，执行中请求会让热切换返回 409；页面发出的请求用 `context.signal` 取消。
 5. 移除模块时先停用，再删除其代码目录并刷新。用户数据按模块 ID 保留；需要清除时在设置中选择模块数据清除，包含已移除模块留下的数据。
@@ -117,6 +119,8 @@ def create_router(context):
 ## 校园数据模块
 
 公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。日期带时区，页面以 Asia/Shanghai 展示。
+
+时间表分类保持 `timetable` ID 与 `#timetable` 路由。`timetable` 模块的 `/snapshot`、`/sync` 提供教务上课数据；页面使用 `/schedule`、`/schedule/sync` 汇总 Blackboard、Gradescope 和教务考试。聚合只调用各模块公开 API，停用的来源退出时间表，账号变化时丢弃在途结果。数据格式见 [时间表接口](../modules/timetable/README.md)。
 
 来源读取最多重试一次超时、网络中断、429 与 5xx；分页限制 100 页并检查重复链接和目标域名。共享认证的 `account_revision` 在更新账号、导入会话或忘记登录时变化；缓存按该版本隔离。模块停止时取消后续读取并等待当前工作线程结束，再由宿主关闭 Store。`check.sh` 自动运行每个模块 `checks/check_*.py`。
 

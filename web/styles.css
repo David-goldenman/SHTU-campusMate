@@ -118,11 +118,17 @@ main { width:100%; max-width:1540px; min-width:0; flex:1; margin:0 auto; padding
 .module-info h3 { font-size:17px; overflow-wrap:anywhere; }
 .module-info>p { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 18px; margin-top:9px; color:var(--muted); font-size:14px; }
 .module-toggle { display:flex; align-items:center; gap:9px; flex:none; font-size:14px; }
-.provider-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.provider-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
 .provider-card { min-width:0; padding:22px; border:1px solid var(--border); border-radius:6px; }
 .provider-card>header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .provider-card>header h3 { font-size:18px; }
 .provider-message { margin-bottom:18px; padding:12px 14px; border:1px solid var(--border); border-radius:4px; background:var(--surface); color:var(--muted); font-size:15px; }
+.provider-message:empty { display:none; }
+.provider-message.danger-text { color:#8b3d48; }
+.provider-controls { min-width:0; margin:0; padding:0; border:0; }
+.password-field { display:flex; align-items:center; gap:12px; }
+.password-field input { min-width:0; flex:1; }
+.password-field button { flex:none; }
 .credential-form { margin-bottom:22px; }
 .provider-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
 .provider-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--border); margin-top:22px; padding-top:16px; color:var(--muted); font-size:14px; }

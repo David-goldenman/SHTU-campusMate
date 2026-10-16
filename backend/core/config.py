@@ -4,7 +4,7 @@ VERSION = "0.1.0"
 CATEGORIES = [
     {"id": "dashboard", "label": "总览"},
     {"id": "mail", "label": "邮箱"},
-    {"id": "timetable", "label": "课程表"},
+    {"id": "timetable", "label": "时间表"},
     {"id": "courses", "label": "课程中心"},
     {"id": "assignments", "label": "作业管理"},
     {"id": "eams", "label": "教务系统"},
