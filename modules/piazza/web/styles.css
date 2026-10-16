@@ -1,0 +1,7 @@
+[data-module-id="piazza"] .piazza-workspace { display: grid; gap: 18px; }
+[data-module-id="piazza"] .piazza-toolbar, [data-module-id="piazza"] .piazza-meta { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+[data-module-id="piazza"] .piazza-toolbar label { flex: 1; min-width: 180px; }
+[data-module-id="piazza"] .piazza-meta { justify-content: space-between; color: var(--muted); }
+[data-module-id="piazza"] .piazza-post { padding: 20px; margin-bottom: 16px; overflow-wrap: anywhere; }
+[data-module-id="piazza"] .piazza-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
+[data-module-id="piazza"] textarea { width: 100%; margin-bottom: 12px; }
