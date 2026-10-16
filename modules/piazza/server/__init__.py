@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.services.auth import LoginRequired
 
+from .courses import course_catalog, school_reference
 from .source import Piazza, identifier, parse_post
 
 
@@ -39,6 +40,17 @@ class ReadState(BaseModel):
     read: bool
 
 
+class Semester(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
+
+
+class Discover(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_semester: Semester | None = None
+
+
 def create_router(context):
     router = APIRouter()
     lock = threading.Lock()
@@ -51,6 +63,25 @@ def create_router(context):
     @router.get("/courses")
     def courses():
         return {"courses": context.store.read("courses", []), "status": context.store.read("status", {})}
+
+    @router.get("/catalog")
+    def catalog():
+        return context.store.read("catalog", {"courses": [], "reference_semester": None, "checked_at": None})
+
+    @router.post("/discover")
+    def discover(body: Discover):
+        if not lock.acquire(blocking=False):
+            raise HTTPException(409, "Piazza 正在读取数据，请稍后再试。")
+        try:
+            reference = school_reference(body.current_semester.model_dump() if body.current_semester else None)
+            with context.auth.authenticated_client("piazza") as client:
+                available = course_catalog(Piazza(client).courses(), reference)
+            result = {"courses": available, "reference_semester": reference,
+                      "checked_at": datetime.now(UTC).isoformat()}
+            context.store.write("catalog", result)
+            return result
+        finally:
+            lock.release()
 
     @router.put("/courses")
     def save_courses(body: Courses):
