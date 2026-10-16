@@ -4,7 +4,7 @@ import * as settings from './settings.js';
 const navigation = [
   ['dashboard','◫','总览'], ['mail','✉','邮箱'], ['timetable','▦','课程表'],
   ['courses','▥','课程中心'], ['assignments','◷','作业管理'],
-  ['notifications','☷','通知'], ['assistant','✧','AI助手'], ['settings','⚙','设置'],
+  ['eams','✎','教务系统'], ['notifications','☷','通知'], ['assistant','✧','AI助手'], ['settings','⚙','设置'],
 ];
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
@@ -19,7 +19,7 @@ const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'
 const categoryDescriptions = {
   dashboard:'本学期课程、近期作业与重要通知。', mail:'阅读校园邮件，按规则、手动或 AI 整理分类。',
   timetable:'按教学周查看课程、节次与教室。', courses:'按课程与平台查看资料、讨论、成绩和录播。',
-  assignments:'查看明确开放的待办及各课程作业状态。', notifications:'提炼带来源的重要事项，跟踪已读状态。',
+  assignments:'查看明确开放的待办及各课程作业状态。', eams:'查看考试安排、学期成绩与培养方案。', notifications:'提炼带来源的重要事项，跟踪已读状态。',
   assistant:'选择缓存资料，进行课程问答、总结和报告。', settings:'管理模块、账号、AI服务和本地数据。',
 };
 
@@ -165,7 +165,7 @@ async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
   document.querySelector('#app-version').textContent = 'v' + state.version;
-  document.querySelector('#navigation').innerHTML = navigation.map(([id,icon,label],index) => (index === 7 ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon + '</span>' + label + '</a>').join('');
+  document.querySelector('#navigation').innerHTML = navigation.map(([id,icon,label],index) => (index === 8 ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon + '</span>' + label + '</a>').join('');
   await render();
   reloadButton.disabled = false;
 }

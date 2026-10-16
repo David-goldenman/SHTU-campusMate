@@ -89,7 +89,7 @@ async def check(root):
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:17666") as client:
             initial = (await client.get("/api/v1/bootstrap")).json()
-            assert [item["id"] for item in initial["categories"]] == ["dashboard", "mail", "timetable", "courses", "assignments", "notifications", "assistant", "settings"]
+            assert [item["id"] for item in initial["categories"]] == ["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant", "settings"]
             assert initial["modules"] == []
             assert all(not item["has_password"] and not item["has_session"] for item in (await client.get("/api/v1/auth/providers")).json()["providers"])
             assert (await client.get("/api/v1/ai/settings")).json() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}

@@ -1,0 +1,19 @@
+.eams-panels { display:grid; gap:20px; }
+.eams-panel { padding:18px 20px; }
+.eams-panel>h3 { margin:0 0 12px; font-size:17px; }
+.eams-panel .campus-toolbar { margin-bottom:14px; }
+.eams-panel .campus-toolbar .field-hint { margin:0; }
+.eams-summary { margin:0 0 12px; font-weight:700; font-size:15px; }
+.eams-table { width:100%; margin:0 0 12px; border-collapse:collapse; font-size:14px; }
+.eams-table th { padding:8px 10px; border-bottom:1px solid var(--border); color:var(--muted); font-weight:600; text-align:left; }
+.eams-table td { padding:8px 10px; border-bottom:1px solid var(--border); }
+.eams-panel details>summary { cursor:pointer; font-weight:700; }
+.eams-panel details[open]>summary { margin-bottom:12px; }
+.eams-plan .eams-group+.eams-group { margin-top:16px; }
+.eams-group>h4 { margin:0 0 6px; color:var(--link); font-size:14px; }
+.eams-group>ul { margin:0; padding-left:18px; }
+.eams-group>li { margin:0; }
+.eams-group li { margin:4px 0; font-size:14px; line-height:1.7; }
+.eams-group li .field-hint { margin:0 0 0 8px; font-size:13px; }
+.eams-panel .campus-form { display:grid; gap:12px; margin-top:12px; }
+.eams-panel [data-answer] { margin-top:14px; }
