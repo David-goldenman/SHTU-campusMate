@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 from copy import deepcopy
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from backend.main import create_app
 
 
 class MemoryVault:
+    transaction = staticmethod(nullcontext)
     def __init__(self):
         self.values = {}
 
@@ -88,6 +90,7 @@ async def check(root):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:17666") as client:
             initial = (await client.get("/api/v1/bootstrap")).json()
             assert [item["id"] for item in initial["categories"]] == ["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant", "settings"]
+            assert next(item["label"] for item in initial["categories"] if item["id"] == "timetable") == "时间表"
             assert initial["modules"] == []
             assert all(not item["has_password"] and not item["has_session"] for item in (await client.get("/api/v1/auth/providers")).json()["providers"])
             assert (await client.get("/api/v1/ai/settings")).json() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
@@ -105,6 +108,7 @@ async def check(root):
             discovered = (await client.post("/api/v1/modules/reload")).json()["modules"]
             assert len(discovered) == 2 and all(item["status"] == "ready" for item in discovered), discovered
             first = next(item for item in discovered if item["id"] == "alpha")
+            assert first["has_frontend"] is True
             assert (await client.get(first["frontend_url"])).status_code == 200
             traversal = first["frontend_url"].split("web/")[0] + "web/%2e%2e/server/__init__.py"
             assert (await client.get(traversal)).status_code == 404

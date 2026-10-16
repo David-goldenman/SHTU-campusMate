@@ -118,11 +118,17 @@ main { width:100%; max-width:1540px; min-width:0; flex:1; margin:0 auto; padding
 .module-info h3 { font-size:17px; overflow-wrap:anywhere; }
 .module-info>p { display:flex; flex-wrap:wrap; align-items:baseline; gap:10px 18px; margin-top:9px; color:var(--muted); font-size:14px; }
 .module-toggle { display:flex; align-items:center; gap:9px; flex:none; font-size:14px; }
-.provider-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.provider-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
 .provider-card { min-width:0; padding:22px; border:1px solid var(--border); border-radius:6px; }
 .provider-card>header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .provider-card>header h3 { font-size:18px; }
 .provider-message { margin-bottom:18px; padding:12px 14px; border:1px solid var(--border); border-radius:4px; background:var(--surface); color:var(--muted); font-size:15px; }
+.provider-message:empty { display:none; }
+.provider-message.danger-text { color:#8b3d48; }
+.provider-controls { min-width:0; margin:0; padding:0; border:0; }
+.password-field { display:flex; align-items:center; gap:12px; }
+.password-field input { min-width:0; flex:1; }
+.password-field button { flex:none; }
 .credential-form { margin-bottom:22px; }
 .provider-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
 .provider-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--border); margin-top:22px; padding-top:16px; color:var(--muted); font-size:14px; }
@@ -192,5 +198,10 @@ dialog::backdrop { background:#2e344099; }
 [data-module-id] .campus-form label { min-width:0; }
 [data-module-id] .campus-form select { max-width:100%; }
 [data-module-id] .campus-form textarea { min-height:120px; }
+.auth-device { border-top:1px solid var(--border); margin-top:20px; padding-top:16px; }
+.auth-device h4 { margin:0 0 8px; }
+.auth-alternative { margin:18px 0; }
+.auth-alternative summary { cursor:pointer; color:var(--muted); }
+.auth-alternative .credential-form { margin:14px 0; }
 [data-module-id] [data-issues]:not(:empty) { padding:14px; margin-bottom:18px; background:var(--surface); border-left:4px solid var(--nord12); overflow-wrap:anywhere; }
 

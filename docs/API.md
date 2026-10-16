@@ -30,7 +30,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo]}` |
 | 任意 | `/modules/<id>/<route>` | 模块自己的公开后端接口，由该模块文档说明 |
 
-`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`frontend_url`。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
+`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
@@ -46,9 +46,19 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | POST | `/auth/<provider>/login` | 可选 `{target}`，登录或验证会话，返回状态 |
 | POST | `/auth/<provider>/browser` | 可选 `{target}`，打开独立验证窗口 |
 | POST | `/auth/<provider>/import-session` | 可选 `{target}`，导入、探测、加密保存并关闭临时窗口 |
+| POST | `/auth/<provider>/refresh` | 可选 `{target}`，主动探测并恢复登录 |
+| POST | `/auth/ids/device/browser` | 打开学校账号安全页 |
+| POST | `/auth/ids/device/start` | `{confirmation:"REGISTER_THIS_DEVICE"}`，打开验证引导并在复核通过后自动绑定 |
+| POST | `/auth/ids/device/bind` | `{confirmation:"REGISTER_THIS_DEVICE"}`，确认后绑定本机免密码设备 |
+| POST | `/auth/ids/device/recover` | 验证待确认的设备绑定 |
+| DELETE | `/auth/ids/device` | 删除本机设备凭据，学校端登记需另行撤销 |
 | DELETE | `/auth/<provider>` | 清除此提供方的本地凭据、会话与临时验证资料 |
 
 `ProviderStatus` 含 `id`、`name`、`username`、`has_password`、`has_session`、`status` 以及可选的 `message`、`checked_at`、`targets`。Cookie、密码、登录票据和 Coremail sid 仅由服务端使用。二次验证在用户可见的登录窗口完成。Python 内部使用 `context.auth.authenticated_client(provider, target=None)`，完整例子与过期策略见 [认证文档](AUTH.md)。
+
+## 时间表
+
+`GET /modules/timetable/schedule` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试；`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。原始上课数据继续通过 `/modules/timetable/snapshot`、`/modules/timetable/sync` 提供；事件字段与时间含义见 [时间表接口](../modules/timetable/README.md)。
 
 ## 共享 AI
 

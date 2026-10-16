@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -94,7 +95,7 @@ items = reader["exams"](EXAMS, "2025-2026学年秋季", "https://eams.shanghaite
 assert len(items) == 2
 first = items[0]
 assert (first["title"], first["date"], first["window"], first["location"], first["due_at"], first["status"]) == ("大学化学", "2026-01-09", "10:30~12:30", "物质学院 1-505", "2026-01-09T10:30:00+08:00", "正常")
-assert first["course_id"] == "eams:grade:CHEM1120.03" and first["id"].startswith("eams:") and items[1]["note"] == "带计算器"
+assert first["course_id"] == "eams:grade:2025-fall:CHEM1120.03" and first["id"].startswith("eams:") and items[1]["note"] == "带计算器"
 assert reader["exams"](EMPTY_EXAMS, "2026-2027学年秋季", "x") == []
 try:
     reader["exams"]("<html><body>maintenance</body></html>", "2026-2027学年秋季", "x")
@@ -107,6 +108,18 @@ assert (gpa["overall"], gpa["weighted_credits"], gpa["earned_credits"]) == (4.0,
 assert [item["label"] for item in gpa["semesters"]] == ["2025-2026学年夏季", "2025-2026学年春季"]
 assert len(courses) == 2 and courses[0]["credits"] == 4.0 and courses[0]["term"] == "2024-2025-1" and courses[0]["semester"] == "2024-fall"
 assert courses[0]["published_at"].startswith("2025-01-24T15:03:27") and courses[1]["point"] is None
+
+# A repeated section in another year or season is a distinct grade record.
+retakes = """<tr><td>2025-2026</td><td>1</td><td>GEMA1001</td><td>GEMA1001.01</td><td>高等数学I</td><td>小组</td><td>4</td><td>D</td><td>1.0</td><td>2026-01-24 15:03:27</td></tr>
+<tr><td>2025-2026</td><td>2</td><td>GEMA1001</td><td>GEMA1001.01</td><td>高等数学I</td><td>小组</td><td>4</td><td>C</td><td>2.0</td><td>2026-06-24 15:03:27</td></tr>"""
+retake_gpa, retake_courses = reader["grades"](GRADES.rsplit("</table>", 1)[0] + retakes + "</table>")
+normalized = validate_bundle({"courses": retake_courses})["courses"]
+assert len(normalized) == 4 and len({course["id"] for course in normalized}) == 4
+assert retake_gpa["overall"] == round(sum(course["point"] * course["credits"] for course in normalized if course["point"] is not None) / 12, 3)
+assert retake_gpa["weighted_credits"] == 12
+for term, course in zip(("2024-2025学年秋季", "2025-2026学年秋季", "2025-2026学年春季"), (normalized[0], normalized[2], normalized[3])):
+    linked = reader["exams"](EXAMS.replace("CHEM1120.03", "GEMA1001.01"), term, "https://eams.shanghaitech.edu.cn/")
+    assert linked[0]["course_id"] == course["id"]
 
 document = reader["plan"](PLAN)
 assert document["title"] == "本科 普通本科生 信息科学与技术学院 电子信息工程 专业培养计划(2026)"
@@ -131,6 +144,34 @@ def broken(request):
 second = reader["fetch"](remote(httpx.MockTransport(broken)), result)
 assert second["issues"] == ["培养方案暂时无法读取，已保留上次数据。"] and second["metadata"]["study_plan"] == result["metadata"]["study_plan"] and len(second["courses"]) == 2
 
+# Permission/missing-page failures affect only the failed panel, not the full sync.
+previous = {"courses": [{"id": "eams:old-grade", "source": "eams"}], "assignments": [{"id": "eams:old-exam", "source": "eams"}],
+            "metadata": {"gpa": {"overall": 1.0}, "study_plan": {"title": "旧培养方案"}, "semesters": result["metadata"]["semesters"]}}
+for path, label, panel in [("/eams/myPlan.action", "培养方案", "plan"),
+                           ("/eams/teach/grade/course/person!historyCourseGrade.action", "学期成绩", "grades"),
+                           ("/eams/stdExamTable!examTable.action", "考试安排", "exams"),
+                           ("/eams/dataQuery.action", "学期目录", "catalogue")]:
+    for status in (403, 404):
+        def unavailable(request):
+            return httpx.Response(status) if request.url.path == path else handler(request)
+
+        partial = reader["fetch"](remote(httpx.MockTransport(unavailable)), previous)
+        assert partial["issues"] == [label + "暂时无法读取，已保留上次数据。"]
+        assert partial["courses"] == (previous if panel == "grades" else result)["courses"]
+        assert partial["assignments"] == (previous if panel == "exams" else result)["assignments"]
+        assert partial["metadata"]["gpa"] == (previous if panel == "grades" else result)["metadata"]["gpa"]
+        assert partial["metadata"]["study_plan"] == (previous if panel == "plan" else result)["metadata"]["study_plan"]
+        assert partial["metadata"]["semesters"] == result["metadata"]["semesters"]
+
+def expired(request):
+    return httpx.Response(401) if request.url.path == "/eams/myPlan.action" else handler(request)
+
+try:
+    reader["fetch"](remote(httpx.MockTransport(expired)), previous)
+    raise AssertionError("登录失效必须传播给共享登录恢复，不能当作板块降级")
+except LoginRequired:
+    pass
+
 
 async def check_api():
     with sandbox("eams", handler) as context:
@@ -151,5 +192,91 @@ async def check_api():
         package.stop(context)
 
 
+async def check_account_switch():
+    with sandbox("eams", handler) as context:
+        app = FastAPI()
+        app.include_router(package.create_router(context))
+        context.store.write("snapshot", {"owner": digest(context.auth.revision), "data": validate_bundle(result), "updated_at": None})
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            # A snapshot read must not become the next account's cached response.
+            snapshot = package._source.snapshot
+
+            def switched_snapshot():
+                value = snapshot()
+                context.auth.revision = "synthetic-account-two"
+                return value
+
+            package._source.snapshot = switched_snapshot
+            for method, url, kwargs in [("GET", "/exams?semester_id=282", {}), ("POST", "/ask", {"json": {"question": "绩点？"}})]:
+                context.auth.revision = "synthetic-account-one"
+                response = await client.request(method, url, **kwargs)
+                assert response.status_code == 409 and "15098" not in response.text
+            package._source.snapshot = snapshot
+
+            # Detect changes both while opening the authenticated client and after I/O.
+            authenticated_client = context.auth.authenticated_client
+            for stage in ("open", "close"):
+                context.auth.revision = "synthetic-account-one"
+                requests = []
+
+                def record(request):
+                    requests.append(request)
+                    return handler(request)
+
+                context.auth.transport = httpx.MockTransport(record)
+
+                @contextmanager
+                def switched_client(*args, **kwargs):
+                    with authenticated_client(*args, **kwargs) as connection:
+                        if stage == "open":
+                            context.auth.revision = "synthetic-account-two"
+                        yield connection
+                    if stage == "close":
+                        context.auth.revision = "synthetic-account-two"
+
+                context.auth.authenticated_client = switched_client
+                response = await client.get("/exams?semester_id=262&batch_id=8")
+                assert response.status_code == 409 and "大学化学" not in response.text
+                assert len(requests) == (0 if stage == "open" else 2)
+            context.auth.authenticated_client = authenticated_client
+
+            # Switching accounts while AI is running must discard the old answer.
+            context.auth.revision = "synthetic-account-one"
+            entered, release = threading.Event(), threading.Event()
+
+            def delayed_chat(**kwargs):
+                entered.set()
+                assert release.wait(5), "AI fixture was not released"
+                return {"content": "private-old-account-answer"}
+
+            context.ai.chat = delayed_chat
+            pending = asyncio.create_task(client.post("/ask", json={"question": "绩点？"}))
+            try:
+                assert await asyncio.to_thread(entered.wait, 5), "AI fixture did not start"
+                context.auth.revision = "synthetic-account-two"
+            finally:
+                release.set()
+            response = await pending
+            assert response.status_code == 409 and "private-old-account-answer" not in response.text
+
+            # A job queued before the switch must not send the stale data to AI.
+            context.auth.revision = "synthetic-account-one"
+            entered.clear()
+            run_in_threadpool = package.run_in_threadpool
+
+            async def switched_threadpool(function, *args, **kwargs):
+                context.auth.revision = "synthetic-account-two"
+                return await run_in_threadpool(function, *args, **kwargs)
+
+            package.run_in_threadpool = switched_threadpool
+            try:
+                assert (await client.post("/ask", json={"question": "绩点？"})).status_code == 409
+                assert not entered.is_set()
+            finally:
+                package.run_in_threadpool = run_in_threadpool
+        package.stop(context)
+
+
 asyncio.run(check_api())
-print("eams: throttling retry, exam/grade/plan parsing, per-panel fallback and public API passed")
+asyncio.run(check_account_switch())
+print("eams: parsing, semester grade identities, panel 403/404 fallback, login propagation and account-switch isolation passed")

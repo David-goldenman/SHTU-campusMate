@@ -1,4 +1,5 @@
 import base64
+import json
 import re
 import secrets
 from http.cookiejar import Cookie, CookieJar, DefaultCookiePolicy
@@ -122,6 +123,24 @@ def _piazza_profile(client: httpx.Client):
     data = response.json()
     if data.get("error") or data.get("result") is None:
         raise LoginRequired("Piazza 登录会话已到期。")
+    profile = data["result"]
+    if isinstance(profile, dict):
+        subject = profile.get("uid") or profile.get("id") or profile.get("email")
+        if subject:
+            return subject
+    raise LoginRequired("Piazza 未返回可验证的账号标识，请重新连接。")
+
+
+def _elrc_identity(client):
+    response = client.get("https://elrc.shanghaitech.edu.cn/unifiedplatform/v1/user/current", follow_redirects=False)
+    if response.status_code != 200:
+        raise LoginRequired("虚拟教学社区未确认当前账号。")
+    payload = response.json()
+    user = payload.get("extendMessage") if isinstance(payload, dict) else None
+    value = user.get("userCode") or user.get("user_code") if isinstance(user, dict) else None
+    if not isinstance(value, (str, int)) or not str(value).strip():
+        raise LoginRequired("虚拟教学社区未返回可验证的账号标识。")
+    return str(value).strip()
 
 
 def complete_blackboard_login(client: httpx.Client, response: httpx.Response):
@@ -141,24 +160,55 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
         _check_page(response, "www.gradescope.com")
         if not BeautifulSoup(response.text, "html.parser").select_one("#account-show"):
             raise LoginRequired("Gradescope 未确认登录，请连接账号或使用浏览器验证。")
+        # The account settings form is a read-only identity probe; do not infer
+        # ownership from the previously saved username or a session cookie.
+        settings = client.get("https://www.gradescope.com/account/edit")
+        _check_page(settings, "www.gradescope.com")
+        for script in BeautifulSoup(settings.text, "html.parser").select("script"):
+            text = script.get_text()
+            match = re.search(r"(?:^|;)\s*gon\.primary_email\s*=\s*", text)
+            if match:
+                try:
+                    profile = json.JSONDecoder().raw_decode(text[match.end():])[0]
+                    user_id = profile["user"]["id"]
+                    if isinstance(user_id, (str, int)) and str(user_id).strip():
+                        return "user:" + str(user_id)
+                except (ValueError, KeyError, TypeError):
+                    pass
+        raise LoginRequired("Gradescope 未返回可验证的账号标识，请重新连接。")
     elif provider == "piazza":
-        _piazza_profile(client)
+        return _piazza_profile(client)
     elif provider == "ids":
         response = client.get(SERVICES[target])
         _check_page(response, urlsplit(SERVICES[target]).hostname)
         if target == "blackboard":
             complete_blackboard_login(client, response)
+            profile = client.get("https://elearning.shanghaitech.edu.cn:8443/learn/api/public/v1/users/me")
+            _check_page(profile, "elearning.shanghaitech.edu.cn")
+            user = profile.json()
+            if isinstance(user, dict) and user.get("userName"):
+                return user["userName"]
+            raise LoginRequired("Blackboard 未返回可验证的账号标识，请重新连接。")
         elif target == "elrc":
             response = client.get("https://elrc.shanghaitech.edu.cn/learn/login/info")
             _check_page(response, "elrc.shanghaitech.edu.cn")
             result = response.json()
             if result.get("message") == "unLogin" or result.get("status") in (401, "401") or not result.get("data"):
                 raise LoginRequired("虚拟教学社区登录会话已到期。")
+            return _elrc_identity(client)
+        else:
+            home = client.get("https://eams.shanghaitech.edu.cn/eams/home.action")
+            _check_page(home, "eams.shanghaitech.edu.cn")
+            subjects = {match[1] for node in BeautifulSoup(home.text, "html.parser").select("font")
+                        if (match := re.fullmatch(r"[^()]+\(([A-Za-z0-9_-]{4,40})\)", node.get_text(strip=True)))}
+            if len(subjects) != 1:
+                raise LoginRequired("教务系统未返回可验证的账号标识，请重新连接。")
+            return subjects.pop()
     else:
         if not state.get("sid"):
             raise VerificationRequired("请在验证窗口完成学校邮箱登录并导入会话。")
         response = client.post("https://mail.shanghaitech.edu.cn/coremail/s/json",
-                               params={"sid": state["sid"], "func": "user:getAttrs"}, json={"optionalAttrIds": []})
+                               params={"sid": state["sid"], "func": "user:getAttrs"}, json={"attrIds": ["uid"]})
         if response.status_code in (401, 403):
             raise LoginRequired("学校邮箱会话已到期，请重新验证。")
         response.raise_for_status()
@@ -167,6 +217,12 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
             raise LoginRequired("学校邮箱会话已到期，请重新验证。")
         if result.get("code") != "S_OK":
             raise RuntimeError("学校邮箱未确认登录状态，请重新验证。")
+        profile = result.get("var") or {}
+        if isinstance(profile, dict):
+            subject = profile.get("uid") or profile.get("email") or profile.get("account")
+            if subject:
+                return subject
+        raise LoginRequired("邮箱未返回可验证的账号标识，请重新连接。")
 
 
 def encrypt_ids_password(password: str, salt: str) -> str:

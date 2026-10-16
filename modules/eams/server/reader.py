@@ -4,6 +4,7 @@ from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
+from fastapi import HTTPException
 
 from backend.services.auth import LoginRequired
 from backend.services.campus import KINDS, SourceError, identity
@@ -53,8 +54,12 @@ def attempt(issues, label, work):
     except LoginRequired:
         raise
     except (SourceError, ValueError):
-        issues.append(label + "暂时无法读取，已保留上次数据。")
-        return None
+        pass
+    except HTTPException as error:
+        if error.status_code not in {403, 404}:
+            raise
+    issues.append(label + "暂时无法读取，已保留上次数据。")
+    return None
 
 
 def semesters(calendar):
@@ -86,6 +91,10 @@ def moment(day, window):
     return value.replace(tzinfo=ZoneInfo("Asia/Shanghai")).isoformat(), start[0] if start else ""
 
 
+def grade_id(term, section):
+    return identity("eams", "grade:" + semester(term) + ":" + section)
+
+
 def exams(page, term, url):
     value = soup_of(page)
     table = value.select_one("table")
@@ -102,7 +111,7 @@ def exams(page, term, url):
         items.append({"id": identity("eams", digest(["exam", term, code, day, window])), "source": "eams", "source_id": code,
                       "kind": "exam", "title": plain(title), "exam_kind": kind, "date": day, "start_time": start, "window": window,
                       "location": location, "status": status, "note": note, "due_at": due, "term": term, "semester": semester(term),
-                      "course_id": identity("eams", "grade:" + code), "url": url})
+                      "course_id": grade_id(term, code), "url": url})
     return sorted(items, key=lambda item: (item["date"], item["start_time"], item["title"]))
 
 
@@ -138,8 +147,9 @@ def grades(page):
             continue
         year, season, code, section, title, category, credits, score, point, published = cells[:10]
         grade, size = number(point), number(credits)
-        courses.append({"id": identity("eams", "grade:" + section), "source": "eams", "source_id": section, "kind": "grade",
-                        "title": plain(title), "code": code, "term": year + "-" + season, "semester": semester(year + "-" + season),
+        term = year + "-" + season
+        courses.append({"id": grade_id(term, section), "source": "eams", "source_id": section, "kind": "grade",
+                        "title": plain(title), "code": code, "term": term, "semester": semester(term),
                         "url": GRADE_URL, "credits": size, "score": score, "point": grade, "category": category,
                         "published_at": timestamp(published)})
         if grade is not None and size:

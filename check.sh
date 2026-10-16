@@ -10,6 +10,8 @@ mkdir -p "$TMPDIR"
 uv sync --quiet
 uv run --no-sync python checks/check_framework.py
 uv run --no-sync python checks/check_auth.py
+uv run --no-sync python checks/check_auth_recovery.py
+node.exe checks/check_device_guide.mjs
 uv run --no-sync python checks/check_ai.py
 uv run --no-sync python checks/check_harness.py
 uv run --no-sync python checks/check_campus.py
