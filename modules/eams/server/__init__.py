@@ -40,15 +40,17 @@ def create_router(context):
 
     @router.get("/exams")
     def semester_exams(semester_id: str = Query(pattern=r"^\d{1,12}$"), batch_id: str = Query(default="", pattern=r"^\d{0,12}$")):
-        """按学期读取考试安排，供页面切换往年考试。"""
+        """按学期和考试批次读取考试安排，供页面切换期中、期末与往年考试。"""
         data = source.snapshot()["data"]
         metadata = data.get("metadata", {})
         student = metadata.get("student_id")
         if not student:
             raise HTTPException(409, "请先同步教务系统数据，再切换学期。")
         term = next((item["name"] for item in metadata.get("semesters", []) if item["id"] == semester_id), "")
-        if semester_id == metadata.get("semester_id") and not batch_id:
-            return {"semester_id": semester_id, "semester": term, "exams": data.get("assignments", []), **metadata.get("exams", {})}
+        exams_meta = metadata.get("exams", {})
+        if semester_id == metadata.get("semester_id") and batch_id in ("", exams_meta.get("batch_id")):
+            return {"semester_id": semester_id, "semester": term, "batches": exams_meta.get("batches", []),
+                    "batch_id": exams_meta.get("batch_id", ""), "batch": exams_meta.get("batch", ""), "exams": data.get("assignments", [])}
         cancelled = threading.Event()
         with context.auth.authenticated_client("ids", target="timetable", cancelled=cancelled) as client:
             remote = Remote(client, cancelled, HOSTS)

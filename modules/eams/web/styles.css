@@ -17,3 +17,6 @@
 .eams-group li .field-hint { margin:0 0 0 8px; font-size:13px; }
 .eams-panel .campus-form { display:grid; gap:12px; margin-top:12px; }
 .eams-panel [data-answer] { margin-top:14px; }
+.eams-segments { display:inline-flex; flex-wrap:wrap; gap:6px; }
+.eams-segments .button { min-height:34px; padding:4px 12px; font-size:14px; }
+.eams-filters { margin-bottom:14px; }

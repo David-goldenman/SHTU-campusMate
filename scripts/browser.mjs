@@ -1,4 +1,5 @@
 import { readFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -9,6 +10,25 @@ const input = JSON.parse(await new Promise(resolve => {
   process.stdin.on('end', () => resolve(value));
 }));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const BROWSERS = [
+  ['Microsoft', 'Edge', 'Application', 'msedge.exe'],
+  ['Microsoft', 'EdgeCore', 'msedge.exe'],
+  ['Google', 'Chrome', 'Application', 'chrome.exe'],
+];
+// The browser location is derived from the environment and local install roots, never from a fixed drive path.
+function browserExecutable(preferred) {
+  const roots = [process.env['ProgramFiles(x86)'], process.env['ProgramFiles'], process.env['LOCALAPPDATA']].filter(Boolean);
+  const candidates = [preferred, process.env.BROWSER_EXECUTABLE, ...roots.flatMap(root => BROWSERS.map(parts => join(root, ...parts)))];
+  const found = candidates.filter(Boolean).find(candidate => existsSync(candidate));
+  if (found) return found;
+  for (const directory of (process.env.PATH || '').split(';')) {
+    for (const name of ['msedge.exe', 'chrome.exe']) {
+      const candidate = join(directory, name);
+      if (directory && existsSync(candidate)) return candidate;
+    }
+  }
+  throw new Error('Browser executable not found');
+}
 let socket;
 let serial = 0;
 const pending = new Map();
@@ -50,7 +70,7 @@ try {
       const args = [`--user-data-dir=${input.profile}`, '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', `--disk-cache-dir=${join(input.profile, 'cache')}`, '--disable-background-mode', '--window-size=1300,900'];
       if (input.headless) args.push('--headless=new', '--disable-gpu');
       args.push('about:blank');
-      const child = spawn(input.edge || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', args, {
+      const child = spawn(browserExecutable(input.edge), args, {
         detached: true, windowsHide: Boolean(input.headless), stdio: 'ignore', env: { ...process.env, TEMP: temp, TMP: temp },
       });
       child.on('error', () => {});

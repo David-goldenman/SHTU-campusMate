@@ -59,7 +59,11 @@ class Blocked:
         return httpx.Response(200, text=self.pages[min(self.calls - 1, len(self.pages) - 1)])
 
 
+seen = []
+
+
 def handler(request):
+    seen.append((request.method, request.url.path))
     pages = {"/eams/stdExamTable!innerIndex.action": INDEX, "/eams/dataQuery.action": CALENDAR,
              "/eams/stdExamTable!examTable.action": EXAMS, "/eams/teach/grade/course/person!historyCourseGrade.action": GRADES,
              "/eams/myPlan.action": PLAN}
@@ -140,10 +144,20 @@ async def check_api():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
             snapshot = (await client.get("/snapshot")).json()
             assert snapshot["data"]["metadata"]["student_id"] == "15098" and len(snapshot["data"]["assignments"]) == 2
+            seen.clear()
             same = (await client.get("/exams?semester_id=282")).json()
-            assert same["batch"] == "期末考试（考试周）" and len(same["exams"]) == 2
+            assert same["batch"] == "期末考试（考试周）" and len(same["exams"]) == 2 and seen == []
+            assert same["batches"] == [{"id": "9", "name": "期末考试（考试周）"}, {"id": "8", "name": "期中考试"}]
+            held = (await client.get("/exams?semester_id=282&batch_id=9")).json()
+            assert held["batch"] == "期末考试（考试周）" and held["batch_id"] == "9" and seen == []
+            switched = (await client.get("/exams?semester_id=282&batch_id=8")).json()
+            assert switched["batch"] == "期中考试" and switched["batch_id"] == "8" and len(switched["exams"]) == 2
+            assert seen == [("POST", "/eams/stdExamTable!innerIndex.action"), ("GET", "/eams/stdExamTable!examTable.action")]
+            seen.clear()
             older = (await client.get("/exams?semester_id=262&batch_id=8")).json()
             assert older["semester"] == "2025-2026学年秋季" and older["batch"] == "期中考试" and older["batch_id"] == "8" and len(older["exams"]) == 2
+            assert [item["id"] for item in older["batches"]] == ["9", "8"]
+            assert seen == [("POST", "/eams/stdExamTable!innerIndex.action"), ("GET", "/eams/stdExamTable!examTable.action")]
             assert (await client.get("/exams?semester_id=abc")).status_code == 422
             answer = (await client.post("/ask", json={"question": "本学期有哪些考试？"})).json()
             assert answer["answer"] == "合成回答" and answer["model"] == "synthetic"
@@ -152,4 +166,4 @@ async def check_api():
 
 
 asyncio.run(check_api())
-print("eams: throttling retry, exam/grade/plan parsing, per-panel fallback and public API passed")
+print("eams: throttling retry, exam batch switch without extra reads, grade/plan parsing, per-panel fallback and public API passed")
