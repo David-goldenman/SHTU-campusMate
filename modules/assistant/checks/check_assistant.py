@@ -25,7 +25,11 @@ async def check():
             assert (await client.post('/chat',json={'message':'课程介绍'})).status_code == 200
             assert len((await client.get('/chat')).json()['messages']) == 2
             assert (await client.get('/chat?course_id=group:1')).json()['messages'] == []
+            task = await client.post('/run',json={'prompt':'整理截止时间','plugins':['deadlines']})
+            assert task.status_code == 200 and task.json()['citations'] and task.json()['tools'][0]['name'] == 'order_deadlines'
+            assert (await client.post('/run',json={'prompt':'整理截止时间','plugins':[]})).status_code == 422
             context.ai.result['content']['citation_ids'] = ['invented']
+            assert (await client.post('/run',json={'prompt':'检查引用','plugins':['deadlines']})).status_code == 502
             assert (await client.post('/chat',json={'message':'错误引用'})).status_code == 502
             assert len((await client.get('/chat')).json()['messages']) == 2
             empty = (await client.post('/generate',json={'prompt':'空范围','context_ids':[]})).json()

@@ -65,6 +65,8 @@ function services(signal) {
       settings:() => request('/ai/settings'),
       generate:body => request('/ai/generate',{method:'POST',body}),
       chat:body => request('/ai/chat',{method:'POST',body}),
+      plugins:() => request('/ai/plugins'),
+      run:body => request('/ai/run',{method:'POST',body}),
     }),
   });
 }
