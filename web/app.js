@@ -1,10 +1,11 @@
+import {icon} from './icons.js';
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
 import * as settings from './settings.js';
 
 const navigation = [
-  ['dashboard','◫','总览'], ['mail','✉','邮箱'], ['timetable','▦','时间表'],
-  ['courses','▥','课程中心'], ['assignments','◷','作业管理'],
-  ['eams','✎','教务系统'], ['notifications','☷','通知'], ['assistant','✧','AI助手'], ['settings','⚙','设置'],
+  ['dashboard','dashboard','总览'], ['mail','mail','邮箱'], ['timetable','calendar','时间表'],
+  ['courses','book','课程中心'], ['assignments','check','作业管理'],
+  ['eams','school','教务系统'], ['notifications','bell','通知'], ['assistant','sparkles','AI助手'], ['settings','settings','设置'],
 ];
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
@@ -77,6 +78,7 @@ async function mountModule(module, container, scope) {
   body.dataset.moduleId = module.id;
   const card = document.createElement('section');
   card.className = 'panel module-card';
+  if (container.dataset.single === 'true') card.classList.add('module-card-single');
   card.innerHTML = '<header class="module-card-heading"><div><h2>' + escape(module.name) + '</h2><span class="module-version">v' + escape(module.version) + '</span></div><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></header>';
   card.append(body);
   container.append(card);
@@ -103,6 +105,7 @@ async function mountModule(module, container, scope) {
   } catch (error) {
     if (scope.controller.signal.aborted) return;
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块暂时无法打开</h3><p>' + escape(error.message) + '</p></div>';
+    card.classList.add('has-error');
     card.querySelector('.module-status').textContent = '加载失败';
     card.querySelector('.module-status').className = 'module-status status-error';
   }
@@ -117,7 +120,7 @@ async function render() {
   const requested = location.hash.slice(1);
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
-  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon + '</span>' + label + '</a>').join('');
+  document.querySelector('#navigation').innerHTML = items.map(([id,iconName,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon(iconName) + '</span><span class="nav-label">' + label + '</span>' + '</a>').join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {
@@ -125,11 +128,13 @@ async function render() {
     link.classList.toggle('active',active);
     if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
   });
-  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">LOCAL WORKSPACE</p><h1>' + labels.get(page) + '</h1><p class="page-description">' + categoryDescriptions[page] + '</p></div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">' + (page === 'dashboard' ? 'YOUR CAMPUS, AT A GLANCE' : 'CAMPUS WORKSPACE') + '</p><h1 id="page-title">' + labels.get(page) + '</h1><p class="page-description">' + categoryDescriptions[page] + '</p></div><div class="page-heading-note">' + (page === 'dashboard' ? '今天，先看重要的事。' : '你的个人学习空间') + '</div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+  main.dataset.page = page;
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
+  zone.dataset.single = String(visible.length === 1 && visible[0].status === 'ready');
   const work = visible.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
@@ -141,6 +146,7 @@ async function render() {
     if (!visible.length) zone.innerHTML = empty('这个分类已准备好接入模块','在设置中启用此分类的模块后，内容会显示在这里。','<a class="button button-secondary" href="#settings">管理模块 →</a>');
   }
   await Promise.all(work);
+  if (current === revision && !scope.controller.signal.aborted) main.focus({preventScroll:true});
 }
 
 async function reloadModules() {
@@ -169,9 +175,14 @@ async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
   document.querySelector('#app-version').textContent = 'v' + state.version;
+  const today = new Date();
+  document.querySelector('#workspace-date').dateTime = today.toISOString();
+  document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'short'}).format(today);
   await render();
   reloadButton.disabled = false;
 }
+
+document.querySelector('.skip-link').onclick = event => { event.preventDefault(); main.focus(); };
 
 reloadButton.onclick = safeAction(reloadButton,reloadModules);
 window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
