@@ -3,19 +3,20 @@ import shutil
 import subprocess
 import time
 
-from ...core.paths import PROJECT
+from ...core.paths import PROJECT, RUNTIME
 from ...core.vault import windows_path, windows_tool
 from .protocols import PROVIDERS
 
 
 class VerificationBrowser:
-    def __init__(self):
+    def __init__(self, directory=RUNTIME / 'auth'):
         self.launchers = {}
+        self.directory = directory
 
     def _directory(self, provider):
         if provider not in PROVIDERS:
             raise ValueError("认证提供方不存在。")
-        return PROJECT / ".codex" / "auth" / provider
+        return self.directory / provider
 
     def _command(self):
         return [windows_tool("node"), windows_path(PROJECT / "scripts" / "browser.mjs")]

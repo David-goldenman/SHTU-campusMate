@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.campus import Remote, Source
 from .reader import BASE, INDEX_URL, exams, fetch, index, read
+from .catalogue import search, syllabus
 
 HOSTS = ["eams.shanghaitech.edu.cn"]
 INSTRUCTION = "你是教务信息助手。只根据给出的教务系统数据回答，并指出数据中没有出现的信息。考试时间、成绩与培养方案要求不得推测，用简洁中文回答，不输出其他来源的链接。"
@@ -41,6 +42,26 @@ def create_router(context):
     def check_owner(owner):
         if owner != source.owner():
             raise HTTPException(409, "账号已更新，请重新同步教务系统数据。")
+
+    @router.get('/course-search')
+    def course_search(q: str = Query(min_length=1, max_length=160), page: int = Query(default=1, ge=1, le=100)):
+        if not q.strip():
+            raise HTTPException(422, '请输入课程名称或代码。')
+        owner = source.owner()
+        def query(client):
+            return search(Remote(client, source.cancelled, HOSTS), q.strip(), page)
+        result = context.auth.read_with_recovery('ids', query, target='timetable', cancelled=source.cancelled)
+        check_owner(owner)
+        return result
+
+    @router.get('/course-info')
+    def course_info(syllabus_id: int = Query(gt=0)):
+        owner = source.owner()
+        def query(client):
+            return syllabus(Remote(client, source.cancelled, HOSTS), syllabus_id)
+        result = context.auth.read_with_recovery('ids', query, target='timetable', cancelled=source.cancelled)
+        check_owner(owner)
+        return result
 
     @router.get("/exams")
     def semester_exams(semester_id: str = Query(pattern=r"^\d{1,12}$"), batch_id: str = Query(default="", pattern=r"^\d{0,12}$")):

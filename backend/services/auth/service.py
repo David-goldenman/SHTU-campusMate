@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import httpx
 
+from ...core.paths import RUNTIME
 from . import protocols
 from .browser import VerificationBrowser
 from .protocols import LoginRequired, VerificationRequired
@@ -17,10 +18,10 @@ def now():
 
 
 class AuthService:
-    def __init__(self, vault, store):
+    def __init__(self, vault, store, runtime_dir=RUNTIME):
         self.vault = vault
         self.store = store
-        self.browser = VerificationBrowser()
+        self.browser = VerificationBrowser(runtime_dir / 'auth')
         self.locks = {provider: threading.RLock() for provider in protocols.PROVIDERS}
         self.device = DeviceCredential(vault)
         self.setup_cancelled = threading.Event()
