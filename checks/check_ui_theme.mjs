@@ -1,4 +1,4 @@
-// Local presentation regressions, separate from the team's functional UI checks.
+// Theme regressions; functional UI checks remain in check_web.mjs.
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
@@ -7,7 +7,7 @@ const base=process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap=await (await fetch(base+'/api/v1/bootstrap')).json();
 const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant'].includes(item.id));
 assert.equal(modules.length,2);
-const profile=resolve('.codex/tmp/local-ui-check-'+process.pid);
+const profile=resolve('.codex/tmp/theme-check-'+process.pid);
 await mkdir(profile,{recursive:true});
 function browser(action) {
   const result=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});
@@ -15,7 +15,7 @@ function browser(action) {
 }
 function fixture(modules,categories) {
   const original=window.fetch.bind(window);
-  const state=window.localUiCheck={modules,categories,empty:false,tabs:false,unexpected:[]};
+  const state=window.themeCheck={modules,categories,empty:false,tabs:false,unexpected:[]};
   const response=value=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
   window.fetch=async(url,options={})=>{
     const path=new URL(url,location.origin).pathname.replace('/api/v1','');
@@ -53,7 +53,7 @@ try {
   socket.addEventListener('message',({data})=>{const message=JSON.parse(data),task=pending.get(message.id);if(!task)return;clearTimeout(task.timer);pending.delete(message.id);message.error?task.reject(new Error(JSON.stringify(message.error))):task.resolve(message.result);});
   const command=(method,params={})=>new Promise((resolve,reject)=>{const id=++serial,timer=setTimeout(()=>{pending.delete(id);reject(new Error('Timed out: '+method));},20000);pending.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params}));});
   const evaluate=expression=>command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}).then(result=>{assert(!result.exceptionDetails,JSON.stringify(result.exceptionDetails));return result.result.value;});
-  const wait=condition=>evaluate(`(async()=>{for(let i=0;i<150;i++){if(${condition})return true;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out: '+${JSON.stringify(condition)}+' | '+JSON.stringify(window.localUiCheck?.unexpected));})()`);
+  const wait=condition=>evaluate(`(async()=>{for(let i=0;i<150;i++){if(${condition})return true;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out: '+${JSON.stringify(condition)}+' | '+JSON.stringify(window.themeCheck?.unexpected));})()`);
   const capture=async(name,width,height)=>{
     await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<850});
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
@@ -77,13 +77,13 @@ try {
   await capture('ui-local-populated',1440,1060);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['20px','20px','20px','20px'],'Theme wins against module first-child padding');
   await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
-  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without local theme');
-  await evaluate("document.documentElement.dataset.uiTheme='local-nord'");
+  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
+  await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
   await evaluate("document.querySelector('[data-module-section=dashboard]').click()");
   assert.equal(await evaluate("document.activeElement.closest('.module-card')?.querySelector('[data-module-id]')?.dataset.moduleId"),'dashboard');
-  await evaluate("localUiCheck.empty=true;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await evaluate("themeCheck.empty=true;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
   await wait("document.querySelector('.overview-stats strong')?.textContent==='—'");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats strong')].map(item=>item.textContent)"),['—','—','—','—']);
   const issues=await evaluate("document.querySelector('[data-module-id=dashboard] [data-issues]').textContent");
@@ -98,7 +98,7 @@ try {
   assert.equal(await evaluate("document.activeElement.dataset.settingsTab"),'ai');
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.sidebar')).transitionDuration"),'0s');
-  await evaluate("localUiCheck.tabs=true;document.querySelector('[data-settings-tab=modules]').click();document.querySelector('#settings-reload').click()");
+  await evaluate("themeCheck.tabs=true;document.querySelector('[data-settings-tab=modules]').click();document.querySelector('#settings-reload').click()");
   await wait("document.querySelector('#settings-reload') && !document.querySelector('#settings-reload').disabled");
   await evaluate("location.hash='dashboard'");await wait("document.querySelector('.module-tabs') && document.querySelector('.overview-stats')");
   assert.equal(await evaluate("document.querySelector('.module-shortcuts')===null"),true,'Tabbed categories use upstream tabs');
@@ -107,6 +107,6 @@ try {
   assert.equal(await evaluate("document.querySelector('link[href*=\"/dashboard/\"]')===null"),true);
   await evaluate("document.querySelector('[data-view=academic-assistant]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
   await wait("document.querySelector('.overview-stats')");
-  assert.deepEqual(await evaluate('localUiCheck.unexpected'),[]);
-  console.log('PASS: real and synthetic dashboards, agenda, empty/error feedback, 4 viewports, independent theme, skip/section links, settings drafts/tabs, generic module tabs and style cleanup');
+  assert.deepEqual(await evaluate('themeCheck.unexpected'),[]);
+  console.log('PASS: real and synthetic dashboards, agenda, empty/error feedback, 4 viewports, theme isolation, skip/section links, settings drafts/tabs, generic module tabs and style cleanup');
 } finally {socket?.close();browser('close');}

@@ -1,6 +1,6 @@
 # 本地 UI 与团队更新的维护说明
 
-本机在 `codex/local-ui-polish` 保留 UI 和启动器定制，持续整合团队 `origin/main`。这些提交仅保存在本地。定时任务每 15 分钟获取远端引用并报告变化，不自动合并、切换分支或推送。
+本机在 `codex/local-ui-polish` 保留 UI 和启动器定制，持续整合团队 `origin/main`。个人启动器及其配置只保存在本地。UI 主题、交互和检查已通过 `codex/share-nord-ui` 上传，并创建 [PR #11](https://github.com/David-goldenman/Shanghaitech-2026-Hackthon/pull/11) 供团队合入；本地已继承同一份共享 UI 提交。定时任务每 15 分钟获取远端引用并报告变化，不自动合并、切换分支或推送。
 
 ## 从哪里启动
 
@@ -15,7 +15,7 @@
 
 ## 外观改哪里
 
-纯视觉改动集中在 `web/local-ui/theme.css`：
+纯视觉改动集中在 `web/themes/nord-refined.css`：
 
 | 修改 | 位置 |
 | --- | --- |
@@ -24,7 +24,7 @@
 | 总览统计、连接引导、日程卡片 | `.campus-overview` 作用域 |
 | 手机和窄屏布局 | 文件末尾的媒体查询 |
 
-`web/index.html` 只保留本地主题的属性和样式链接、跳至主内容入口及菜单图标。所有主题覆写限定于 `data-ui-theme="local-nord"`。开发时移除这个 HTML 属性即可对照团队基础外观；样式链接中的跳转与快捷入口基础样式仍保留。不要把团队样式全文复制进本地主题；新增覆写只写有差异的属性。
+`web/index.html` 只保留本地主题的属性和样式链接、跳至主内容入口及菜单图标。所有主题覆写限定于 `data-ui-theme="nord-refined"`。开发时移除这个 HTML 属性即可对照团队基础外观；样式链接中的跳转与快捷入口基础样式仍保留。不要把团队样式全文复制进本地主题；新增覆写只写有差异的属性。
 
 团队 `web/styles.css`、`web/icons.js`、`web/settings.js`、`web/shared.js`、总览原始样式与 `checks/check_web.mjs` 已恢复为本次主线版本。以后这些文件可以直接接受团队更新，再检查本地覆写是否仍匹配。
 
@@ -36,7 +36,7 @@
 - `modules/dashboard/web/index.js`：保留新版近期作业和日程；全部来源尚未连接时显示 `—` 与连接引导，收起重复的未连接提示，保留独立错误。第四张统计使用已有 `ready_sources` 字段。
 - `scripts/launch.py`：本机已有环境启动、进程归属检查、停止与依赖校验。只支持项目实际使用的版本、固定 Git 地址以及当前 Windows 平台条件；未知依赖条件会明确报错。
 - `run.cmd`：本机双击入口对 `run-local.ps1` 的引用。这是仍需保留的公共启动入口差异。
-- `checks/check_local_ui.mjs`、`checks/check_launcher.py`、`checks/check_launcher_requirements.py`：本地主题与启动器回归检查，和团队检查分开维护。
+- `checks/check_ui_theme.mjs`、`checks/check_launcher.py`、`checks/check_launcher_requirements.py`：本地主题与启动器回归检查，和团队检查分开维护。
 
 Piazza 保持信息同步和新附件提醒，不自动下载附件。本轮没有新增 QQ 接入或改动来源抓取逻辑。
 
@@ -72,7 +72,7 @@ git merge --no-commit origin/main
 & .\.codex\venv\Scripts\python.exe -X utf8 -B checks/check_launcher_requirements.py
 & .\.codex\venv\Scripts\python.exe -X utf8 -B checks/check_launcher.py
 & D:\Hermes\node\node.exe checks/check_web.mjs http://127.0.0.1:16666
-& D:\Hermes\node\node.exe checks/check_local_ui.mjs http://127.0.0.1:16666
+& D:\Hermes\node\node.exe checks/check_ui_theme.mjs http://127.0.0.1:16666
 ```
 
 本地 UI 检查包含真实未连接页面、合成有数据/无数据快照、独立错误保留、分页切换、模块样式清理、主题开关对照以及 1440/768/375px 和横屏布局。团队检查继续覆盖登录草稿、重试、时间表和模块启停。测试窗口使用合成账号，不提交真实登录信息或调用付费 AI。
