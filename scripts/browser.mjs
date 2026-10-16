@@ -10,14 +10,15 @@ const input = JSON.parse(await new Promise(resolve => {
 }));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 let socket;
+let retainSocket = false;
 let serial = 0;
 const pending = new Map();
-function call(method, params = {}) {
+function call(method, params = {}, sessionId) {
   return new Promise((resolve, reject) => {
     const id = ++serial;
     const timer = setTimeout(() => { pending.delete(id); reject(new Error('Browser command timed out')); }, 15000);
     pending.set(id, { resolve, reject, timer });
-    socket.send(JSON.stringify({ id, method, params }));
+    socket.send(JSON.stringify({ id, method, params, ...(sessionId ? {sessionId} : {}) }));
   });
 }
 async function connect(url) {
@@ -62,13 +63,24 @@ try {
       if (!existing) throw new Error('Login browser did not start');
     }
     await connect(existing.webSocketDebuggerUrl);
-    await call('Target.createTarget', { url: input.url });
+    if (input.device_setup) {
+      if (input.url !== 'https://ids.shanghaitech.edu.cn/personalInfo/personCenter/index.html#/accountsecurity') throw new Error('Unexpected device setup destination');
+      const {targetId} = await call('Target.createTarget', {url:'about:blank'});
+      const {sessionId} = await call('Target.attachToTarget', {targetId,flatten:true});
+      const source = await readFile(new URL('./ids-device-guide.js', import.meta.url), 'utf8');
+      await call('Page.enable', {}, sessionId);
+      await call('Page.addScriptToEvaluateOnNewDocument', {source}, sessionId);
+      await call('Page.navigate', {url:input.url}, sessionId);
+      retainSocket = Boolean(input.keep_alive);
+    } else {
+      await call('Target.createTarget', { url: input.url });
+    }
     console.log(JSON.stringify({ opened: true }));
     // Windows browsers launched through WSL need their launcher to remain alive.
     if (input.keep_alive) {
       const watcher = setInterval(async () => {
         try { await endpoint(); }
-        catch { clearInterval(watcher); }
+        catch { clearInterval(watcher); if (retainSocket && socket) socket.close(); }
       }, 1000);
     }
   } else {
@@ -93,5 +105,5 @@ try {
   console.error(JSON.stringify({ error: 'Verification browser operation failed' }));
   process.exitCode = 1;
 } finally {
-  if (socket) socket.close();
+  if (socket && !retainSocket) socket.close();
 }

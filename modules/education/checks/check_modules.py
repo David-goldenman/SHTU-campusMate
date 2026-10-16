@@ -19,6 +19,9 @@ from backend.services.auth import LoginRequired  # noqa: E402
 
 
 class MemoryVault:
+    def transaction(self):
+        from contextlib import nullcontext
+        return nullcontext()
     def __init__(self):
         self.values = {}
 
@@ -179,6 +182,22 @@ async def check(data):
             assert blocked.status_code == 401
             assert (await client.get('/api/v1/modules/piazza/posts?course_id=demo-network')).json()['total'] == 2
             print('PASS Piazza: replies, safe links, rule triage, deduplication, read state, failed-page retry, offline cache')
+
+            owners = {provider: app.state.auth.get_status(provider)['account_revision'] for provider in ('ids','piazza')}
+            for provider in owners:
+                app.state.auth.store.write('auth:revision:' + provider, 'synthetic-second-account')
+            assert (await client.get('/api/v1/modules/elrc/catalog')).json()['courses'] == []
+            assert (await client.get('/api/v1/modules/elrc/courses/demo-course')).status_code == 400
+            assert (await client.get('/api/v1/modules/elrc/search?q=电场')).json()['items'] == []
+            assert (await client.get('/api/v1/modules/piazza/courses')).json()['courses'] == []
+            assert (await client.get('/api/v1/modules/piazza/posts?course_id=demo-network')).status_code == 404
+            shared = (await client.get('/api/v1/modules/courses/snapshot')).json()['data']
+            assert not shared['lessons'] and not shared['posts']
+            for provider, owner in owners.items():
+                app.state.auth.store.write('auth:revision:' + provider, owner)
+            assert (await client.get('/api/v1/modules/piazza/posts?course_id=demo-network')).json()['total'] == 2
+            assert (await client.get('/api/v1/modules/elrc/search?q=电场')).json()['items']
+            print('PASS legacy account isolation: catalog, lesson, search, watched courses, posts, aggregates and switch-back')
 
             for mid in ('elrc', 'education', 'piazza'):
                 assert (await client.get(f'/api/v1/modules/{mid}/openapi.json')).status_code == 200

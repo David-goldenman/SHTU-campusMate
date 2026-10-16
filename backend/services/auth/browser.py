@@ -27,15 +27,19 @@ class VerificationBrowser:
             raise RuntimeError("验证窗口尚未启动或已经关闭，请重新打开。")
         return json.loads(result.stdout)
 
-    def open(self, provider, url):
+    def open(self, provider, url, *, device_setup=False):
         process = self.launchers.get(provider)
+        if device_setup and process is not None:
+            # Enrollment keeps its CDP document guide attached through school redirects.
+            self.close(provider)
+            process = None
         if process is not None and process.poll() is None:
-            return self._run("open", provider, url=url)
+            return self._run("open", provider, url=url, device_setup=device_setup)
         self.close(provider)
         process = subprocess.Popen(self._command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                    text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         self.launchers[provider] = process
-        process.stdin.write(json.dumps({"action": "open", "profile": windows_path(self._directory(provider)), "url": url, "keep_alive": True}))
+        process.stdin.write(json.dumps({"action": "open", "profile": windows_path(self._directory(provider)), "url": url, "keep_alive": True, "device_setup": device_setup}))
         process.stdin.close()
         line = process.stdout.readline()
         if not line:

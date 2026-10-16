@@ -4,7 +4,9 @@ import shutil
 import subprocess
 import threading
 from copy import deepcopy
+from contextlib import contextmanager
 from pathlib import Path
+from filelock import FileLock
 
 from .paths import DATA, PROJECT
 
@@ -36,29 +38,43 @@ class Vault:
     def __init__(self, path: Path | None = None):
         self.path = path if path is not None else DATA / "vault.dpapi"
         self.lock = threading.RLock()
-        self._values = json.loads(protect(self.path.read_text(encoding="ascii"), "unprotect")) if self.path.exists() else {}
+        self.file_lock = FileLock(str(self.path) + ".lock", timeout=90)
+        self._values, self._stamp = {}, None
+        with self.transaction():
+            pass
+
+    @contextmanager
+    def transaction(self):
+        """Serialize read/modify/write, including device signature counters."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.lock, self.file_lock:
+            stamp = self.path.stat().st_mtime_ns if self.path.exists() else None
+            if stamp != self._stamp:
+                self._values = json.loads(protect(self.path.read_text(encoding="ascii"), "unprotect")) if stamp is not None else {}
+                self._stamp = stamp
+            yield
 
     def get(self, key: str) -> dict:
-        with self.lock:
+        with self.transaction():
             return deepcopy(self._values.get(key, {}))
 
     def save(self, key: str, value: dict):
-        with self.lock:
+        with self.transaction():
             self._write({**self._values, key: deepcopy(value)})
 
     def delete(self, key: str):
-        with self.lock:
+        with self.transaction():
             if key in self._values:
                 self._write({k: value for k, value in self._values.items() if k != key})
 
     def delete_prefix(self, prefix: str):
-        with self.lock:
+        with self.transaction():
             values = {k: value for k, value in self._values.items() if not k.startswith(prefix)}
             if len(values) != len(self._values):
                 self._write(values)
 
     def clear(self):
-        with self.lock:
+        with self.transaction():
             if self._values:
                 self._write({})
 
@@ -69,3 +85,4 @@ class Vault:
         temporary.write_text(encrypted, encoding="ascii")
         temporary.replace(self.path)
         self._values = values
+        self._stamp = self.path.stat().st_mtime_ns

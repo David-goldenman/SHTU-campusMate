@@ -9,7 +9,13 @@ dependencies = [
   "fastapi>=0.115",
   "uvicorn>=0.34",
   "cryptography>=44",
+  "filelock>=3",
+  "shanghaitech-ids-passkey @ git+https://github.com/vvbbnn00/shanghaitech-ids-passkey.git@7c4df62716ceb3d94452d22f3d07f19ff1b8db8b",
 ]
 
 [tool.uv]
 package = false
+
+[[tool.uv.index]]
+url = "https://mirrors.nju.edu.cn/pypi/web/simple"
+default = true

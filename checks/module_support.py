@@ -44,6 +44,10 @@ class Auth:
     def session_parameters(self, provider):
         return {"sid": "synthetic-sid"}
 
+    def read_with_recovery(self, provider, operation, *, target=None, cancelled=None):
+        with self.authenticated_client(provider, target=target, cancelled=cancelled) as client:
+            return operation(client)
+
 
 class AI:
     def __init__(self):
