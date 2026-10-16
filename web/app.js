@@ -5,6 +5,7 @@ import {icon as navIcon} from './icons.js';
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
 const scrim = document.querySelector('#menu-scrim');
+document.querySelector('.skip-link').addEventListener('click',event => { event.preventDefault(); main.focus(); });
 let state;
 let pageScope;
 let revision = 0;
@@ -148,6 +149,22 @@ async function render() {
       button.onkeydown = event => {const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];if (offset) {event.preventDefault();tabs.children[(index + offset + visible.length) % visible.length].click();}};
     });
   }
+  if (!tabbed && visible.length > 1) {
+    const shortcuts = document.createElement('nav');
+    shortcuts.className = 'module-shortcuts';
+    shortcuts.setAttribute('aria-label','页面分区');
+    shortcuts.innerHTML = visible.map(module => '<button type="button" data-module-section="' + escape(module.id) + '">' + escape(module.name) + '</button>').join('');
+    shortcuts.addEventListener('click',event => {
+      const button = event.target.closest('[data-module-section]');
+      if (!button) return;
+      const heading = [...zone.querySelectorAll('.module-card')].find(card => card.querySelector('[data-module-id]')?.dataset.moduleId === button.dataset.moduleSection)?.querySelector('h2');
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.closest('.module-card').scrollIntoView({block:'start'});
+      heading.focus({preventScroll:true});
+    },{signal:scope.controller.signal});
+    zone.before(shortcuts);
+  }
   const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
@@ -159,6 +176,7 @@ async function render() {
     if (!visible.length) zone.innerHTML = empty('这个分类已准备好接入模块','在设置中启用此分类的模块后，内容会显示在这里。','<a class="button button-secondary" href="#settings">管理模块 →</a>');
   }
   await Promise.all(work);
+  if (current === revision) main.focus({preventScroll:true});
 }
 
 async function reloadModules() {
