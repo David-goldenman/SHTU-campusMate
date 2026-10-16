@@ -47,4 +47,5 @@ with sandbox('notifications') as context:
     assert called.wait(2)
     service.close()
     assert not service.thread.is_alive()
+    assert service.snapshot()['error'] is None
 print('notifications: deduplication, read-state revisions, verified references, cache preservation, account isolation and worker cleanup passed')

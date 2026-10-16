@@ -56,6 +56,8 @@ class Notifications:
             try:
                 return self._generate(force)
             except Exception as error:
+                if self.stopping.is_set():
+                    raise HTTPException(409, "通知模块正在停止。") from None
                 message = str(error.detail) if isinstance(error, HTTPException) else "通知生成未完成（" + type(error).__name__ + "），已保留上次结果。"
                 self.context.store.write("error", {"owner": account_revision(self.context), "message": message})
                 if isinstance(error, HTTPException):
