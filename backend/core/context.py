@@ -37,3 +37,4 @@ class ModuleContext:
     data_dir: Path
     auth: Any
     ai: Any
+    api: Any

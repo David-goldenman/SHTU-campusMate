@@ -11,3 +11,8 @@ uv sync --quiet
 uv run --no-sync python checks/check_framework.py
 uv run --no-sync python checks/check_auth.py
 uv run --no-sync python checks/check_ai.py
+uv run --no-sync python checks/check_campus.py
+shopt -s nullglob
+for check in modules/*/checks/check_*.py; do
+    uv run --no-sync python "$check"
+done

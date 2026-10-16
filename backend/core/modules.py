@@ -6,10 +6,12 @@ import sys
 import threading
 import types
 import uuid
+from urllib.parse import unquote
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -96,7 +98,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.read_api)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -193,6 +195,22 @@ class ModuleManager:
     def _end_request(self, entry):
         with self.lock:
             entry.requests -= 1
+
+    async def read_api(self, module_id, path="/snapshot"):
+        """Call another module's public GET API through the same HTTP lifecycle."""
+        parts = unquote(path.split("?", 1)[0]).split("/")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", module_id) or not path.startswith("/") or path.startswith("//") or any(part in {".", ".."} for part in parts) or "\\" in path or "#" in path:
+            raise ValueError("模块读取需要合法模块 ID 和模块内相对路径。")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self), base_url="http://modules.local") as client:
+            return await client.get("/" + module_id + path)
+
+    def authorize_write(self, request):
+        parts = request.url.path.split("/")
+        if len(parts) < 6 or parts[1:4] != ["api", "v1", "modules"]:
+            return False
+        entry = self.entries.get(parts[4])
+        hook = getattr(entry.package, "authorize_write", None) if entry and entry.app else None
+        return bool(hook and hook(entry.context, request))
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "websocket":
