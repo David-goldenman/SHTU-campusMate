@@ -67,6 +67,8 @@ with context.auth.authenticated_client("coremail") as client:
 
 客户端统一管理 Cookie，请求应使用原站 HTTPS 地址，不手动设置 Cookie 头或传入每次请求的 Cookie。导入与写回会筛选提供方所属域名，保留 Secure、HttpOnly、SameSite、Path、Expires 和 host-only 属性；发出请求时执行严格的主机范围策略。HttpOnly 与 SameSite 是浏览器属性，Python 客户端保存这些属性用于会话往返。
 
+后台来源可传入 `authenticated_client(provider, target=..., cancelled=threading.Event())`。等待共享账号锁期间会检查取消事件；模块停止后无需等待其他 IDS 来源完成全部同步。返回状态中的 `account_revision` 在保存账号、导入会话和忘记登录时更新，用于隔离来源缓存。
+
 ## 存储与清理
 
 `backend/core/vault.py` 的 `Vault` 默认写入项目 `.private/vault.dpapi`，使用 Windows DPAPI `CurrentUser` 加密整份 JSON，先写加密临时文件再原子替换。`get()` 返回副本，`save()`、`delete()`、`delete_prefix()` 与 `clear()` 统一管理秘密。认证键为 `auth:credentials:{provider}` 和 `auth:session:{provider}`；账号、密码、Cookie、sid 与其他密钥全部留在加密 Vault。普通认证状态写入 Store 的 `auth:state:{provider}`，其中只含状态、提示、阻断标志与探测时间。DPAPI 文件与当前 Windows 账号绑定，运行于该账号或启用 Windows 互操作的 WSL。

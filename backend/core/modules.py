@@ -6,10 +6,12 @@ import sys
 import threading
 import types
 import uuid
+from urllib.parse import unquote
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
@@ -45,6 +47,7 @@ class ModuleManager:
         self.exception_handlers = exception_handlers or {}
         self.entries: dict[str, Entry] = {}
         self.lock = threading.RLock()
+        self.lifecycle_lock = threading.RLock()
         sys.dont_write_bytecode = True
         self.root.mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +99,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -122,20 +125,26 @@ class ModuleManager:
         return entry
 
     def reload(self):
-        with self.lock:
+        with self.lifecycle_lock:
             self.close()
+            entries = {}
             for folder in sorted(self.root.iterdir()):
                 if folder.is_dir() and (folder / "module.json").is_file():
                     entry = self._load(folder)
-                    self.entries[entry.info["id"]] = entry
+                    entries[entry.info["id"]] = entry
+            with self.lock:
+                self.entries = entries
             return self.list()
 
     def set_enabled(self, module_id, enabled):
-        with self.lock:
-            entry = self.entries.get(module_id)
-            if not entry:
-                raise HTTPException(404, "模块尚未安装，请先刷新模块。")
-            self._idle([entry])
+        with self.lifecycle_lock:
+            with self.lock:
+                entry = self.entries.get(module_id)
+                if not entry:
+                    raise HTTPException(404, "模块尚未安装，请先刷新模块。")
+                self._idle([entry])
+                entry.app = None
+                entry.info["status"] = "stopping"
             try:
                 self._stop(entry)
             except Exception:
@@ -144,14 +153,21 @@ class ModuleManager:
             values = self.store.read("modules", {})
             values[module_id] = enabled
             self.store.write("modules", values)
-            self.entries[module_id] = self._load(entry.folder)
+            replacement = self._load(entry.folder)
+            with self.lock:
+                self.entries[module_id] = replacement
             return self.list()
 
     def close(self):
-        with self.lock:
-            self._idle(self.entries.values())
+        with self.lifecycle_lock:
+            with self.lock:
+                self._idle(self.entries.values())
+                entries = list(self.entries.values())
+                for entry in entries:
+                    entry.app = None
+                    entry.info["status"] = "stopping"
             errors = []
-            for entry in self.entries.values():
+            for entry in entries:
                 try:
                     self._stop(entry)
                 except Exception:
@@ -159,10 +175,11 @@ class ModuleManager:
                     errors.append(entry.info["id"])
             if errors:
                 raise HTTPException(409, "模块停止失败：" + ", ".join(errors))
-            self.entries.clear()
+            with self.lock:
+                self.entries.clear()
 
     def clear_data(self):
-        with self.lock:
+        with self.lifecycle_lock:
             self.close()
             self.store.clear_modules()
             self.vault.delete_prefix("module:")
@@ -193,6 +210,22 @@ class ModuleManager:
     def _end_request(self, entry):
         with self.lock:
             entry.requests -= 1
+
+    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None):
+        """Call a module's public HTTP API with lifecycle tracking."""
+        parts = unquote(path.split("?", 1)[0]).split("/")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", module_id) or not path.startswith("/") or path.startswith("//") or any(part in {".", ".."} for part in parts) or "\\" in path or "#" in path:
+            raise ValueError("模块读取需要合法模块 ID 和模块内相对路径。")
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self, raise_app_exceptions=False), base_url="http://modules.local") as client:
+            return await client.request(method, "/" + module_id + path, json=body)
+
+    def authorize_write(self, request):
+        parts = request.url.path.split("/")
+        if len(parts) < 6 or parts[1:4] != ["api", "v1", "modules"]:
+            return False
+        entry = self.entries.get(parts[4])
+        hook = getattr(entry.package, "authorize_write", None) if entry and entry.app else None
+        return bool(hook and hook(entry.context, request))
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "websocket":

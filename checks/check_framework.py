@@ -63,6 +63,9 @@ def create_router(context):
 
 def stop(context):
     context.store.write('stopped', True)
+
+def authorize_write(context, request):
+    return request.url.path == '/api/v1/modules/' + context.id + '/state' and request.headers.get('authorization') == 'Bearer synthetic-' + context.id
 ''')
     return directory
 
@@ -106,9 +109,21 @@ async def check(root):
             traversal = first["frontend_url"].split("web/")[0] + "web/%2e%2e/server/__init__.py"
             assert (await client.get(traversal)).status_code == 404
             assert (await client.get("/api/v1/modules/alpha/state")).json()["version"] == "one"
+            assert (await app.state.modules.entries["beta"].context.api("alpha", "/state")).json()["version"] == "one"
+            try:
+                await app.state.modules.call_api("alpha", "/%2e%2e/beta/state")
+                raise AssertionError("Module API traversal must be rejected")
+            except ValueError:
+                pass
             assert (await client.put("/api/v1/modules/alpha/state")).status_code == 200
             assert (await client.get("/api/v1/modules/beta/state")).json()["value"] is None
             assert (await client.get("/api/v1/modules/beta/state")).json()["has_secret"] is False
+            csrf_token = client.headers.pop("X-Framework-Token")
+            assert (await client.put("/api/v1/modules/alpha/state", headers={"Authorization": "Bearer synthetic-alpha"})).status_code == 200
+            assert (await client.put("/api/v1/modules/beta/state", headers={"Authorization": "Bearer synthetic-alpha"})).status_code == 403
+            assert (await client.put("/api/v1/settings", json={"port": 17667}, headers={"Authorization": "Bearer synthetic-alpha"})).status_code == 403
+            assert (await client.put("/api/v1/modules/alpha/state", headers={"Authorization": "Bearer synthetic-alpha", "Origin": "https://untrusted.example"})).status_code == 403
+            client.headers["X-Framework-Token"] = csrf_token
             (alpha / "server" / "helpers.py").write_text("VALUE = 'new'\n")
             updated = (await client.post("/api/v1/modules/reload")).json()["modules"]
             second = next(item for item in updated if item["id"] == "alpha")
@@ -118,11 +133,23 @@ async def check(root):
             disabled = await client.put("/api/v1/modules/alpha", json={"enabled": False})
             assert disabled.status_code == 200
             assert (await client.get("/api/v1/modules/alpha/state")).status_code == 404
+            assert (await app.state.modules.call_api("alpha", "/state")).status_code == 404
             assert (await client.get(second["frontend_url"])).status_code == 404
             assert (await client.get("/api/v1/modules/beta/state")).status_code == 200
             await client.put("/api/v1/modules/alpha", json={"enabled": True})
             assert (await client.get("/api/v1/modules/alpha/state")).json()["value"] == "alpha"
             assert (await client.get("/api/v1/modules/alpha/openapi.json")).json()["paths"]["/state"]
+            active = app.state.modules.entries["alpha"]
+            saved_stop = active.package.stop
+
+            def stop_with_api(context):
+                assert asyncio.run(context.api("beta", "/state")).status_code == 200
+                saved_stop(context)
+
+            active.package.stop = stop_with_api
+            assert (await client.put("/api/v1/modules/alpha", json={"enabled": False})).status_code == 200
+            await client.put("/api/v1/modules/alpha", json={"enabled": True})
+            assert (await app.state.modules.call_api("beta", "/state", method="PUT")).status_code == 200
             active = app.state.modules.entries["alpha"]
             original_stop = active.package.stop
 
