@@ -14,7 +14,7 @@
 
 ## 启动
 
-当前开发环境为 Windows + WSL Ubuntu-26.04：Python 服务在 WSL 运行，登录验证使用 Windows Edge，凭据使用当前 Windows 用户的 DPAPI 加密。需要 Python 3.12+、uv、Windows Node.js 22+ 和 Edge。Node.js 仅用于登录验证窗口，网页界面使用原生 ES Modules。
+当前开发环境为 Windows + WSL Ubuntu-26.04：Python 服务在 WSL 运行，登录验证使用 Windows Edge，凭据使用当前 Windows 用户的 DPAPI 加密。需要 Python 3.12+、uv、Windows Node.js 22+ 和 Edge；原生 AI 插件包管理还需要 PATH 中的 pnpm。官方 Harness 运行时随 uv 依赖安装，网页界面使用原生 ES Modules。
 
 在 Windows 双击 `run.cmd`，或运行：
 
@@ -26,6 +26,12 @@
 
 在 WSL 中运行 `bash ./run.sh`，打开 [本地工作台](http://127.0.0.1:16666)。默认端口为 16666，设置中修改端口后重启生效。所有路径从项目目录计算，可以整体移动项目目录。启动脚本把虚拟环境、uv 缓存、Python 缓存和临时文件统一放入 `.codex/`。
 
+## AI 功能开发入口
+
+AI 工具和工作流统一使用官方 DeepSeek Harness 后端运行时。每项新增能力在独立 `modules/<id>/harness/` 中实现原生 Cordis 插件，由模块管理负责启停与刷新；框架维护凭据、运行时适配和生命周期。基础文本对话和生成使用共享 `chat`、`generate`，插件任务使用 `context.ai.run(..., plugins=[模块ID])`。示例为 [截止时间整理](modules/deadlines/README.md)，可在 AI 助手的“插件任务”中选择。
+
+开始开发前阅读 [团队开发流程](docs/DEVELOPMENT.md#开发流程)、[AI 插件接口](docs/AI.md#原生-harness-插件) 和 [模块契约](docs/MODULES.md)。`main` 保存已整合且可运行的版本；功能在独立分支开发，完成验证与文档后通过 PR 合并。
+
 ## 目录与职责
 
 | 目录 | 内容与维护者 |
@@ -33,7 +39,7 @@
 | `web/` | 框架页面、导航、全局设置、共享组件和 Nord 设计变量；框架维护者负责 |
 | `backend/core/`、`backend/main.py` | 生命周期、模块加载、数据隔离、本地接口保护；框架维护者负责 |
 | `backend/services/auth/`、`scripts/` | 登录提供方、二次验证和会话管理；认证服务维护者负责 |
-| `backend/services/ai/` | DeepSeek 配置和通用生成接口；AI 服务维护者负责 |
+| `backend/services/ai/` | DeepSeek 配置、基础对话和官方 Harness 适配；AI 服务维护者负责 |
 | `modules/<id>/` | 一项独立业务模块，内部按 `web/`、`server/`、`checks/` 分工 |
 | `.private/` | 加密凭据、普通设置、各模块用户数据；整目录加入 Git 忽略规则 |
 | `.codex/` | 当前项目的开发环境、缓存和验证临时数据；整目录加入 Git 忽略规则 |
@@ -47,7 +53,7 @@ DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需�
 
 先开发网页和 HTTP API，使用 `modules/<id>/module.json` 注册业务模块；在设置中刷新即可发现，启停和更新以模块为单位进行。模块前端通过 `mount(container, context)` 挂载，后端通过 `create_router(context)` 暴露自己的接口。界面清理、后台任务停止和数据清除都遵循明确的生命周期，详见 [模块开发接口](docs/MODULES.md)。
 
-登录通过 `context.auth` 复用，AI 通过 `context.ai` 调用，模块使用自己的 `context.store`、`context.secrets` 和 `context.data_dir` 管理数据。前端通过注入的 `context.api`、`context.services` 和 `context.ui` 使用接口及组件。API 基础路径为 `/api/v1`，运行后可查看 [交互式接口文档](http://127.0.0.1:16666/api/docs) 和 [OpenAPI](http://127.0.0.1:16666/api/openapi.json)。共享 AI 直接调用 DeepSeek 官方 API，由模块提供要处理的文本和对话。
+登录通过 `context.auth` 复用，AI 通过 `context.ai` 调用，模块使用自己的 `context.store`、`context.secrets` 和 `context.data_dir` 管理数据。前端通过注入的 `context.api`、`context.services` 和 `context.ui` 使用接口及组件。API 基础路径为 `/api/v1`，运行后可查看 [交互式接口文档](http://127.0.0.1:16666/api/docs) 和 [OpenAPI](http://127.0.0.1:16666/api/openapi.json)。基础对话和生成使用 DeepSeek 官方 API；需要 AI 调用工具完成工作的新增功能在 `modules/<id>/harness/` 实现原生 Cordis 插件，通过官方 Harness 运行时的 `context.ai.run` 执行，并跟随模块热插拔。AI 助手的“插件任务”提供所选资料和截止时间整理工具的使用入口，详见 [插件接口](docs/AI.md#原生-harness-插件)。
 
 Nord 变量统一在 `web/styles.css` 定义：Polar Night 用于侧栏与正文，Snow Storm 用于内容背景，Frost 用于操作和焦点，Aurora 用于状态提示。默认字体为微软雅黑 UI、微软雅黑和系统字体，正文 16px、行高 1.75，主要标题 32px；业务模块复用 `.button`、`.panel`、`label`、`.empty-state` 等公共组件，以模块根节点限定自己的样式。完整配色、字号和组件用法见 [设计规范](docs/DESIGN.md)。
 

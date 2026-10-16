@@ -1,6 +1,7 @@
 """Synthetic module checks; all files remain in the project's .codex directory."""
 import copy
 import importlib.util
+import json
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -54,6 +55,9 @@ class AI:
 
     def chat(self, **kwargs):
         return copy.deepcopy(self.result)
+
+    def run(self, **kwargs):
+        return {**copy.deepcopy(self.result), "content": json.dumps(self.result["content"]), "tools": [{"id": "synthetic", "name": "order_deadlines", "is_error": False}]}
 
     def settings(self):
         return {"enabled": True, "key_saved": True, "model": "synthetic"}
