@@ -1,0 +1,15 @@
+[project]
+name = "campus-framework"
+version = "0.1.0"
+description = "Local web framework with shared authentication, AI and independent modules"
+requires-python = ">=3.12"
+dependencies = [
+  "beautifulsoup4>=4.13",
+  "httpx>=0.28",
+  "fastapi>=0.115",
+  "uvicorn>=0.34",
+  "cryptography>=44",
+]
+
+[tool.uv]
+package = false

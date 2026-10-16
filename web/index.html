@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2e3440">
+  <meta name="description" content="按功能安装和管理独立模块的本地工作台。">
+  <title>校园工作台</title>
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar" id="sidebar" aria-label="工作台导航">
+    <a class="brand" href="#dashboard"><img src="/assets/icon.svg" alt=""><span>校园工作台<small>LOCAL WORKSPACE</small></span></a>
+    <div class="workspace-label"><span>工作空间</span><span>LOCAL</span></div>
+    <nav id="navigation" aria-label="主导航"></nav>
+    <div class="sidebar-bottom"><i aria-hidden="true"></i><div>本地工作空间<small>按功能安装和管理模块</small></div></div>
+    <div class="sidebar-footer"><span>Framework</span><span id="app-version"></span></div>
+  </aside>
+  <button class="menu-scrim" id="menu-scrim" type="button" aria-label="关闭导航" hidden></button>
+  <div class="shell">
+    <header class="topbar">
+      <button class="icon-button mobile-only" id="mobile-menu" type="button" aria-label="展开导航" aria-controls="sidebar" aria-expanded="false">☰</button>
+      <div class="breadcrumb"><span class="breadcrumb-root">我的工作空间</span><span class="breadcrumb-root" aria-hidden="true">/</span><strong id="page-label">总览</strong></div>
+      <div class="topbar-actions"><span class="local-badge"><i aria-hidden="true"></i>本机运行</span><button class="button button-secondary" id="reload-modules" type="button" disabled>刷新模块</button></div>
+    </header>
+    <main id="main" tabindex="-1"><div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>正在打开工作台…</div></main>
+    <footer class="main-footer"><span>Campus Workspace</span><span>独立模块，共同工作台。</span></footer>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+
