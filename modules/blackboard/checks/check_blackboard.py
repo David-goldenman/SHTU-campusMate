@@ -13,6 +13,9 @@ assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'2099-0
 assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'bad-date'}},at) == ('unknown',None)
 assert reader.availability(None,at) == ('unknown',None)
 assert reader.activity('<div id="grades_wrapper"><div id="12" class="sortable_item_row submitted_item_row">Submitted</div><div id="13" class="sortable_item_row">未提交</div></div>') == {'_12_1':True,'_13_1':False}
+for term in ['2026秋季学期', '2026-2027学年秋季学期']:
+    courses = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">PHYS1183 普通物理II-' + term + '</a></div>')
+    assert courses['_9_1']['term'] == term
 
 
 class Tree:

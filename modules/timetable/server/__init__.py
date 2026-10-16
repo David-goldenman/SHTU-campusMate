@@ -1,28 +1,109 @@
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
+from uuid import uuid4
 
 from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from backend.services.campus import Source, timestamp
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
+from .calendar import Event, SemesterSettings, ZONE, calendar
+from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
 _source = None
+_calendar = None
 
 
 def create_router(context):
-    global _source
-    source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], fetch, target="timetable")
+    global _source, _calendar
+
+    def read_schedule(remote, previous):
+        data = fetch(remote, previous)
+        if school.due(data['metadata']):
+            try:
+                school.refresh(data['metadata'])
+            except HTTPException:
+                pass  # A calendar failure leaves course synchronization usable.
+        return data
+
+    source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable")
+    school = _calendar = SchoolCalendar(context, source)
     router = source.router()
 
+    def settings_key():
+        metadata = source.snapshot()['data']['metadata']
+        return 'semester:' + source.owner() + ':' + metadata.get('semester_id', metadata.get('semester', ''))
+
+    def local_events():
+        return context.store.read('events:' + source.owner(), [])
+
+    @router.get('/calendar-settings')
+    def settings():
+        metadata = source.snapshot()['data']['metadata']
+        official = school.saved(metadata)
+        automatic = official.get('terms', {}).get(term_key(metadata), {})
+        manual = context.store.read(settings_key(), {})
+        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')), 'source': 'manual' if manual else 'school',
+                'url': official.get('url'), 'pdf_url': official.get('pdf_url'), 'checked_at': official.get('checked_at'), 'error': official.get('error')}
+
+    @router.put('/calendar-settings')
+    def save_settings(body: SemesterSettings):
+        context.store.write(settings_key(), body.model_dump(mode='json'))
+        return settings()
+
+    @router.delete('/calendar-settings')
+    def restore_settings():
+        context.store.delete(settings_key())
+        return settings()
+
+    @router.post('/calendar/refresh')
+    async def refresh_calendar():
+        await run_in_threadpool(school.refresh, source.snapshot()['data']['metadata'])
+        return settings()
+
+    @router.get('/events')
+    def events():
+        return {'items': local_events()}
+
+    @router.post('/events', status_code=201)
+    def add_event(body: Event):
+        item = {**body.model_dump(mode='json'), 'id': 'local:' + uuid4().hex, 'source': 'local', 'at': body.starts_at.astimezone(ZONE).isoformat()}
+        context.store.write('events:' + source.owner(), [*local_events(), item])
+        return item
+
+    @router.put('/events/{event_id}')
+    def update_event(event_id: str, body: Event):
+        items = local_events()
+        item = next((item for item in items if item['id'] == event_id), None)
+        if item is None:
+            raise HTTPException(404, '未找到这条安排。')
+        item.update(**body.model_dump(mode='json'), at=body.starts_at.astimezone(ZONE).isoformat())
+        context.store.write('events:' + source.owner(), items)
+        return item
+
+    @router.delete('/events/{event_id}')
+    def delete_event(event_id: str):
+        items = local_events()
+        if not any(item['id'] == event_id for item in items):
+            raise HTTPException(404, '未找到这条安排。')
+        context.store.write('events:' + source.owner(), [item for item in items if item['id'] != event_id])
+        return {'deleted': True}
+
     @router.get("/schedule")
-    async def schedule():
+    async def schedule(week_start: date | None = None):
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SCHEDULE_SOURCES)
         values = {"timetable": source.snapshot(), **values}
-        events, issues, undated = [], [], 0
+        dates = settings()
+        events, issues, undated = local_events(), [], 0
+        for item in dates.get('closures', []):
+            events.append({'id': 'calendar:' + item['date'], 'title': item['title'], 'source': 'calendar', 'event_type': 'calendar',
+                           'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})
+        if dates.get('error'):
+            issues.append(dates['error'])
         for name, value in values.items():
             data = value["data"]
             label = SCHEDULE_SOURCES.get(name, "教务课表")
@@ -43,8 +124,9 @@ def create_router(context):
         updated = max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None)
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取时间表。")
+        data = {**values['timetable']['data'], 'events': events, 'undated': undated, 'issues': issues}
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
-                "updated_at": updated, "data": {**values["timetable"]["data"], "events": events, "undated": undated, "issues": issues},
+                "updated_at": updated, "data": data, 'calendar': calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one']),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)
@@ -53,6 +135,17 @@ def create_router(context):
         return {"sources": {"timetable": source.sync(), **{name: result.json() if result.status_code == 202 else {"status": "unavailable"} for name, result in zip(SCHEDULE_SOURCES, results)}}}
 
     return router
+
+
+def start(context):
+    metadata = _source.snapshot()['data']['metadata']
+    if term_key(metadata) and context.auth.get_status('ids')['identity_verified'] and _calendar.due(metadata):
+        def update():
+            try:
+                _calendar.refresh(metadata)
+            except HTTPException:
+                pass
+        _source.executor.submit(update)
 
 
 def stop(context):

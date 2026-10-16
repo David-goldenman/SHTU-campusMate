@@ -1,5 +1,3 @@
-import {icon} from './icons.js';
-
 let token = '';
 
 export function setToken(value) { token = value; }
@@ -49,7 +47,7 @@ export function dialog(title, content) {
   node.returnValue = '';
   const heading = document.createElement('div');
   heading.className = 'dialog-heading';
-  heading.innerHTML = '<h2 id="dialog-title"></h2><button class="icon-button" type="button" aria-label="关闭">' + icon('close') + '</button>';
+  heading.innerHTML = '<h2 id="dialog-title"></h2><button class="icon-button" type="button" aria-label="关闭">×</button>';
   heading.querySelector('h2').textContent = title;
   heading.querySelector('button').onclick = () => node.close();
   const body = document.createElement('div');
@@ -88,7 +86,7 @@ export function safeAction(control, action) {
 }
 
 export function empty(title, description, action = '') {
-  return '<div class="empty-state"><span class="empty-symbol" aria-hidden="true">' + icon('inbox') + '</span><h2>' + escape(title) + '</h2><p>' + escape(description) + '</p>' + action + '</div>';
+  return '<div class="empty-state"><span class="empty-symbol" aria-hidden="true">▦</span><h2>' + escape(title) + '</h2><p>' + escape(description) + '</p>' + action + '</div>';
 }
 
 export function useStyle(url, signal) {

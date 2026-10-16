@@ -23,7 +23,7 @@ def check(project):
     def command(*arguments, good=True):
         result = subprocess.run(
             [PS, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
-             "-File", str(project / "run.ps1"), "--python", sys.executable, *map(str, arguments)],
+             "-File", str(project / "run-local.ps1"), "--python", sys.executable, *map(str, arguments)],
             cwd=project, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=65,
         )
         if good:
@@ -91,7 +91,6 @@ if __name__ == "__main__":
         project.mkdir()
         for folder in ("backend", "modules", "web", "scripts"):
             shutil.copytree(ROOT / folder, project / folder, ignore=shutil.ignore_patterns("__pycache__"))
-        for name in ("run.ps1", "run.cmd", "stop.cmd", "pyproject.toml"):
+        for name in ("run-local.ps1", "run.cmd", "stop.cmd", "pyproject.toml"):
             shutil.copyfile(ROOT / name, project / name)
         check(project)
-

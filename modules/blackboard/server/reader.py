@@ -10,6 +10,7 @@ from backend.services.campus.data import digest
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
+TERM = re.compile(r"20\d{2}(?:-20\d{2}学年)?\S*?[春夏暑秋]季?学期")
 
 
 def checked(value):
@@ -51,7 +52,7 @@ def portal(html):
                 continue
             label = anchor.get_text(" ", strip=True)
             code = re.search(r"\b[A-Z]{2,}\d+[A-Z]?\b", label)
-            term = re.search(r"20\d{2}-20\d{2}学年\S+?学期", label)
+            term = TERM.search(label)
             result[cid] = {"status": state, "code": code[0] if code else "", "term": term[0] if term else ""}
     return result
 
@@ -134,7 +135,8 @@ def fetch(remote, previous):
             if not isinstance(detail, dict) or not detail.get("name"):
                 raise SourceError("Blackboard 课程缺少名称。")
             info = states.get(cid, {})
-            item = course("blackboard", cid, detail["name"], info.get("code") or detail.get("courseId"), info.get("term"), BASE + "/webapps/blackboard/execute/launcher?" + urlencode({"type": "Course", "id": cid}), status=info.get("status", "unknown"))
+            term = TERM.search(info.get('term') or detail['name'])
+            item = course("blackboard", cid, detail["name"], info.get("code") or detail.get("courseId"), term[0] if term else '', BASE + "/webapps/blackboard/execute/launcher?" + urlencode({"type": "Course", "id": cid}), status=info.get("status", "unknown"))
             result["courses"].append(item)
             nodes = contents(remote, cid, result["issues"])
             extra = []

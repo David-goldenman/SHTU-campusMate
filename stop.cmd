@@ -1,6 +1,6 @@
 @echo off
 setlocal
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1" --stop
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0run-local.ps1" --stop
 set "CAMPUS_EXIT=%ERRORLEVEL%"
 if not "%CAMPUS_EXIT%"=="0" (
     echo.

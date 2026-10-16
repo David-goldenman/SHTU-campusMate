@@ -28,6 +28,7 @@ class Navigation(BaseModel):
     icon: str = Field(default="▧", min_length=1, max_length=8)
     description: str = Field(default="", max_length=240)
     order: int = Field(default=100, ge=0, le=10000)
+    layout: Literal['stack', 'tabs'] = 'stack'
 
 
 class Manifest(BaseModel):

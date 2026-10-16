@@ -1,11 +1,17 @@
 import {defineTool} from '@deepseek-ai/dsh-tools';
 import {writeFile} from 'node:fs/promises';
+import {readFileSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
 
 export const name = 'campus-academic-assistant';
-export const inject = ['tools'];
+export const inject = ['tools', 'skills'];
 
 export function apply(ctx) {
+  for (const name of readdirSync(new URL('./skills/', import.meta.url))) {
+    const source = readFileSync(new URL('./skills/' + name + '/SKILL.md', import.meta.url), 'utf8');
+    const description = source.match(/^description: (.+)$/m)[1];
+    ctx.effect(() => ctx.skills.register({name, description, content:source.replace(/^---[\s\S]*?---\s*/, ''), source:'runtime'}));
+  }
   let sequence = 0;
   const workspace = process.cwd();
   function register(name, endpoint, description, parameters) {
@@ -19,7 +25,7 @@ export function apply(ctx) {
         if (!url || !token) throw new Error('请从首页学习助手发起任务，以使用已连接资料。');
         const response = await fetch(url + '/tools/' + endpoint,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer ' + token},body:JSON.stringify(args),signal:execution.signal});
         const value = await response.json();
-        if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : '学习工具请求参数不完整，请调整后重试。');
+        if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : value.detail.map(item => item.loc.join('.') + ': ' + item.msg).join('; '));
         const filename = `study-${++sequence}-${endpoint}.json`;
         await writeFile(join(workspace,filename),JSON.stringify({tool:name,arguments:args,result:value},null,2));
         return JSON.stringify({...value,workspace_file:filename});
@@ -28,10 +34,10 @@ export function apply(ctx) {
   }
   const string = {type:'string'};
   const pagination = {offset:{type:'integer'},limit:{type:'integer'}};
-  register('study_query','query','查询已同步课程、作业、时间表、历史成绩、本专业培养方案、通知、邮件和个人档案。返回可引用原文。pending=true 仅查询明确可做且未提交的当前作业；其他提交状态不可推测。可按 q、course_id 和分页缩小范围。',{
-    area:{type:'string',required:true,enum:['courses','assignments','timetable','grades','degree_plan','notifications','mail','profile']},q:string,course_id:string,pending:{type:'boolean'},...pagination,
+  register('study_query','query','查询已同步课程、作业、时间表、历史课程、本专业培养方案、通知、邮件和个人档案。返回可引用原文。pending=true 仅查询明确可做且未提交的当前作业；其他提交状态不可推测。可按 q、course_id 和分页缩小范围。',{
+    area:{type:'string',required:true,enum:['courses','assignments','timetable','course_history','degree_plan','notifications','mail','profile']},q:string,course_id:string,pending:{type:'boolean'},week_start:{type:'string',description:'查询时间表时可用 YYYY-MM-DD 指定一周，默认本周。'},...pagination,
   });
-  register('study_search','search','在课程资料、讨论和录播原文中检索。可传课程中心的 course_id；检索转写使用 collection=lessons 和 q。材料结果的 record_id 可交给 study_document 读取真实页码。',{
+  register('study_search','search','在课程资料、讨论和录播原文中检索。先 query courses 获取课程中心的 record_id 并作为 course_id；q 只搜索材料标题和正文，列出课程文件时留空，不用课程名搜索文件。检索转写使用 collection=lessons 和 q。材料结果的 record_id 可交给 study_document 读取真实页码。',{
     collection:{type:'string',enum:['materials','lessons','posts']},q:string,course_id:string,...pagination,
   });
   register('study_document','document','按 record_id 下载作业题目或课程文件并读取 PDF/PPTX 页级文字。record_id 必须来自本次查询或检索；可以使用作业 ID。q 用于在页内定位知识点；page 从 1 开始。扫描图片不推测内容。',{

@@ -1,45 +1,43 @@
 # Campus Framework
 
-本地校园工作台，统一提供 Nord 界面、导航、设置、加密凭据、学校登录、DeepSeek 基础 AI 服务与官方 Harness 插件运行时。已整合首页学习助手、总览、邮箱、时间表、课程聚合、作业、教务系统、通知、AI 助手，以及 Blackboard、Gradescope、ELRC、Piazza、教育问答和截止时间插件模块。首页可以对话查询学习资料、规划作业、引用课件页码并结合成绩与培养方案讨论选课；时间表汇总每周课程、带时间的 quiz／作业与教务考试。侧栏按模块启停显示相应分类，顺序与文案由模块清单声明，框架统一呈现，设置始终可用。
+> 本机定制：双击 `run.cmd` 复用已有 Python 启动网页，`stop.cmd` 停止。主题修改与更新步骤见 [本地 UI 维护说明](docs/LOCAL_UI.md)。团队的 `run.ps1` 保留原版入口。
+
+本地校园工作台，统一提供 Nord 界面、导航、设置、加密凭据、学校登录、DeepSeek 基础 AI 服务与官方 Harness 插件运行时。已整合首页学习助手、总览、邮箱、时间表、课程聚合、作业、教务系统、通知、AI 助手，以及 Blackboard、Gradescope、ELRC、Piazza、教育问答和截止时间插件模块。首页可以对话查询学习资料、规划作业、引用课件页码并结合已有课程与培养方案讨论选课；时间表按周整合课程、作业截止、考试和个人安排，自动读取学校校历并保留按学期手动设置。侧栏按模块启停显示相应分类，顺序与文案由模块清单声明，框架统一呈现，设置始终可用。
 
 ## 下一阶段开发方向
 
 近期目标是完成一条可演示的真实使用链路：连接学校账号 → 识别本学期 → 汇总课程与作业 → 查看通知 → 用课程原文回答问题。按以下顺序推进：
 
 1. **真实来源验收与登录恢复。** 六个来源已完成真实账号的登录与基础同步验证，最近完成课表、Blackboard、Gradescope、Coremail 的重复同步和重启检查。已提供 IDS 本机免密码设备入口、过期恢复和按已验证账号隔离缓存；验证范围及限制见 [真实来源验收](docs/LIVE_ACCEPTANCE.md)，用户连接步骤见 [认证文档](docs/AUTH.md)。继续覆盖学校协议变化、验证码与各来源文件正文，未知提交状态不列为未提交。
-2. **验证带引用的学习建议。** 首页 [学习助手插件](modules/academic-assistant/README.md) 已接入按需查询、PDF／PPTX 页级文字、录播检索、历史成绩、培养方案及课程目录／大纲查询。继续用真实问题核对作业建议与课程要求；界面说明发送至 DeepSeek 的资料范围，后端校验实际引用和账号版本后保存。扫描件与未公布的学期开课安排需要用户补充。
-3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。本机 Windows 启动器复用已有 Python 并自动打开网页，WSL 开发入口也保留；接下来准备合成演示数据和 5 分钟演示脚本，按 [交付与移植规范](docs/DELIVERY.md) 验收后再接 Electron。
+2. **验证带引用的学习建议。** 首页 [学习助手插件](modules/academic-assistant/README.md) 已接入按需查询、PDF／PPTX 页级文字、录播检索、已有课程记录、培养方案及课程目录／大纲查询。继续用真实问题核对作业建议与课程要求；界面说明发送至 DeepSeek 的资料范围，后端校验实际引用和账号版本后保存。扫描件与未公布的学期开课安排需要用户补充。
+3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。启动器默认在 Windows 运行并打开 Edge；接下来准备合成演示数据和 5 分钟演示脚本，按 [交付与移植规范](docs/DELIVERY.md) 验收后再接 Electron。
 
 每项工作从最新主分支建立功能分支，仍按模块分工；共享身份、聚合契约和启动流程的变更作为集成任务处理。
 
 ## 启动
 
-Windows 双击本目录的 `run.cmd`。启动器使用已有 Python，等待本机后台可访问后自动打开浏览器，默认地址为 http://127.0.0.1:16666/。启动失败会保留报错窗口，详细日志在 `.codex/logs/`，不会只闪一下就退出。
+**本机使用 `run.cmd` / `run-local.ps1`，关闭后台使用 `stop.cmd`。** 已有项目环境可直接启动，不自动安装依赖；步骤见 [本地 UI 维护说明](docs/LOCAL_UI.md)。
 
-Windows 启动器不会安装 Ubuntu、Python 或依赖。它优先使用现有 `.codex/venv/Scripts/python.exe`，其次查找常见的 Anaconda/Miniconda 路径。需要 Python 3.12+；缺包或版本不符时列出缺项，由用户在选定环境补齐。已有项目环境能用时，不重复下载环境。Windows 环境缺少 IANA 时区数据时，会复用现有 Conda 的时区数据；找不到才提示自行补装 tzdata。
+以下保留团队 `run.ps1` 的环境准备与开发入口说明；本机 `run.cmd` 的环境与停止方式以本地说明为准。
 
-首次使用时，在设置中连接账号并配置共享 AI；已有账号资料继续保存在本机。打开网页本身不执行登录或模型调用。
+当前开发入口为 Windows 原生：Python 服务和官方 Harness 在 Windows 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要 Windows uv、Git、Node.js 22+ 和 Edge；原生插件安装需要 pnpm。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；WSL 可通过 `--distro` 显式选择，继续作为 Linux 开发入口。官方 Harness 运行时随 Python 依赖安装。
 
-- 双击 `stop.cmd`：请求当前目录后台正常结束，执行模块清理；关闭浏览器不会停止后台。
-- 重复双击 `run.cmd`：后台已就绪时复用当前实例并打开网页。
-- 改用其他已有环境：在 `python-path.txt` 中填写一行 python.exe 完整路径，或用 `--python`；该配置文件由 Git 忽略。
-- 设置端口后，未指定端口的下次启动会读取本地保存的值；端口已被其他程序占用时提示错误，不打开或停止那个程序。
+在 Windows 双击 `run.cmd`，或运行：
 
-~~~powershell
-.\run.ps1 --check
-.\run.ps1 --no-browser
+```powershell
+.\run.ps1
+# 在 PowerShell/CMD 中也可直接使用 run.cmd
+.\run.cmd --check
 .\run.ps1 --port 17666
-.\run.ps1 --python 'D:\anaconda\python.exe' --check
-.\run.ps1 --stop
-~~~
+.\run.ps1 --distro Ubuntu-22.04
+.\run.ps1 --no-browser
+```
 
-更新代码后，新增依赖需在启动器实际使用的环境中手动补齐；`git pull` 不安装 Python 包。启动检查支持普通版本约束和锁定到具体提交的 HTTPS Git 依赖，并核对已安装包的来源记录。缺项会一起列出，启动器不会自动下载。
+启动器默认使用 Windows 原生环境；指定 `--distro` 或 `CAMPUS_WSL_DISTRO` 时使用对应 WSL 发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
 
-`--check` 只检查选定环境，不启动服务。旧式 `-Port`、`-NoBrowser`、`-CheckRuntime`、`-PythonPath` 参数也可使用。日志和实例信息写入 `.codex/`；停止时验证进程创建时间和所属目录，避免误停其他副本。
+默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
 
-Windows Node.js 22+ 和 Edge 用于登录验证；原生 AI 插件的包管理另需 pnpm。启动网页不执行插件包安装。凭据使用当前 Windows 用户的 DPAPI 加密。共享 AI 及账号需要在设置中自行配置。
-
-WSL 入口保留为 `bash ./run.sh`；它按上游流程在 `.private/runtime/venv` 准备运行环境。应用缓存、登录验证与 Harness 工作区由 `.private/runtime/` 管理；本机 Windows 启动器复用已有 `.codex/venv`，启动控制与开发日志留在 `.codex/`。Windows 双击入口直接使用本机环境，不依赖 WSL。
+在已配置环境的 WSL 中也可运行 `bash ./run.sh`，手动打开 [本地工作台](http://127.0.0.1:16666)。应用运行环境、缓存、启动状态和本机生成的 Windows 互操作脚本放在 `.private/runtime/`；开发环境与验证资料放在 `.codex/`，均不会提交。迁移源码时不复制虚拟环境；目标电脑重新准备依赖，详情见 [四人协作、打包与迁移](docs/DELIVERY.md)。
 
 ## AI 功能开发入口
 
@@ -65,7 +63,7 @@ AI 工具和工作流统一使用官方 DeepSeek Harness 后端运行时。每�
 
 项目以空配置启动。账号、密码、Cookie、登录参数、AI Key 和模块秘密统一写入 `.private/vault.dpapi`；接口只返回配置及会话状态。普通设置保存在 `.private/settings.sqlite3`，模块文件存放在 `.private/modules/<id>/`。设置中可分别清除凭据、模块数据，或重置全部本地数据。私有资料和开发环境遵循项目 `.gitignore`。
 
-DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需重新配置凭据。登录验证窗口临时资料位于 `.private/runtime/auth/`，导入会话后关闭并删除临时资料。Windows 会话密钥由操作系统管理，项目内保存密文。
+DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需重新配置凭据。登录验证使用 `.private/runtime/auth/` 中按服务固定的 Edge 资料，导入后关闭窗口并保留资料；断开账号或清除凭据时删除对应资料。Windows 会话密钥由操作系统管理，项目内保存密文。
 
 ## 统一开发方式
 
@@ -83,7 +81,7 @@ Nord 变量统一在 `web/styles.css` 定义：Polar Night 用于侧栏与正文
 
 ## 验证与文档
 
-在 WSL 运行 `bash ./check.sh`。检查覆盖空配置、模块动态加载/更新/停用、模块存储隔离、本地接口保护、DPAPI 往返、登录流程、DeepSeek 模拟响应和官方 Harness 原生插件，并自动发现模块检查。学习资料集成检查覆盖 ELRC/Piazza 缓存、教育回答、统一助手与插件任务；夹具只在 `.codex/` 中生成，AI 响应使用本地模拟数据。
+在 Windows 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File check.ps1`，或在 WSL 运行 `bash ./check.sh`。检查覆盖空配置、模块动态加载/更新/停用、模块存储隔离、本地接口保护、DPAPI 往返、登录流程、DeepSeek 模拟响应和官方 Harness 原生插件，并自动发现模块检查。学习资料集成检查覆盖 ELRC/Piazza 缓存、教育回答、统一助手与插件任务；夹具只在 `.codex/` 中生成，AI 响应使用本地模拟数据。
 
 - [统一 HTTP API](docs/API.md)
 - [模块生命周期与扩展接口](docs/MODULES.md)

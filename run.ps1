@@ -1,50 +1,116 @@
 ﻿$ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$OutputEncoding = [Console]::OutputEncoding
-$env:PYTHONUTF8 = '1'
+. (Join-Path $PSScriptRoot 'scripts/launcher.ps1')
+
+$lock = $null
+$browserJob = $null
 try {
-    $pythonPath = $null
-    $forwarded = [System.Collections.Generic.List[string]]::new()
-    for ($index = 0; $index -lt $args.Count; $index++) {
-        switch (([string]$args[$index]).ToLowerInvariant()) {
-            { $_ -in '-pythonpath', '--python' } {
-                $index++
-                if ($index -ge $args.Count) { throw '请在 --python 后填写已有 python.exe 的完整路径。' }
-                $pythonPath = $args[$index]
-                break
-            }
-            '-port' { $forwarded.Add('--port'); break }
-            '-nobrowser' { $forwarded.Add('--no-browser'); break }
-            '-checkruntime' { $forwarded.Add('--check'); break }
-            '-stop' { $forwarded.Add('--stop'); break }
-            default { $forwarded.Add($args[$index]) }
+    $options = Read-LaunchOptions $args
+    if ($options.Help) {
+        Write-Host 'Campus Framework launcher'
+        Write-Host 'run.cmd [--distro NAME] [--port PORT] [--no-browser] [--check]'
+        Write-Host 'Start the native Windows service and open Microsoft Edge. --distro selects WSL.'
+        Write-Host 'Keep this window open. Press Ctrl+C to stop the server.'
+        Write-Host '--check validates launch dependencies without starting the server.'
+        Write-Host '--version prints the application version.'
+        exit 0
+    }
+    if ($options.Version) {
+        $project = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'pyproject.toml') -Raw
+        Write-Host ([regex]::Match($project, '(?m)^version = "([^"]+)"').Groups[1].Value)
+        exit 0
+    }
+    $edge = if (!$options.NoBrowser -and !$options.Check) { Find-Edge } else { $null }
+    $running = Get-CampusServer $PSScriptRoot
+    if ($running -and !$options.Check) {
+        if ($options.Port -and $options.Port -ne $running.port) {
+            throw "This workspace is already running on port $($running.port). Stop it before changing ports."
         }
+        $url = "http://127.0.0.1:$($running.port)"
+        Write-Host "Already running: $url"
+        if ($edge) { Start-Process -FilePath $edge -ArgumentList $url }
+        exit 0
     }
-    if (-not $pythonPath -and $env:CAMPUS_PYTHON) { $pythonPath = $env:CAMPUS_PYTHON }
-    $configuration = Join-Path $PSScriptRoot 'python-path.txt'
-    if (-not $pythonPath -and (Test-Path -LiteralPath $configuration)) {
-        $pythonPath = (Get-Content -LiteralPath $configuration -Raw -Encoding UTF8).Trim()
+    $directory = Join-Path $PSScriptRoot '.private/runtime/launcher'
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    if (!$options.Check) {
+        try { $lock = [IO.File]::Open((Join-Path $directory 'launch.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
+        catch { throw 'This workspace is already starting. Wait for its startup window, then try again.' }
     }
-    if (-not $pythonPath) {
-        $candidates = @(
-            (Join-Path $PSScriptRoot '.codex\venv\Scripts\python.exe'),
-            (Join-Path $env:USERPROFILE 'anaconda3\python.exe'),
-            (Join-Path $env:USERPROFILE 'miniconda3\python.exe'),
-            'D:\anaconda\python.exe',
-            'C:\ProgramData\anaconda3\python.exe'
-        )
+
+    if ($options.Distro) {
+        $wslCommand = Get-Command wsl.exe -ErrorAction SilentlyContinue
+        if (!$wslCommand) { throw 'WSL was not found. Install Windows Subsystem for Linux and an Ubuntu or Debian distribution.' }
+        $wsl = $wslCommand.Source
+        $installed = ConvertFrom-WslList (Invoke-Wsl $wsl @('--list', '--quiet') -Quiet)
+        if ($script:WslExitCode -ne 0 -or !$installed) { throw 'No WSL distribution found. Install WSL and Ubuntu, then run this launcher again.' }
+        $default = ((Invoke-Wsl $wsl @('--exec', 'printenv', 'WSL_DISTRO_NAME') -Quiet) -join '').Trim([char]0, [char]13, [char]10, [char]32)
+        $candidates = Get-WslCandidates $installed $options.Distro $default
+        $distribution = $null
         foreach ($candidate in $candidates) {
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $pythonPath = $candidate; break }
+            Invoke-Wsl $wsl @('--distribution', $candidate, '--cd', $PSScriptRoot, '--exec', 'bash', '-c', 'command -v wslpath >/dev/null && test -x /init && test -f run.sh') -Quiet
+            if ($script:WslExitCode -eq 0) { $distribution = $candidate; break }
         }
+        if (!$distribution) { throw 'No usable WSL distribution found. Enable Windows interoperability and install bash, or pass --distro NAME.' }
+        Write-Host "Using WSL: $distribution"
+        Initialize-WindowsTools $PSScriptRoot $wsl $distribution
+        if ($options.Check) {
+            Invoke-Wsl $wsl @('--distribution', $distribution, '--cd', $PSScriptRoot, '--exec', 'bash', './run.sh', '--check')
+            exit $script:WslExitCode
+        }
+    } else {
+        $env:CAMPUS_EDGE = Find-Edge
+        $uvCommand = Get-Command uv.exe -ErrorAction SilentlyContinue
+        if (!$uvCommand) { throw 'Install Windows uv (https://docs.astral.sh/uv/getting-started/installation/), then reopen this launcher.' }
+        $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+        if (!$nodeCommand) { throw 'Install Windows Node.js 22+ for the school login window.' }
+        $nodeVersion = & $nodeCommand.Source --version
+        if ($nodeVersion -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 22) { throw 'Windows Node.js 22+ is required.' }
+        $runtime = Join-Path $PSScriptRoot '.private/runtime/windows'
+        $env:UV_PROJECT_ENVIRONMENT = Join-Path $runtime 'venv'
+        $env:UV_PYTHON_INSTALL_DIR = Join-Path $runtime 'python'
+        $env:UV_CACHE_DIR = Join-Path $runtime 'cache/uv'
+        $env:PYTHONPYCACHEPREFIX = Join-Path $runtime 'cache/python'
+        $env:PYTHONDONTWRITEBYTECODE = '1'
+        $env:TEMP = Join-Path $runtime 'tmp'
+        $env:TMP = $env:TEMP
+        New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
+        if ($options.Check) {
+            & $uvCommand.Source --version
+            Write-Host "Native Windows and Node $nodeVersion ready. AI plugin installation also requires pnpm."
+            exit 0
+        }
+        Push-Location $PSScriptRoot
+        try { & $uvCommand.Source sync --locked; if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed.' } }
+        finally { Pop-Location }
     }
-    if (-not $pythonPath -or -not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
-        throw '未找到已有 Python。请在 python-path.txt 写入现有 Python 3.12+ 的 python.exe 完整路径；启动器不会下载环境。'
+    $launchId = [guid]::NewGuid().ToString('N')
+    $serverArgs = @('--launch-id', $launchId)
+    if ($options.Port) { $serverArgs += @('--port', [string]$options.Port) }
+    if ($edge) {
+        $browserJob = Start-Job -FilePath (Join-Path $PSScriptRoot 'scripts/open-workspace.ps1') -ArgumentList $PSScriptRoot, $edge, $launchId
     }
-    $pythonPath = (Resolve-Path -LiteralPath $pythonPath).Path
-    & $pythonPath -X utf8 -B (Join-Path $PSScriptRoot 'scripts\launch.py') @forwarded
-    exit $LASTEXITCODE
-}
-catch {
-    [Console]::Error.WriteLine('启动器无法完成操作：' + $_.Exception.Message)
+    Write-Host 'Starting Campus Workspace.'
+    Write-Host 'Keep this window open; Ctrl+C stops the service.'
+    if ($edge) { Write-Host 'Edge opens when the service is ready.' }
+    if ($options.Distro) {
+        Invoke-Wsl $wsl (@('--distribution', $distribution, '--cd', $PSScriptRoot, '--exec', 'bash', './run.sh') + $serverArgs)
+        $code = $script:WslExitCode
+    } else {
+        Push-Location $PSScriptRoot
+        try { & $uvCommand.Source run --no-sync python -m backend.main @serverArgs; $code = $LASTEXITCODE }
+        finally { Pop-Location }
+    }
+    if ($code -ne 0) { Write-Host "Startup failed (exit $code). See the message above. If the port is occupied, use --port 17666." }
+    exit $code
+} catch {
+    Write-Host "Startup error: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    if ($browserJob) {
+        Stop-Job $browserJob -ErrorAction SilentlyContinue
+        Receive-Job $browserJob -ErrorAction SilentlyContinue
+        Remove-Job $browserJob -Force -ErrorAction SilentlyContinue
+    }
+    if ($lock) { $lock.Dispose() }
 }

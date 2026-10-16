@@ -1,0 +1,80 @@
+# 本地 UI 与团队更新的维护说明
+
+本机在 `codex/local-ui-polish` 保留 UI 和启动器定制，持续整合团队 `origin/main`。这些提交仅保存在本地。定时任务每 15 分钟获取远端引用并报告变化，不自动合并、切换分支或推送。
+
+## 从哪里启动
+
+- 双击根目录 `run.cmd`，调用 `run-local.ps1` → `scripts/launch.py`，复用已有 `.codex/venv/Scripts/python.exe`，就绪后打开浏览器。默认 http://127.0.0.1:16666/ ，端口以设置为准。
+- 双击 `stop.cmd` 只停止本目录启动的后台。关闭浏览器后后台仍继续运行。
+- `run-local.ps1 --check` 检查环境；`--no-browser` 只启动后台；`--python 路径` 可指定已安装的 Python。`python-path.txt` 和 `CAMPUS_PYTHON` 仍可指定环境。
+- 团队 `run.ps1` 保留主线原版。它使用团队的 uv 环境流程，可能安装运行时；本机日常请使用 `run.cmd` 或 `run-local.ps1`。
+
+本地启动器仅为自身及子进程设置脚本执行方式，使本仓库的 Windows 凭据辅助脚本可运行；不修改系统或用户的永久策略。
+
+启动器不会自动下载 Python 或库。本次主线新增的 Windows 时区依赖已按用户授权装入已有项目环境。临时文件、日志和检查截图保存在 `.codex/`；持久账号、会话与模块数据继续使用 `.private/`。
+
+## 外观改哪里
+
+纯视觉改动集中在 `web/local-ui/theme.css`：
+
+| 修改 | 位置 |
+| --- | --- |
+| 背景、文字、边框、侧栏宽度 | 文件开头的语义变量 |
+| 导航、按钮、卡片、设置外观 | 对应组件选择器 |
+| 总览统计、连接引导、日程卡片 | `.campus-overview` 作用域 |
+| 手机和窄屏布局 | 文件末尾的媒体查询 |
+
+`web/index.html` 只保留本地主题的属性和样式链接、跳至主内容入口及菜单图标。所有主题覆写限定于 `data-ui-theme="local-nord"`。开发时移除这个 HTML 属性即可对照团队基础外观；样式链接中的跳转与快捷入口基础样式仍保留。不要把团队样式全文复制进本地主题；新增覆写只写有差异的属性。
+
+团队 `web/styles.css`、`web/icons.js`、`web/settings.js`、`web/shared.js`、总览原始样式与 `checks/check_web.mjs` 已恢复为本次主线版本。以后这些文件可以直接接受团队更新，再检查本地覆写是否仍匹配。
+
+## 功能与结构改哪里
+
+主题文件只能改变外观。以下少量本地行为仍在原文件，需要合并时核对：
+
+- `web/app.js`：跳至主内容、切页焦点，以及非分页分类中的页面分区快捷按钮。侧栏、模块分类、分页布局与生命周期继续使用主线契约，未写死业务模块 ID。
+- `modules/dashboard/web/index.js`：保留新版近期作业和日程；全部来源尚未连接时显示 `—` 与连接引导，收起重复的未连接提示，保留独立错误。第四张统计使用已有 `ready_sources` 字段。
+- `scripts/launch.py`：本机已有环境启动、进程归属检查、停止与依赖校验。只支持项目实际使用的版本、固定 Git 地址以及当前 Windows 平台条件；未知依赖条件会明确报错。
+- `run.cmd`：本机双击入口对 `run-local.ps1` 的引用。这是仍需保留的公共启动入口差异。
+- `checks/check_local_ui.mjs`、`checks/check_launcher.py`、`checks/check_launcher_requirements.py`：本地主题与启动器回归检查，和团队检查分开维护。
+
+Piazza 保持信息同步和新附件提醒，不自动下载附件。本轮没有新增 QQ 接入或改动来源抓取逻辑。
+
+## 下次更新怎么做
+
+1. 在本地 UI 分支保存修改，确认工作区干净；不要把 `.private/` 或 `.codex/` 加入提交。
+2. 获取远端更新，查看变化：
+
+```powershell
+git fetch origin
+git log --oneline HEAD..origin/main
+git diff --stat HEAD...origin/main
+```
+
+3. 合并功能，逐项处理有冲突的文件：
+
+```powershell
+git merge --no-commit origin/main
+```
+
+即使没有同文件冲突，也要检查接口字段、路由、模块分类与 CSS 类名。先保留新版功能，再适配主题和少量本地行为；不能直接把整个冲突文件选为本地版。仓库已启用本地 `rerere` 记忆历史冲突解决，但禁用自动暂存，复用结果仍需检查。
+
+4. 验证后完成合并提交，重启本机后台并刷新页面。不要在尚未解决冲突时启动程序。工作区不干净或合并中断时，先检查 `git status`，不要使用强制重置覆盖修改。
+
+本次同步前的完整版本保存在本地备份分支 `codex/ui-before-sync-20261017`，可用于对照，不需要复制覆盖整个目录。需要试验团队原版时可使用独立工作目录，避免在运行中的目录来回切换分支。
+
+## 本机验证入口
+
+使用已有环境，无需新装 Python。先启动本机服务，再运行界面检查：
+
+```powershell
+& .\run-local.ps1 --check
+& .\.codex\venv\Scripts\python.exe -X utf8 -B checks/check_launcher_requirements.py
+& .\.codex\venv\Scripts\python.exe -X utf8 -B checks/check_launcher.py
+& D:\Hermes\node\node.exe checks/check_web.mjs http://127.0.0.1:16666
+& D:\Hermes\node\node.exe checks/check_local_ui.mjs http://127.0.0.1:16666
+```
+
+本地 UI 检查包含真实未连接页面、合成有数据/无数据快照、独立错误保留、分页切换、模块样式清理、主题开关对照以及 1440/768/375px 和横屏布局。团队检查继续覆盖登录草稿、重试、时间表和模块启停。测试窗口使用合成账号，不提交真实登录信息或调用付费 AI。
+
+跨模块或公共框架变动还需运行团队框架、边界与相关业务检查；完整团队验收入口为 `check.ps1` / `check.sh`。本机直接调用已有环境内相同的检查脚本，可避免这些入口自动创建运行时。

@@ -63,6 +63,17 @@ class RequirementsCheck(unittest.TestCase):
             with self.subTest(requirement=requirement), self.assertRaises(RuntimeError):
                 check([requirement], {name: distribution(version)})
 
+    def test_windows_dependency_marker(self):
+        requirement = "tzdata>=2025.2; sys_platform == 'win32'"
+        with patch.object(launcher.sys, "platform", "win32"):
+            check([requirement], {"tzdata": distribution("2025.2")})
+            with self.assertRaisesRegex(RuntimeError, "缺少依赖或版本不符"):
+                check([requirement], {})
+        with patch.object(launcher.sys, "platform", "linux"):
+            check([requirement], {})
+        with self.assertRaisesRegex(RuntimeError, "依赖条件已变化"):
+            check(["tzdata>=2025.2; unknown_marker"], {})
+
     def test_missing_import_is_not_hidden(self):
         with self.assertRaisesRegex(RuntimeError, "无法找到模块"):
             check([], {}, module_available=False)

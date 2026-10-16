@@ -1,4 +1,5 @@
 from typing import Literal
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,10 +23,11 @@ class Remember(BaseModel):
 
 
 class Query(BaseModel):
-    area: Literal["courses", "assignments", "timetable", "grades", "degree_plan", "notifications", "mail", "profile"]
+    area: Literal["courses", "assignments", "timetable", "course_history", "degree_plan", "notifications", "mail", "profile"]
     q: str = Field(default="", max_length=300)
     course_id: str = Field(default="", max_length=300)
     pending: bool = False
+    week_start: date | None = None
     offset: int = Field(default=0, ge=0)
     limit: int = Field(default=30, ge=1, le=60)
 

@@ -8,6 +8,7 @@
     "label": "通知",
     "icon": "☷",
     "description": "提炼带来源的重要事项，跟踪已读状态。",
-    "order": 70
+    "order": 70,
+    "layout": "tabs"
   }
 }

@@ -18,7 +18,9 @@ def profile_owner(context):
 
 def read_profile(context):
     owner = profile_owner(context)
-    return {"profile": context.store.read("profile:" + owner, Profile().model_dump()), "academic": context.store.read("academic:" + owner, {})}
+    saved = context.store.read('academic:' + owner, {})
+    academic = {key: saved[key] for key in ('plan_title', 'study_plan', 'updated_at') if key in saved}
+    return {"profile": context.store.read("profile:" + owner, Profile().model_dump()), "academic": academic}
 
 
 class Task:
@@ -66,7 +68,7 @@ class Task:
         if area == 'profile':
             value = read_profile(self.context)
             academic = value['academic']
-            summary = {'profile': value['profile'], 'academic': {key: academic[key] for key in ('gpa', 'plan_title', 'updated_at') if key in academic}, 'courses_count': len(academic.get('courses', []))}
+            summary = {'profile': value['profile'], 'academic': {key: academic[key] for key in ('plan_title', 'updated_at') if key in academic}}
             return {"items": [self.source('study:profile', '我的学习档案', json.dumps(summary, ensure_ascii=False))]}
         if area == 'assignments':
             value = await self.api('assignments')
@@ -75,15 +77,15 @@ class Task:
             value = await self.api('courses')
             items = value['data']['courses']
         elif area == 'timetable':
-            value = await self.api('timetable', '/schedule')
-            items = value['data']['timetable'] + value['data']['events']
-        elif area in {'grades', 'degree_plan'}:
+            path = '/schedule' + ('?week_start=' + body.week_start.isoformat() if body.week_start else '')
+            value = await self.api('timetable', path)
+            classes = [item for day in value['calendar']['days'] for item in day['events'] if item['event_type'] == 'class']
+            items = classes + value['data']['events']
+        elif area in {'course_history', 'degree_plan'}:
             value = await self.api('eams')
             data = value['data']
-            if area == 'grades':
+            if area == 'course_history':
                 items = data['courses']
-                self.academic(courses=items, gpa=data['metadata'].get('gpa', {}))
-                items = [{'id': 'eams:gpa', 'title': '历史成绩与绩点汇总', 'gpa': data['metadata'].get('gpa', {}), 'url': 'https://eams.shanghaitech.edu.cn/eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR'}, *items]
             else:
                 plan = data['metadata'].get('study_plan', {})
                 if not plan:

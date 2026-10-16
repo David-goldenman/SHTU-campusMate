@@ -1,14 +1,15 @@
-import {icon} from './icons.js';
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
 import * as settings from './settings.js';
+import {icon as navIcon} from './icons.js';
 
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
 const scrim = document.querySelector('#menu-scrim');
-const reloadButton = document.querySelector('#reload-modules');
+document.querySelector('.skip-link').addEventListener('click',event => { event.preventDefault(); main.focus(); });
 let state;
 let pageScope;
 let revision = 0;
+const selectedViews = new Map();
 
 let labels = new Map();
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
@@ -67,9 +68,7 @@ async function mountModule(module, container, scope) {
   body.dataset.moduleId = module.id;
   const card = document.createElement('section');
   card.className = 'panel module-card';
-  card.id = 'module-card-' + module.id;
-  if (container.dataset.single === 'true') card.classList.add('module-card-single');
-  card.innerHTML = '<header class="module-card-heading"><div><h2 tabindex="-1">' + escape(module.name) + '</h2><span class="module-version">v' + escape(module.version) + '</span></div><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></header>';
+  card.innerHTML = '<header class="module-card-heading"><h2>' + escape(module.name) + '</h2><span class="module-status status-' + escape(module.status) + '"' + (module.status === 'ready' ? ' hidden' : '') + '>' + moduleStatuses[module.status] + '</span></header>';
   card.append(body);
   container.append(card);
   if (module.status === 'error') {
@@ -101,8 +100,8 @@ async function mountModule(module, container, scope) {
     scope.controller.signal.removeEventListener('abort',abort);
     if (scope.controller.signal.aborted) return;
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块暂时无法打开</h3><p>' + escape(error.message) + '</p></div>';
-    card.classList.add('has-error');
     card.querySelector('.module-status').textContent = '加载失败';
+    card.querySelector('.module-status').hidden = false;
     card.querySelector('.module-status').className = 'module-status status-error';
   }
 }
@@ -113,13 +112,12 @@ async function render() {
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
-  const descriptions = new Map(state.categories.map(item => [item.id,item.description]));
   const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
   const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
   const requested = location.hash.slice(1);
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
-  document.querySelector('#navigation').innerHTML = items.map(([id,iconName,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon(iconName) + '</span><span class="nav-label">' + escape(label) + '</span>' + '</a>').join('');
+  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>').join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {
@@ -127,27 +125,47 @@ async function render() {
     link.classList.toggle('active',active);
     if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
   });
-  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">CAMPUS WORKSPACE</p><h1 id="page-title">' + escape(labels.get(page)) + '</h1><p class="page-description">' + escape(descriptions.get(page)) + '</p></div><div class="page-heading-note">你的个人学习空间</div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+  main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
-  zone.dataset.single = String(visible.length === 1 && visible[0].status === 'ready');
-  if (visible.length > 1) {
+  zone.dataset.count = String(visible.length);
+  const tabbed = state.categories.find(item => item.id === page)?.layout === 'tabs' && visible.length > 1;
+  let mounted = visible;
+  if (tabbed) {
+    const selected = visible.find(item => item.id === selectedViews.get(page)) || visible.find(item => item.id === page) || visible[0];
+    mounted = [selected];
+    zone.dataset.count = '1';
+    zone.setAttribute('role','tabpanel');
+    zone.setAttribute('aria-labelledby','view-' + selected.id);
+    const tabs = document.createElement('div');
+    tabs.className = 'settings-tabs module-tabs';
+    tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',labels.get(page));
+    tabs.innerHTML = visible.map(item => '<button type="button" id="view-' + item.id + '" role="tab" aria-controls="module-area" data-view="' + item.id + '" aria-selected="' + (item.id === selected.id) + '" tabindex="' + (item.id === selected.id ? '0' : '-1') + '">' + escape(item.name) + '</button>').join('');
+    zone.before(tabs);
+    tabs.querySelectorAll('button').forEach((button,index) => {
+      button.onclick = async () => {selectedViews.set(page,button.dataset.view);await render();main.querySelector('#view-' + button.dataset.view)?.focus();};
+      button.onkeydown = event => {const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];if (offset) {event.preventDefault();tabs.children[(index + offset + visible.length) % visible.length].click();}};
+    });
+  }
+  if (!tabbed && visible.length > 1) {
     const shortcuts = document.createElement('nav');
     shortcuts.className = 'module-shortcuts';
     shortcuts.setAttribute('aria-label','页面分区');
-    shortcuts.innerHTML = visible.map(module => '<button type="button" data-module-jump="' + escape(module.id) + '">' + escape(module.name) + '</button>').join('');
-    zone.before(shortcuts);
+    shortcuts.innerHTML = visible.map(module => '<button type="button" data-module-section="' + escape(module.id) + '">' + escape(module.name) + '</button>').join('');
     shortcuts.addEventListener('click',event => {
-      const button = event.target.closest('[data-module-jump]');
+      const button = event.target.closest('[data-module-section]');
       if (!button) return;
-      const card = document.getElementById('module-card-' + button.dataset.moduleJump);
-      card.querySelector('h2').focus({preventScroll:true});
-      card.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+      const heading = [...zone.querySelectorAll('.module-card')].find(card => card.querySelector('[data-module-id]')?.dataset.moduleId === button.dataset.moduleSection)?.querySelector('h2');
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.closest('.module-card').scrollIntoView({block:'start'});
+      heading.focus({preventScroll:true});
     },{signal:scope.controller.signal});
+    zone.before(shortcuts);
   }
-  const work = visible.map(module => mountModule(module,zone,scope));
+  const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
       modules:state.modules, labels, signal:scope.controller.signal,
@@ -158,7 +176,7 @@ async function render() {
     if (!visible.length) zone.innerHTML = empty('这个分类已准备好接入模块','在设置中启用此分类的模块后，内容会显示在这里。','<a class="button button-secondary" href="#settings">管理模块 →</a>');
   }
   await Promise.all(work);
-  if (current === revision && !scope.controller.signal.aborted) main.focus({preventScroll:true});
+  if (current === revision) main.focus({preventScroll:true});
 }
 
 async function reloadModules() {
@@ -186,17 +204,10 @@ async function refresh() {
 async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
-  document.querySelector('#app-version').textContent = 'v' + state.version;
-  const today = new Date();
-  document.querySelector('#workspace-date').dateTime = today.toISOString();
-  document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'short'}).format(today);
+  document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date());
   await render();
-  reloadButton.disabled = false;
 }
 
-document.querySelector('.skip-link').onclick = event => { event.preventDefault(); main.focus(); };
-
-reloadButton.onclick = safeAction(reloadButton,reloadModules);
 window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
 window.addEventListener('pagehide',() => { void dispose(); });
 

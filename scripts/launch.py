@@ -144,7 +144,14 @@ def check_runtime():
         raise RuntimeError("需要已有的 Python 3.12 或以上版本。")
     missing = []
     requirements = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
-    for requirement in requirements:
+    for declaration in requirements:
+        requirement, separator, marker = declaration.partition(";")
+        requirement = requirement.strip()
+        if separator:
+            if marker.strip() != "sys_platform == 'win32'":
+                raise RuntimeError("依赖条件已变化，请维护者更新启动检查：" + declaration)
+            if sys.platform != "win32":
+                continue
         match = re.fullmatch(r"([A-Za-z0-9_.-]+)(>=|==)([^ ,;]+)", requirement)
         git = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*@\s*git\+(https://[^\s#]+)@([a-fA-F0-9]{40})", requirement)
         if not match and not git:
@@ -355,4 +362,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
