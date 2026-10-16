@@ -63,6 +63,6 @@ class Citation(BaseModel):
 
 
 class Answer(BaseModel):
-    text: str = Field(min_length=1, max_length=24000)
+    text: str | None = Field(default=None, min_length=1, max_length=24000)
     citations: list[Citation] = Field(default_factory=list, max_length=24)
     insufficient_context: bool = False

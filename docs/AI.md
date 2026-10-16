@@ -53,6 +53,14 @@ AI 工具和工作流的统一扩展方式是独立的原生 Harness 插件模�
 
 基础生成与对话采用一次性完整响应，官方请求最长等待 90 秒，输出上限 6000 tokens。官方返回余额、认证、限流、网络或格式错误时，接口返回安全的 `502` 错误说明；未配置或关闭 AI 时返回 `409`，设置冲突返回 `400`，请求字段不符合约定返回 `422`。官方错误正文及密钥不写入这些说明。
 
+## Harness 实时事件
+
+后端 `context.ai.run(..., plugins=[模块ID], on_event=callback, cancel_event=event)` 可选接收实时事件及 `threading.Event` 取消信号。`callback(frame)` 在执行 Harness 的工作线程中运行；需要更新异步队列时使用事件循环的 `call_soon_threadsafe`。该调用仍返回原有完整结果，`/ai/run` 的 JSON 契约保持一致。
+
+适配层在提供 `on_event` 时加载内部 Cordis 插件 `backend/services/ai/stream/`，订阅官方 `agent/assistant-stream`，通过 SDK 的 JSON-RPC 通知 `campus.stream` 转发 `{sessionId,frame}`。`frame.type` 为 `start`、`chunk` 或 `end`，`chunk` 使用官方流式协议。此插件仅适配传输，不注册业务工具，不出现在业务插件列表中。宿主不把这些原始通知直接发送到网页；模块选择可以呈现的字段，例如只呈现已核对来源后的 `text-delta`，过滤推理及工具参数。
+
+取消信号触发后，运行中的 SDK 关闭并回收子进程；初始化与安装依赖步骤之间也检查该信号。业务模块负责取消后的存储规则和任务令牌清理。首页学习助手使用 NDJSON 返回进度、正文和最终引用，具体事件见 [模块说明](../modules/academic-assistant/README.md)。合成模型检查要求实时片段在模型响应结束前到达。
+
 ## 模块接入
 
 后端模块使用统一上下文中的共享 AI 实例：

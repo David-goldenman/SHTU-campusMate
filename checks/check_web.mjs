@@ -149,7 +149,7 @@ try {
   await evaluate(`toggleModule('blackboard')`); assert.equal(await evaluate(`!!document.querySelector('[data-nav=courses]')`),true);
   await evaluate(`toggleModule('gradescope')`); assert.equal(await evaluate(`!!document.querySelector('[data-nav=courses]')`),false);
   await evaluate(`toggleModule('assistant')`); assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-nav]')].map(a=>a.dataset.nav)`),['settings']);
-  await evaluate(`location.hash='timetable';waitFor(()=>location.hash==='#settings' && document.querySelector('[data-module-toggle=timetable]'))`);
+  await evaluate(`location.hash='timetable';waitFor(()=>location.hash.split('?')[0]==='#settings' && document.querySelector('[data-module-toggle=timetable]'))`);
   assert.deepEqual(await evaluate(`webCheck.unexpected`),[]);
   console.log('PASS: combined timetable, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
 } finally {

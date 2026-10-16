@@ -52,7 +52,7 @@ export function apply(ctx) {
   register('study_navigate','navigate','用户明确要求打开工作台页面时使用，回答完成后进入指定分类。普通建议保留在聊天中。',{
     category:{type:'string',required:true,enum:['dashboard','mail','timetable','courses','assignments','eams','notifications','assistant','settings']},
   });
-  register('study_finish','finish','提交完整中文回答与引用并进行原文校验。引用只复制实际来源 text 的短句，不能改写。校验失败时按错误修正并再次调用；accepted=true 后结束任务。',{
-    text:{type:'string',required:true},citations:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{source_id:{type:'string',required:true},quote:{type:'string',required:true}}}},insufficient_context:{type:'boolean'},
+  register('study_finish','finish','回答前核对本次来源与引用。quote 只复制实际来源 text 的原文短句，校验失败时修正并再次调用；accepted=true 后用 Markdown 正常输出完整中文回答，不再调用其他工具。无需在此工具传正文。',{
+    text:{type:'string'},citations:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{source_id:{type:'string',required:true},quote:{type:'string',required:true}}}},insufficient_context:{type:'boolean'},
   });
 }

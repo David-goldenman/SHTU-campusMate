@@ -103,6 +103,7 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | --- | --- | --- |
 | GET | `/modules/academic-assistant/chat` | `{messages}`，当前账号组合的本机历史 |
 | POST | `/modules/academic-assistant/chat` | `{message}` → `{role,text,citations,navigation,tools,model,created_at}` |
+| POST | `/modules/academic-assistant/chat/stream` | `{message}` → NDJSON：`activity`、`reset`、`delta`、`complete` 或 `error` |
 | DELETE | `/modules/academic-assistant/chat` | 清空当前对话，保留学习档案 |
 | GET | `/modules/academic-assistant/profile` | `{profile,academic}` |
 | PUT | `/modules/academic-assistant/profile` | `{major,cohort_year,direction,weekly_hours,notes}`，需要已验证 IDS |
@@ -113,5 +114,7 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | GET | `/modules/eams/course-info?syllabus_id=` | 教学大纲 `{id,title,text,url,scope,truncated}` |
 
 学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、已有课程记录、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+
+流式聊天的 `delta.text` 为正文增量，`complete.message` 与普通聊天结果一致，只有该事件表示成功。流开始后的失败以 `error:{status,detail}` 返回；中断、停止和失败均不保存半段聊天。引用先经工具核对，最终消息保留页码与原文；完整事件字段及生命周期见 [学习助手](../modules/academic-assistant/README.md)。
 
 课程查询复用 IDS 的教务会话，实时读取课程名称／代码及教学大纲；`scope` 分别为 `course_catalog` 和 `course_syllabus`。这两个接口提供课程目录与课程要求，学期实际开课和可选资格仍需核对学校公布的选课安排。培养方案快照新增原始 `requirements` 和 `notes`，见 [教务模块](../modules/eams/README.md)。

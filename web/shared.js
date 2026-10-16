@@ -6,7 +6,7 @@ export function escape(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 }
 
-export async function api(path, options = {}) {
+export async function api(path, {onEvent, ...options} = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('接口路径需要以 / 开头。');
   const url = new URL('/api/v1' + path, location.origin);
   if (url.origin !== location.origin || !url.pathname.startsWith('/api/v1/')) throw new Error('接口路径超出工作台范围。');
@@ -18,6 +18,23 @@ export async function api(path, options = {}) {
     request.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
   }
   const response = await fetch(url, request);
+  if (response.ok && onEvent) {
+    if (!response.headers.get('Content-Type')?.startsWith('application/x-ndjson')) throw new Error('回复格式不正确，请重试。');
+    const reader = response.body.getReader(), decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        const {value, done} = await reader.read();
+        buffer += decoder.decode(value,{stream:!done});
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+        if (done) break;
+      }
+      if (buffer.trim()) onEvent(JSON.parse(buffer));
+    } finally { await reader.cancel(); reader.releaseLock(); }
+    return;
+  }
   const value = await response.json();
   if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : '请求失败，请检查设置后重试。');
   return value;
@@ -29,7 +46,7 @@ export function moduleApi(id, signal) {
     if (path.startsWith('//') || (path && !path.startsWith('/') && !path.startsWith('?'))) throw new Error('模块接口需要使用相对路径。');
     const url = new URL(prefix + path, location.origin);
     if (url.pathname !== prefix && !url.pathname.startsWith(prefix + '/')) throw new Error('接口路径超出当前模块范围。');
-    return api(url.pathname.slice('/api/v1'.length) + url.search, {...options, signal});
+    return api(url.pathname.slice('/api/v1'.length) + url.search, {...options, signal:options.signal ? AbortSignal.any([signal,options.signal]) : signal});
   };
 }
 

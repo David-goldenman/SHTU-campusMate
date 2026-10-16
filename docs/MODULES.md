@@ -51,6 +51,7 @@ export async function mount(container, context) {
 | --- | --- |
 | `context.module` | 当前模块的 `ModuleInfo` |
 | `context.api(path, options)` | 请求 `/api/v1/modules/<id>` 下的接口，自动 JSON 与本地写请求头 |
+| `context.api(path, {onEvent, signal, ...options})` | 流式 NDJSON 接口逐行调用 `onEvent(event)`；自定义取消信号与模块卸载信号共同生效 |
 | `context.services.auth.providers()` | 列出共享认证配置状态 |
 | `context.services.auth.status(id)` | 查询某认证提供方的本地状态 |
 | `context.services.ai.settings()` | 读取共享 AI 启用状态 |
