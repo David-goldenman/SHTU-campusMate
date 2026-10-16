@@ -89,6 +89,10 @@ async def check(root):
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:17666") as client:
             initial = (await client.get("/api/v1/bootstrap")).json()
+            health = (await client.get("/api/v1/health")).json()
+            assert health == {"application": "campus-framework", "version": initial["version"], "launch_id": app.state.launch_id}
+            assert "csrf_token" not in health and len(health["launch_id"]) == 32
+            assert (await client.get("/api/v1/health", headers={"Host": "other.example"})).status_code == 403
             assert [item["id"] for item in initial["categories"]] == ["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant", "settings"]
             assert next(item["label"] for item in initial["categories"] if item["id"] == "timetable") == "时间表"
             assert initial["modules"] == []

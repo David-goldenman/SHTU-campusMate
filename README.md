@@ -8,23 +8,30 @@
 
 1. **真实来源验收与登录恢复。** 六个来源已完成真实账号的登录与基础同步验证，最近完成课表、Blackboard、Gradescope、Coremail 的重复同步和重启检查。已提供 IDS 本机免密码设备入口、过期恢复和按已验证账号隔离缓存；验证范围及限制见 [真实来源验收](docs/LIVE_ACCEPTANCE.md)，用户连接步骤见 [认证文档](docs/AUTH.md)。继续覆盖学校协议变化、验证码与各来源文件正文，未知提交状态不列为未提交。
 2. **通过 Harness 插件完成带引用的学习助手闭环。** 将课程检索、课次时间定位、课件正文提取和长转写检索作为独立工具或工作流模块接入官方运行时；复用教育模块的原文校验，选择课程后能回答问题、展示原文片段并打开对应来源。AI 调用前展示实际资料范围，模块后端校验结果与账号版本后再保存。
-3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。修复启动脚本对单一 WSL 发行版的依赖，准备一套合成演示数据和 5 分钟演示脚本。网页主链路验收后再接 Electron。
+3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。启动器已支持自动选择 WSL 并打开 Edge；接下来准备合成演示数据和 5 分钟演示脚本，按 [交付与移植规范](docs/DELIVERY.md) 验收后再接 Electron。
 
 每项工作从最新主分支建立功能分支，仍按模块分工；共享身份、聚合契约和启动流程的变更作为集成任务处理。
 
 ## 启动
 
-当前开发环境为 Windows + WSL Ubuntu-26.04：Python 服务在 WSL 运行，登录验证使用 Windows Edge，凭据使用当前 Windows 用户的 DPAPI 加密。需要 Python 3.12+、uv、Windows Node.js 22+ 和 Edge；原生 AI 插件包管理还需要 PATH 中的 pnpm。官方 Harness 运行时随 uv 依赖安装，网页界面使用原生 ES Modules。
+当前开发入口为 Windows + WSL：Python 服务在 WSL 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要安装一个带 bash、启用 Windows 互操作的 WSL 发行版（建议 Ubuntu/Debian）、Linux uv、Windows Node.js 22+ 和 Edge。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；原生 AI 插件还需要 WSL 中可运行的 Node.js 22+ 和 pnpm。官方 Harness 运行时随 Python 依赖安装。
 
 在 Windows 双击 `run.cmd`，或运行：
 
 ```powershell
 .\run.ps1
-# 同时运行其他本地项目时可指定独立预览端口
+# 在 PowerShell/CMD 中也可直接使用 run.cmd
+.\run.cmd --check
 .\run.ps1 --port 17666
+.\run.ps1 --distro Ubuntu-22.04
+.\run.ps1 --no-browser
 ```
 
-在 WSL 中运行 `bash ./run.sh`，打开 [本地工作台](http://127.0.0.1:16666)。默认端口为 16666，设置中修改端口后重启生效。所有路径从项目目录计算，可以整体移动项目目录。启动脚本把虚拟环境、uv 缓存、Python 缓存和临时文件统一放入 `.codex/`。
+启动器优先使用可用的默认 WSL，再尝试其他发行版；自动选择时跳过 Docker/Podman/Rancher 管理的发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
+
+默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器使用实例就绪检查，不会把占用同一端口的其他程序当成本工作台。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖可能需要联网。Linux uv 可按 [官方安装说明](https://docs.astral.sh/uv/getting-started/installation/) 安装到 WSL，或放在本项目 `.codex/bin/uv`。
+
+在已配置环境的 WSL 中也可运行 `bash ./run.sh`，手动打开 [本地工作台](http://127.0.0.1:16666)。运行环境、缓存、启动状态和根据本机生成的 Windows 互操作脚本放在 `.codex/`，不会提交。迁移源码时不复制虚拟环境；目标电脑重新准备依赖，详情见 [四人协作、打包与迁移](docs/DELIVERY.md)。
 
 ## AI 功能开发入口
 
@@ -73,5 +80,6 @@ Nord 变量统一在 `web/styles.css` 定义：Polar Night 用于侧栏与正文
 - [AI 接入与上下文约定](docs/AI.md)
 - [Nord 界面与组件](docs/DESIGN.md)
 - [团队开发与修改边界](docs/DEVELOPMENT.md)
+- [四人协作、打包与迁移](docs/DELIVERY.md)
 
 交互式 API 页面从 jsDelivr 加载 Swagger UI；离线时可直接使用 OpenAPI JSON 和项目内接口文档。学校登录协议、二次验证和会话有效期由相应网站决定；以真实登录探测结果确认会话状态。

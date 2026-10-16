@@ -13,11 +13,14 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/bootstrap` | `{version, csrf_token, categories, settings, modules}`；分类按侧栏顺序返回 |
+| GET | `/health` | `{application:"campus-framework",version,launch_id}`；启动器校验本次服务已可访问 |
 | GET | `/settings` | `{port, active_port, restart_required, storage:{directory,encryption}}` |
 | PUT | `/settings` | 请求 `{port:16666}`，返回完整设置；修改后重启生效 |
 | POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope}` |
 
 端口范围为 1024–65535，浏览器限制端口在系统边界拒绝。默认保存端口 16666，`--port` 只覆盖当次运行端口。
+
+`launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.codex/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
 
 清除 `credentials` 时停止模块及登录窗口，清除 Vault 中所有共享和模块秘密、认证状态，并关闭 AI，再挂载模块；普通模块数据保留。清除 `modules` 时停止模块、清除全部模块状态、秘密和文件，再挂载模块；共享登录、AI 与框架设置保留。`all` 执行两类清除并恢复默认设置，当前监听端口持续到服务重启。模块代码与清单始终由开发者维护，数据清除操作只处理本地数据。
 
