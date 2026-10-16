@@ -41,6 +41,13 @@ def check_remote():
                 pass
     assert timestamp("2026-10-01T08:00:00") == "2026-10-01T08:00:00+08:00"
     assert timestamp("not-a-date") is None
+    with httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(403))) as client:
+        from fastapi import HTTPException
+        try:
+            Remote(client, threading.Event(), ["example.edu"]).json("GET", "https://example.edu/data")
+            raise AssertionError("Course permission errors must remain distinct from login expiry")
+        except HTTPException as error:
+            assert error.status_code == 403
 
 
 def check_source():

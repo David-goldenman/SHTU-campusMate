@@ -60,8 +60,10 @@ class Remote:
                     self.cancelled.wait(0.25)
                     continue
                 raise SourceError("来源连接超时或网络中断，已保留上次成功数据。") from None
-            if response.status_code in {401, 403} or "/login" in response.url.path.lower() or "authserver" in response.url.path:
+            if response.status_code == 401 or "/login" in response.url.path.lower() or "authserver" in response.url.path:
                 raise LoginRequired("来源登录已失效，请到设置重新连接。")
+            if response.status_code == 403:
+                raise HTTPException(403, "来源未授权读取该内容。")
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt == 0:
                     delay = response.headers.get("retry-after", "0.25")
