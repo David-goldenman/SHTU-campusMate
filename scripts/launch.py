@@ -146,14 +146,29 @@ def check_runtime():
     requirements = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["dependencies"]
     for requirement in requirements:
         match = re.fullmatch(r"([A-Za-z0-9_.-]+)(>=|==)([^ ,;]+)", requirement)
-        if not match:
+        git = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*@\s*git\+(https://[^\s#]+)@([a-fA-F0-9]{40})", requirement)
+        if not match and not git:
             raise RuntimeError("依赖声明已变化，请维护者更新启动检查：" + requirement)
-        package, operator, expected = match.groups()
+        package = (match or git)[1]
         try:
-            installed = importlib.metadata.version(package)
+            distribution = importlib.metadata.distribution(package)
         except importlib.metadata.PackageNotFoundError:
             missing.append(requirement)
             continue
+        if git:
+            # PEP 610 records the repository and exact commit used by pip/uv.
+            try:
+                origin = json.loads(distribution.read_text("direct_url.json") or "{}")
+                vcs = origin.get("vcs_info", {})
+                matches_source = (origin.get("url") == git[2] and vcs.get("vcs") == "git"
+                                  and vcs.get("commit_id", "").lower() == git[3].lower())
+            except (ValueError, TypeError, AttributeError):
+                matches_source = False
+            if not matches_source:
+                missing.append(requirement)
+            continue
+        _, operator, expected = match.groups()
+        installed = distribution.version
         version = lambda text: tuple(int(part) for part in re.match(r"\d+(?:\.\d+)*", text)[0].split("."))
         if operator == "==" and installed != expected or operator == ">=" and version(installed) < version(expected):
             missing.append(requirement)
@@ -162,7 +177,8 @@ def check_runtime():
             "当前环境缺少依赖或版本不符：\n  " + "\n  ".join(missing) +
             "\n请在选定环境补齐后重试。启动器不会自动安装。\n当前 Python：" + sys.executable
         )
-    for name in ("fastapi", "uvicorn", "deepseek_harness", "deepseek_harness_runtime"):
+    for name in ("fastapi", "uvicorn", "deepseek_harness", "deepseek_harness_runtime",
+                 "filelock", "requests", "shanghaitech_ids_passkey"):
         if importlib.util.find_spec(name) is None:
             raise RuntimeError("当前环境无法找到模块 " + name + "，请检查已有环境。")
 

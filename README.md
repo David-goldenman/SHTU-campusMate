@@ -33,6 +33,8 @@ Windows 启动器不会安装 Ubuntu、Python 或依赖。它优先使用现有 
 .\run.ps1 --stop
 ~~~
 
+更新代码后，新增依赖需在启动器实际使用的环境中手动补齐；`git pull` 不安装 Python 包。启动检查支持普通版本约束和锁定到具体提交的 HTTPS Git 依赖，并核对已安装包的来源记录。缺项会一起列出，启动器不会自动下载。
+
 `--check` 只检查选定环境，不启动服务。旧式 `-Port`、`-NoBrowser`、`-CheckRuntime`、`-PythonPath` 参数也可使用。日志和实例信息写入 `.codex/`；停止时验证进程创建时间和所属目录，避免误停其他副本。
 
 Windows Node.js 22+ 和 Edge 用于登录验证；原生 AI 插件的包管理另需 pnpm。启动网页不执行插件包安装。凭据使用当前 Windows 用户的 DPAPI 加密。共享 AI 及账号需要在设置中自行配置。
