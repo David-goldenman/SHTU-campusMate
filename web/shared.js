@@ -89,5 +89,17 @@ export function empty(title, description, action = '') {
   return '<div class="empty-state"><span class="empty-symbol" aria-hidden="true">▦</span><h2>' + escape(title) + '</h2><p>' + escape(description) + '</p>' + action + '</div>';
 }
 
-export const ui = Object.freeze({escape, toast, dialog, confirmDialog, safeAction, empty});
+export function useStyle(url, signal) {
+  const style = document.createElement('link');
+  style.rel = 'stylesheet';
+  style.href = url;
+  const cleanup = () => { style.remove(); signal.removeEventListener('abort',cleanup); };
+  if (!signal.aborted) {
+    signal.addEventListener('abort',cleanup,{once:true});
+    document.head.append(style);
+  }
+  return cleanup;
+}
+
+export const ui = Object.freeze({escape, toast, dialog, confirmDialog, safeAction, empty, useStyle});
 

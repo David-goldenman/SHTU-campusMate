@@ -1,1 +1,13 @@
-{"id":"blackboard","name":"Blackboard","version":"0.1.0","category":"courses","api_version":1}
+{
+  "id": "blackboard",
+  "name": "Blackboard",
+  "version": "0.1.0",
+  "category": "courses",
+  "api_version": 1,
+  "navigation": {
+    "label": "课程中心",
+    "icon": "▥",
+    "description": "按课程与平台查看资料、讨论、成绩和录播。",
+    "order": 40
+  }
+}

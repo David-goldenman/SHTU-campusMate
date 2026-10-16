@@ -9,13 +9,14 @@ export TMPDIR="$PWD/.codex/tmp"
 mkdir -p "$TMPDIR"
 uv sync --quiet
 uv run --no-sync python checks/check_framework.py
+uv run --no-sync python checks/check_module_boundaries.py
+node.exe checks/check_frontend.mjs
 uv run --no-sync python checks/check_auth.py
 uv run --no-sync python checks/check_auth_recovery.py
 node.exe checks/check_device_guide.mjs
 uv run --no-sync python checks/check_ai.py
 uv run --no-sync python checks/check_harness.py
 uv run --no-sync python checks/check_campus.py
-uv run --no-sync python checks/check_analysis.py
 shopt -s nullglob
 for check in modules/*/checks/check_*.py; do
     uv run --no-sync python "$check"

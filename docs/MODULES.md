@@ -26,7 +26,7 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
-`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`eams`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
+`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 使用同样的 ID 格式，`settings` 由框架保留。业务分类由模块自行声明，无需修改框架白名单。可选 `navigation:{label,icon,description,order}` 决定侧栏文本、图标、描述及顺序（order 为 0–10000）；相同分类的模块须声明一致内容。旧清单未声明时以分类 ID、▧、空描述、order=100 兼容。冲突时显式声明优先，其后按模块 ID 排序选择第一项；分类按 order、分类 ID 排序。框架设置始终在最后。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
 
@@ -36,13 +36,10 @@ modules/notes/
 
 ```javascript
 export async function mount(container, context) {
-  const style = document.createElement('link');
-  style.rel = 'stylesheet';
-  style.href = new URL('./styles.css', import.meta.url);
-  document.head.append(style);
+  const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), context.signal);
   const response = await context.api('/status', {signal: context.signal});
   container.innerHTML = `<p>${context.ui.escape(response.message)}</p>`;
-  return () => { style.remove(); };
+  return () => { removeStyle(); };
 }
 ```
 
@@ -59,6 +56,7 @@ export async function mount(container, context) {
 | `context.services.ai.chat(body)` | 调用通用对话 |
 | `context.services.ai.plugins()`、`.run(body)` | 列出原生插件，调用所选插件执行任务 |
 | `context.ui` | 公共 UI helper，组件约定见 [设计文档](DESIGN.md) |
+| `context.ui.useStyle(url, signal)` | 挂载样式并在中止时移除，返回幂等清理函数；在首次 await 前调用 |
 | `context.navigate(category)` | 切换框架分类 |
 | `context.signal` | 当前挂载的 AbortSignal，用于 fetch 与 DOM 监听器 |
 
@@ -131,3 +129,7 @@ ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们�
 模块可定义 `authorize_write(context, request) -> bool` 接受自己的专用 Bearer 令牌。宿主仍先校验 Host、Origin 与跨站请求；钩子必须精确限制路径和令牌。正常网页写请求使用框架 CSRF。邮件模块仅为专用 Agent 写标签接口启用此能力，密钥由该模块 `context.secrets` 保存。
 
 模块启停与刷新按生命周期串行执行，停止钩子运行时释放注册表读取锁，允许后台任务完成已有的跨模块调用。开始停止前先关闭对应路由入口；正在执行的请求仍按原契约返回 409。
+
+模块的 signal 在切页、停用、刷新和该模块 mount 失败时中止；一个模块加载失败不会中止同页其他模块。计时器、全局监听器等须在首次异步等待前注册 abort 清理。仅在 mount 最后返回 cleanup 无法覆盖提前抛错。
+
+模块之间只能经 `context.api(module_id, path, method="GET", body=None)` 调用公开接口。课程资料选择接口属于课程中心，见 [课程中心](../modules/courses/README.md)。框架可在 modules 目录为空时启动设置页；独立启用允许依赖功能暂时不可用，模块自身生命周期必须正常。

@@ -1,9 +1,6 @@
 export async function mount(container, context) {
-  const style = document.createElement('link');
-  style.rel = 'stylesheet';
-  style.href = new URL('./styles.css', import.meta.url);
-  document.head.append(style);
-  const cleanup = () => { style.remove(); container.replaceChildren(); };
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
+  const cleanup = () => { removeStyle(); container.replaceChildren(); };
   const e = context.ui.escape;
   const options = {signal: context.signal};
   const states = {ready: '已同步', empty: '暂无已发布资料', partial: '部分内容可用', not_synced: '尚未同步', syncing: '同步中', stale: '保留旧缓存，需重试', error: '读取失败'};

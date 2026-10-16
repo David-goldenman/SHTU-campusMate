@@ -5,3 +5,5 @@
 `GET /catalog/{collection}` 支持 course_id、current、pending、source、q、offset、limit，limit 最大 500。pending 只适用于作业，要求来源为 Gradescope 或 Blackboard、明确开放且明确未提交；未知状态保持独立。`GET /course?course_id=聚合ID` 返回各平台课程、资料、讨论、录播、作业和折叠课表。
 
 `GET/PUT /groups` 读取或完整保存 `{groups:[{id,title,course_ids}]}`；每组 2–20 个已知来源课程，每门课仅属于一个手动组，空数组恢复自动关联。模块不读取其他模块数据库。项目 `check.sh` 执行来源不可用、学期关联、三态待办及手动关联检查。
+
+`POST /context` 接收 `{course_id?:string, context_ids?:string[]}`，返回 `{items,courses,text,context,account_revision,revision}`。这是助手和通知模块使用的公开资料选择接口：默认选择本学期课程及邮件；指定课程时只取该课程资料并排除邮件；显式空 context_ids 得到空资料，未提供则按课程范围选择。每条正文最多 1800 字、最多 400 条、序列化上下文最多 85000 字符；截断计数放在 context 中。items 带 source_revision，revision 结合当前账号及所选资料版本；调用方完成异步 AI 操作后仍需核对 account_revision。未知课程返回 404，失效选择返回 422，读取过程中切换账号返回 409。来源模块缺失按 snapshot 的 issues 降级；本接口只读缓存，不触发同步或 AI。

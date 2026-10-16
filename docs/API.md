@@ -25,12 +25,14 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
-| GET | `/modules` | `{modules:[ModuleInfo]}` |
-| POST | `/modules/reload` | 扫描模块目录、释放并重新加载，返回 `{modules:[ModuleInfo]}` |
-| PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo]}` |
+| GET | `/modules` | `{modules:[ModuleInfo],categories:[Category]}` |
+| POST | `/modules/reload` | 扫描模块目录、释放并重新加载，返回 `{modules:[ModuleInfo],categories:[Category]}` |
+| PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo],categories:[Category]}` |
 | 任意 | `/modules/<id>/<route>` | 模块自己的公开后端接口，由该模块文档说明 |
 
-`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
+`Category` 包含 `id,label,icon,description,order`，从已安装模块的导航声明生成，最后附加框架设置。清单、启停和刷新均返回同一分类列表；页面只显示存在已启用前端模块的业务分类。
+
+`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 

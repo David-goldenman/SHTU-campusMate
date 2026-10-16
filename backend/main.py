@@ -13,7 +13,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .core.config import CATEGORIES, VERSION, Settings
+from .core.config import VERSION, Settings
 from .core.modules import ModuleManager
 from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
@@ -104,7 +104,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.get("/api/v1/bootstrap", tags=["框架"], summary="初始化网页与模块清单")
     def bootstrap():
-        return {"version": VERSION, "csrf_token": csrf, "categories": CATEGORIES, "settings": settings(), **modules.list()}
+        return {"version": VERSION, "csrf_token": csrf, "settings": settings(), **modules.list()}
 
     @app.get("/api/v1/settings", tags=["设置"], summary="读取全局设置与存储说明")
     def get_settings():
