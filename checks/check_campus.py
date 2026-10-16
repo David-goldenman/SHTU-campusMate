@@ -78,7 +78,33 @@ def check_source():
     assert validate_bundle({"courses": [{"id": "x:1", "source": "x"}]})["courses"]
 
 
+def check_download():
+    import asyncio
+    from backend.services.campus.files import download
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        if request.url.path == "/redirect":
+            return httpx.Response(302, headers={"Location": "https://foreign.example/file"})
+        return httpx.Response(200, content=b"%PDF-synthetic", headers={"Content-Type": "application/pdf"})
+
+    with sandbox("files", handler) as context:
+        response = download(context, "ids", ["example.edu"], lambda remote: ("https://example.edu/file", "synthetic.pdf"), threading.Event())
+        assert Path(response.path).read_bytes() == b"%PDF-synthetic"
+        asyncio.run(response.background())
+        assert not Path(response.path).exists()
+        with context.auth.authenticated_client("ids") as client:
+            try:
+                Remote(client, threading.Event(), ["example.edu"]).request("GET", "https://example.edu/redirect")
+                raise AssertionError("Foreign redirects must not be followed")
+            except LoginRequired:
+                pass
+        assert not any("foreign.example" in url for url in calls)
+
+
 if __name__ == "__main__":
     check_remote()
     check_source()
+    check_download()
     print("campus: retries, pagination bounds, malformed JSON, cache preservation, account isolation and worker cleanup passed")

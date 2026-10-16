@@ -1,4 +1,4 @@
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from fastapi import HTTPException
@@ -32,19 +32,35 @@ class Remote:
             raise SourceError("同步已停止。")
 
     def request(self, method, url, **kwargs):
-        parsed = urlsplit(url)
-        if parsed.scheme != "https" or parsed.hostname not in self.hosts or parsed.username or parsed.password:
-            raise SourceError("来源地址超出允许的服务范围。")
+        self.checked_url(url)
         for attempt in range(2):
             self.check()
+            current, verb, arguments = url, method, dict(kwargs)
             try:
-                response = self.client.request(method, url, timeout=20, **kwargs)
+                for _ in range(6):
+                    self.checked_url(current)
+                    response = self.client.request(verb, current, timeout=20, follow_redirects=False, **arguments)
+                    if not response.is_redirect:
+                        break
+                    location = response.headers.get("location")
+                    if not location:
+                        raise SourceError("来源跳转缺少目标地址。")
+                    current = urljoin(str(response.url), location)
+                    if urlsplit(current).hostname not in self.hosts or "/login" in urlsplit(current).path.lower():
+                        raise LoginRequired("来源要求重新登录，请到设置连接。")
+                    arguments.pop("params", None)
+                    if response.status_code == 303 or response.status_code in {301, 302} and verb.upper() == "POST":
+                        verb = "GET"
+                        arguments.pop("data", None)
+                        arguments.pop("json", None)
+                else:
+                    raise SourceError("来源跳转次数过多。")
             except (httpx.TimeoutException, httpx.NetworkError):
                 if attempt == 0:
                     self.cancelled.wait(0.25)
                     continue
                 raise SourceError("来源连接超时或网络中断，已保留上次成功数据。") from None
-            if response.status_code in {401, 403} or urlsplit(str(response.url)).hostname not in self.hosts or "/login" in response.url.path.lower() or "authserver" in response.url.path:
+            if response.status_code in {401, 403} or "/login" in response.url.path.lower() or "authserver" in response.url.path:
                 raise LoginRequired("来源登录已失效，请到设置重新连接。")
             if response.status_code == 429 or response.status_code >= 500:
                 if attempt == 0:
@@ -57,6 +73,19 @@ class Remote:
             if not response.is_success:
                 raise SourceError("来源未接受本次读取请求。")
             return response
+
+    def checked_url(self, url):
+        parsed = urlsplit(url)
+        ports = {None, 443, 8443} if parsed.hostname == "elearning.shanghaitech.edu.cn" else {None, 443}
+        if parsed.scheme != "https" or parsed.hostname not in self.hosts or parsed.port not in ports or parsed.username or parsed.password:
+            raise SourceError("来源地址超出允许的服务范围。")
+
+    def html(self, url):
+        from bs4 import BeautifulSoup
+        response = self.request("GET", url)
+        if BeautifulSoup(response.text, "html.parser").select_one('#loginForm, form[action="/login"], input[type="password"]'):
+            raise LoginRequired("来源返回了登录页面，请在设置重新连接。")
+        return response.text
 
     def json(self, method, url, **kwargs):
         response = self.request(method, url, **kwargs)
@@ -81,6 +110,5 @@ class Remote:
             link = page.get("nextPage")
             if not link:
                 return
-            from urllib.parse import urljoin
             url, params = urljoin(url, link), None
         raise SourceError("来源分页超过 100 页，请缩小读取范围。")
