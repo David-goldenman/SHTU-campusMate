@@ -2,7 +2,7 @@ import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './
 import * as settings from './settings.js';
 
 const navigation = [
-  ['dashboard','◫','总览'], ['mail','✉','邮箱'], ['timetable','▦','课程表'],
+  ['dashboard','◫','总览'], ['mail','✉','邮箱'], ['timetable','▦','时间表'],
   ['courses','▥','课程中心'], ['assignments','◷','作业管理'],
   ['eams','✎','教务系统'], ['notifications','☷','通知'], ['assistant','✧','AI助手'], ['settings','⚙','设置'],
 ];
@@ -18,7 +18,7 @@ const labels = new Map(navigation.map(([id,,label]) => [id,label]));
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
 const categoryDescriptions = {
   dashboard:'本学期课程、近期作业与重要通知。', mail:'阅读校园邮件，按规则、手动或 AI 整理分类。',
-  timetable:'按教学周查看课程、节次与教室。', courses:'按课程与平台查看资料、讨论、成绩和录播。',
+  timetable:'查看上课安排、quiz 与作业截止时间，以及教务考试。', courses:'按课程与平台查看资料、讨论、成绩和录播。',
   assignments:'查看明确开放的待办及各课程作业状态。', eams:'查看考试安排、学期成绩与培养方案。', notifications:'提炼带来源的重要事项，跟踪已读状态。',
   assistant:'选择缓存资料，进行课程问答、总结和报告。', settings:'管理模块、账号、AI服务和本地数据。',
 };
@@ -112,8 +112,12 @@ async function render() {
   const current = ++revision;
   await dispose();
   if (current !== revision) return;
+  const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
+  const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
   const requested = location.hash.slice(1);
-  const page = labels.has(requested) ? requested : 'dashboard';
+  const page = items.some(([id]) => id === requested) ? requested : items[0][0];
+  if (requested !== page) history.replaceState(null,'','#' + page);
+  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon + '</span>' + label + '</a>').join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {
@@ -125,7 +129,7 @@ async function render() {
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
-  const visible = state.modules.filter(module => module.category === page && module.enabled && (module.status === 'error' || (module.status === 'ready' && module.frontend_url)));
+  const visible = enabled.filter(module => module.category === page);
   const work = visible.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
@@ -165,7 +169,6 @@ async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
   document.querySelector('#app-version').textContent = 'v' + state.version;
-  document.querySelector('#navigation').innerHTML = navigation.map(([id,icon,label],index) => (index === 8 ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon + '</span>' + label + '</a>').join('');
   await render();
   reloadButton.disabled = false;
 }
