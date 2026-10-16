@@ -30,7 +30,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo]}` |
 | 任意 | `/modules/<id>/<route>` | 模块自己的公开后端接口，由该模块文档说明 |
 
-`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`frontend_url`。有效模块另有 `api_version:1` 和当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。仅后端模块的 `frontend_url` 为 `null`。
+`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`frontend_url`。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
@@ -58,7 +58,24 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | PUT | `/ai/settings` | `{enabled, model, api_key?, delete_key?}` → 安全配置状态 |
 | POST | `/ai/generate` | `{prompt, context?:string, format?:"text"\|"json"}` |
 | POST | `/ai/chat` | `{messages:[{role,content}], format?:"text"\|"json"}` |
+| GET | `/ai/plugins` | `{plugins:[ModuleInfo]}`，提供原生插件的模块及状态 |
+| POST | `/ai/run` | `{prompt,context?:string,plugins:[模块ID]}` → `{content,model,session_id,tools:[{id,name,is_error}]}` |
 
 生成和对话返回 `{content, model, usage:{prompt_tokens,completion_tokens,total_tokens}}`，`content` 按格式为文本或 JSON 对象。模型为 `deepseek-flash` 或 `deepseek-v4-pro`。启用 AI 前保存 Key；不填 Key 表示保留，删除 Key 时单独设置 `delete_key:true` 并关闭 AI。`generate` 的 prompt 最长 16000 字符，context 最长 120000 字符；chat 最多 100 条消息，消息合计最长 120000 字符。
 
 AI 处理调用方明确提供的文本，不会自动读取模块缓存或登录资料。需要聊天历史、来源引用、分类规则或报告保存时，由对应业务模块管理并提供上下文。详见 [AI 文档](AI.md)。
+
+`run` 通过官方 Harness 的原生 Cordis 插件执行任务。prompt 最长 16000 字符，context 最长 120000 字符；显式选择 1–16 个唯一插件 ID，模块管理负责启停和刷新。执行中的插件模块保持活动请求，生命周期操作按现有约定返回 409。原生插件、依赖安装和临时会话的说明见 [AI 插件接口](AI.md#原生-harness-插件)。
+
+调用示例为 `{"prompt":"整理所选事项","context":"调用方选择的资料","plugins":["deadlines"]}`。响应 `content` 为最终文本；`tools[].is_error` 表示单次工具是否失败，工具错误可能由模型处理后继续完成任务。`session_id` 标识本次独立任务。插件列表包含各启停状态，调用方选择 `status:"ready"`；纯插件模块通过共享 AI 接口执行，其 `/modules/<id>/` 下的 HTTP 接口由可选 Python 后端提供。
+
+| 状态 | 插件任务含义 |
+| --- | --- |
+| 400 | 所选模块的 npm 包名重复 |
+| 403 | 本地访问或写入验证失败 |
+| 404 | 所选插件缺失、停用或未就绪 |
+| 409 | AI 未配置、关闭，或活动任务阻止生命周期操作 |
+| 422 | 共享任务请求长度不符、插件数组为空或模块 ID 重复 |
+| 502 | 插件安装、模型、运行时失败，或任务未完整结束 |
+
+新增 AI 工具与工作流使用独立模块的原生插件，统一经过 `/ai/run`；基础文本功能使用 `/ai/chat` 和 `/ai/generate`。共享契约维持 `api_version:1`，业务输出 schema、资料引用与持久化约定由模块 API 定义，并随功能 PR 更新。

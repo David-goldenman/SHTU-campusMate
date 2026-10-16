@@ -19,6 +19,7 @@ from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
 from .core.vault import Vault
 from .services.ai import AIService, create_router as ai_router
+from .services.ai.harness import Harness
 from .services.auth import AuthService, LoginRequired, VerificationRequired, create_router as auth_router
 
 
@@ -59,6 +60,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     auth, ai = AuthService(vault, store), AIService(vault, store)
     errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error}
     modules = ModuleManager(store, vault, auth, ai, root=modules_root, data=data_dir, exception_handlers=errors)
+    ai.harness = Harness(modules)
 
     @asynccontextmanager
     async def lifespan(app):
