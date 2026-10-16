@@ -17,6 +17,18 @@ class GenerateRequest(BaseModel):
     format: Literal["text", "json"] = "text"
 
 
+class RunRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=16000)
+    context: str | None = Field(default=None, max_length=120000)
+    plugins: list[str] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def check_plugins(self):
+        if len(set(self.plugins)) != len(self.plugins):
+            raise ValueError("每个插件只需选择一次。")
+        return self
+
+
 class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str = Field(min_length=1, max_length=120000)
@@ -51,5 +63,13 @@ def create_router(service):
     @router.post("/chat", summary="处理调用方提供的对话消息")
     def chat(body: ChatRequest):
         return service.chat(**body.model_dump())
+
+    @router.get("/plugins", summary="列出模块提供的原生 Harness 插件")
+    def plugins():
+        return service.harness.plugins()
+
+    @router.post("/run", summary="通过官方 Harness 执行所选插件任务")
+    def run(body: RunRequest):
+        return service.run(**body.model_dump())
 
     return router
