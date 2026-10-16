@@ -110,6 +110,8 @@ def create_router(context):
 
 来源读取最多重试一次超时、网络中断、429 与 5xx；分页限制 100 页并检查重复链接和目标域名。共享认证的 `account_revision` 在更新账号、导入会话或忘记登录时变化；缓存按该版本隔离。模块停止时取消后续读取并等待当前工作线程结束，再由宿主关闭 Store。`check.sh` 自动运行每个模块 `checks/check_*.py`。
 
+ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们的 Source 使用 `state_prefix="campus:"`，将全局后台同步进度与原有逐课同步进度分开。共享快照可读取同模块、同账号版本的原有缓存，使已同步的课次和帖子直接进入聚合；调用者仍只依赖公开 API。
+
 `backend.services.campus.files.download` 在一次认证上下文内获取文件，逐跳校验 HTTPS 目标与端口，将内容暂存 `.codex/tmp/<module_id>/`，通过 FileResponse 交付后删除。模块提供固定的服务域名列表与按需解析文件链接的函数，临时签名地址留在后端。
 
 模块可定义 `authorize_write(context, request) -> bool` 接受自己的专用 Bearer 令牌。宿主仍先校验 Host、Origin 与跨站请求；钩子必须精确限制路径和令牌。正常网页写请求使用框架 CSRF。邮件模块仅为专用 Agent 写标签接口启用此能力，密钥由该模块 `context.secrets` 保存。

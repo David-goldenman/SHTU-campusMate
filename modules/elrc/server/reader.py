@@ -11,12 +11,16 @@ BASE = "https://elrc.shanghaitech.edu.cn"
 
 
 def api(remote, path, params=None, payload=None):
-    result = remote.json("POST", BASE + path, json=payload) if payload is not None else remote.json("GET", BASE + path, params=params)
+    client = getattr(remote, "client", None)
+    token = next((cookie.value for cookie in client.cookies.jar if cookie.name == "CsrfToken" and "elrc.shanghaitech.edu.cn".endswith(cookie.domain.lstrip("."))), "") if client is not None else ""
+    headers = {"CsrfToken": token} if token else {}
+    result = remote.json("POST", BASE + path, json=payload, headers=headers) if payload is not None else remote.json("GET", BASE + path, params=params, headers=headers)
     if not isinstance(result, dict):
         raise SourceError("教学社区返回格式不正确。")
-    if result.get("status") in (401, "401") or result.get("message") == "unLogin":
+    code = str(result.get("code", result.get("status", "200")))
+    if code in {"401", "403"} or result.get("message") == "unLogin":
         raise LoginRequired("教学社区会话已到期，请重新连接 IDS。")
-    if result.get("status") not in (None, 0, "0", 200, "200") or "data" not in result:
+    if code not in {"0", "200", "0000"} or result.get("success") is False or result.get("errorCode", "success") != "success" or "data" not in result:
         raise SourceError("教学社区没有返回预期的数据。")
     return result["data"]
 
@@ -84,8 +88,10 @@ def fetch(remote, previous):
                 raise SourceError("课程详情格式不正确。")
             if details.get("courseId"):
                 recording_map[(str(details["courseId"]), item["semester"])] = item["id"]
-            if data.get("course_semester_id"):
-                tree = api(remote, "/learn/v1/homepage/chapter/info", {"courseId": cid, "semester": data["course_semester_id"], "metadataType": "chapter_contents", "type": "released"})
+            entity = details.get("entityData") or {}
+            semester_id = entity.get("course_semester_id") or data.get("course_semester_id")
+            if semester_id:
+                tree = api(remote, "/learn/v1/homepage/chapter/info", {"courseId": cid, "semester": semester_id, "metadataType": "chapter_contents", "type": "released"})
                 result["materials"].extend(chapters(tree, cid, url, result["issues"]))
         except HTTPException:
             result["issues"].append(item["title"] + " 的课程资料暂时不可读，保留缓存。")

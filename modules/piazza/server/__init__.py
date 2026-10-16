@@ -11,6 +11,9 @@ from backend.services.auth import LoginRequired
 
 from .courses import course_catalog, school_reference
 from .source import Piazza, identifier, parse_post
+from . import campus
+
+_source = None
 
 
 class Course(BaseModel):
@@ -52,6 +55,7 @@ class Discover(BaseModel):
 
 
 def create_router(context):
+    global _source
     router = APIRouter()
     lock = threading.Lock()
 
@@ -160,4 +164,10 @@ def create_router(context):
             context.store.write("posts:" + course_id, posts)
         return {"read": body.read}
 
+    router.include_router(campus.create_router(context))
+    _source = campus._source
     return router
+
+
+def stop(context):
+    campus.stop(context)

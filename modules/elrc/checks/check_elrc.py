@@ -1,9 +1,12 @@
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 from checks.module_support import load
 from backend.services.campus import SourceError
+from backend.services.campus import Remote
+import httpx
 
 package = load('elrc')
 reader = sys.modules[package.__name__ + '.reader']
@@ -29,3 +32,12 @@ try:
 except SourceError:
     pass
 print('elrc: chapter paths, string language metadata, missing timestamps, deleted lines and repeated pagination passed')
+
+def csrf(request):
+    assert request.headers['CsrfToken'] == 'synthetic-token'
+    return httpx.Response(200, json={'data': []})
+
+with httpx.Client(transport=httpx.MockTransport(csrf)) as client:
+    client.cookies.set('CsrfToken', 'synthetic-token', domain='elrc.shanghaitech.edu.cn')
+    assert reader.api(Remote(client, threading.Event(), ['elrc.shanghaitech.edu.cn']), '/rman/v1/smart/voice/select', payload={'contentid':'stream'}) == []
+print('elrc: shared source forwards the platform CSRF cookie for transcript requests')

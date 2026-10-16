@@ -15,7 +15,7 @@ from fastapi import FastAPI
 
 from backend.core.store import Store
 from backend.main import runtime_error
-from modules.piazza.server import create_router
+from modules.piazza.server import create_router, stop
 from modules.piazza.server.courses import course_catalog, school_reference
 
 FALL = {"id": "2026-2027-1", "name": "2026-2027学年秋季"}
@@ -59,7 +59,8 @@ async def check_api(directory):
     store = Store(directory / "settings.sqlite3")
     store.write("courses", [{"id": "manual", "name": "Keep selected"}])
     app = FastAPI(exception_handlers={RuntimeError: runtime_error})
-    app.include_router(create_router(SimpleNamespace(store=store, auth=SimpleNamespace(authenticated_client=authenticated))))
+    context = SimpleNamespace(id="piazza", store=store, auth=SimpleNamespace(authenticated_client=authenticated, get_status=lambda provider: {"account_revision": "synthetic"}))
+    app.include_router(create_router(context))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get('/catalog')).json()["courses"] == []
         response = await client.post('/discover', json={"current_semester": FALL})
@@ -71,6 +72,7 @@ async def check_api(directory):
         broken = True
         assert (await client.post('/discover', json={"current_semester": FALL})).status_code == 400
         assert (await client.get('/catalog')).json() == before
+    stop(context)
     store.close()
     print("PASS discovery API: scoped auth, safe output, cached catalog, preserved selections, malformed-response preservation")
 

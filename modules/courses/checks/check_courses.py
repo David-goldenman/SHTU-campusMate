@@ -10,6 +10,8 @@ from backend.services.campus.data import validate_bundle
 from checks.module_support import load, sandbox
 
 package = load('courses')
+catalog = sys.modules[package.__name__ + '.catalog']
+assert catalog.current_semester({'elrc': {'data': {'metadata': {'semester': {'id': '2030-2031-2'}}}}}) == '2031-spring'
 
 
 async def check():

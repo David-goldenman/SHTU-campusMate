@@ -12,6 +12,13 @@ def current_semester(snapshots):
     value = snapshots.get("timetable", {}).get("data", {}).get("metadata", {}).get("semester")
     if value:
         return semester(value)
+    academic = snapshots.get("elrc", {}).get("data", {}).get("metadata", {}).get("semester")
+    if isinstance(academic, dict):
+        value = academic.get("id") or academic.get("showSemester") or academic.get("name")
+    else:
+        value = academic
+    if value:
+        return semester(value)
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
     return str(now.year - (now.month == 1)) + "-" + ("fall" if now.month in {1, 9, 10, 11, 12} else "spring" if now.month <= 6 else "summer")
 

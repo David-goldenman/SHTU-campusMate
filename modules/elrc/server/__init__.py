@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .catalog import ELRC
 from .content import ContentLibrary, now
+from . import campus
+
+_source = None
 
 
 class Selection(BaseModel):
@@ -20,6 +23,7 @@ class SyncCourse(BaseModel):
 
 
 def create_router(context):
+    global _source
     router = APIRouter()
     lock = threading.Lock()
     offline = ELRC(context.data_dir)
@@ -99,4 +103,10 @@ def create_router(context):
         return {"items": [item.model_copy(update={"text": item.text[:4000]}).model_dump()
                           for _, item in ranked[:limit]]}
 
+    router.include_router(campus.create_router(context))
+    _source = campus._source
     return router
+
+
+def stop(context):
+    campus.stop(context)

@@ -11,14 +11,15 @@ from .remote import Remote
 
 
 class Source:
-    def __init__(self, context, provider, hosts, fetch, target=None):
+    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix=""):
         self.context, self.provider, self.hosts, self.fetch, self.target = context, provider, hosts, fetch, target
+        self.sync_key, self.snapshot_key = state_prefix + "sync", state_prefix + "snapshot"
         self.cancelled, self.lock = threading.Event(), threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=context.id)
         self.future = None
-        state = context.store.read("sync", {})
+        state = context.store.read(self.sync_key, {})
         if state.get("status") == "syncing":
-            context.store.write("sync", {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
+            context.store.write(self.sync_key, {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
 
     def owner(self):
         account = self.context.auth.get_status(self.provider)
@@ -26,9 +27,9 @@ class Source:
 
     def snapshot(self):
         with self.lock:
-            saved = self.context.store.read("snapshot", {})
+            saved = self.context.store.read(self.snapshot_key, {})
             owner = self.owner()
-            state = self.context.store.read("sync", {})
+            state = self.context.store.read(self.sync_key, {})
             if state.get("owner") != owner:
                 state = {"status": "not_connected", "message": "请在设置连接账号，然后同步。"}
             if saved.get("owner") != owner:
@@ -41,7 +42,7 @@ class Source:
                 raise HTTPException(409, "模块正在停止。")
             if self.future is not None and not self.future.done():
                 return {"queued": False, "status": "syncing"}
-            self.context.store.write("sync", {"status": "syncing", "owner": self.owner()})
+            self.context.store.write(self.sync_key, {"status": "syncing", "owner": self.owner()})
             self.future = self.executor.submit(self.run)
             return {"queued": True, "status": "syncing"}
 
@@ -55,8 +56,8 @@ class Source:
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
                     return
-                self.context.store.write("snapshot", {"owner": owner, "data": data, "updated_at": datetime.now(timezone.utc).isoformat()})
-                self.context.store.write("sync", {"status": "partial" if data["issues"] else "ready", "owner": owner})
+                self.context.store.write(self.snapshot_key, {"owner": owner, "data": data, "updated_at": datetime.now(timezone.utc).isoformat()})
+                self.context.store.write(self.sync_key, {"status": "partial" if data["issues"] else "ready", "owner": owner})
         except Exception as error:
             if self.cancelled.is_set():
                 return
@@ -69,7 +70,7 @@ class Source:
                 message = "来源网络请求失败，已保留缓存。"
             else:
                 message = "来源数据处理失败（" + type(error).__name__ + "），已保留缓存。"
-            self.context.store.write("sync", {"status": status, "message": message, "owner": owner})
+            self.context.store.write(self.sync_key, {"status": status, "message": message, "owner": owner})
 
     def router(self):
         router = APIRouter()

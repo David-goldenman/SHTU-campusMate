@@ -1,5 +1,11 @@
 # Piazza · WYT
 
+## 校园数据集成
+
+保留课程自动发现、本学期匹配、关注选择、20 条分页采集、附件、重要性规则与已读状态。新增 `GET /snapshot` 向课程中心发布已关注课程的缓存正文；`POST /sync`（202）后台刷新已加入课程及各课程最近 50 条讨论；`GET /post?course_id=...&post_id=...` 读取该近期目录中的正文与回复。后台任务在 `stop(context)` 中取消并结束。已更新帖子的旧正文会失效，重新读取后再提供完整文字。
+
+共享快照按账号版本隔离，旧采集缓存首次接入时绑定当前账号版本；换账号仍应先清除旧模块数据，避免旧页面混用缓存。来源课程通过已实测的 `user.status` / `networks` 发现，`active` 状态不作为本学期依据。
+
 归属今日讨论中的「piazza WYT」。依据 `QQ-Piazza-采集程序-分享版-20261015.zip` 中 `message-hub/source_api.py`、`connectors.py`、`storage.py` 的 Piazza 部分接入，挂载在**通知**。
 
 ## 使用

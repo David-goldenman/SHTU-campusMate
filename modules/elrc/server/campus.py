@@ -1,15 +1,25 @@
-from fastapi import HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.services.campus import Remote, Source
 from .reader import fetch, recording, transcript
+from .snapshot import with_library
 
 _source = None
 
 
 def create_router(context):
     global _source
-    _source = Source(context, "ids", ["elrc.shanghaitech.edu.cn"], fetch, target="elrc")
-    router = _source.router()
+    _source = Source(context, "ids", ["elrc.shanghaitech.edu.cn"], fetch, target="elrc", state_prefix="campus:")
+    if context.store.read("library_owner") is None:
+        context.store.write("library_owner", _source.owner())
+    router = APIRouter()
+
+    @router.get("/snapshot")
+    def snapshot():
+        value = _source.snapshot()
+        return with_library(context, value) if context.store.read("library_owner") == _source.owner() else value
+
+    router.add_api_route("/sync", _source.sync, methods=["POST"], status_code=202)
 
     @router.get("/recording")
     def get_recording(course_id: str = Query(pattern=r"^[A-Za-z0-9_-]{1,120}$"), recording_id: str = Query(pattern=r"^[A-Za-z0-9_-]{1,120}$")):
@@ -20,13 +30,13 @@ def create_router(context):
         with context.auth.authenticated_client("ids", target="elrc") as client:
             value = recording(Remote(client, _source.cancelled, _source.hosts), course_id, recording_id)
         with _source.lock:
-            cached = context.store.read("snapshot", {})
+            cached = context.store.read(_source.snapshot_key, {})
             if cached.get("owner") != owner or owner != _source.owner():
                 raise HTTPException(409, "账号已更新，请重新读取。")
             for item in cached["data"]["lessons"]:
                 if item["id"] == canonical:
                     item["stream_ids"] = [stream["id"] for lesson in value["lessons"] for stream in lesson["streams"]]
-            context.store.write("snapshot", cached)
+            context.store.write(_source.snapshot_key, cached)
         return value
 
     @router.get("/transcript")
@@ -38,13 +48,13 @@ def create_router(context):
         with context.auth.authenticated_client("ids", target="elrc") as client:
             value = transcript(Remote(client, _source.cancelled, _source.hosts), stream_id)
         with _source.lock:
-            cached = context.store.read("snapshot", {})
+            cached = context.store.read(_source.snapshot_key, {})
             if cached.get("owner") != owner or owner != _source.owner():
                 raise HTTPException(409, "账号已更新，请重新读取。")
             for item in cached["data"]["lessons"]:
                 if stream_id in item.get("stream_ids", []):
                     item["body_text"] = "\n".join(line["text"] for line in value["transcript"]) + "\n" + "\n".join(chapter["body_text"] for chapter in value["summary"])
-            context.store.write("snapshot", cached)
+            context.store.write(_source.snapshot_key, cached)
         return value
 
     return router
