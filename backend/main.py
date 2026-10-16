@@ -1,5 +1,6 @@
 import argparse
 import secrets
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -57,7 +58,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     vault = vault or Vault()
     active_port = Settings(port=active_port or store.read("settings", {"port": 16666})["port"]).port
     csrf = secrets.token_urlsafe(32)
-    auth, ai = AuthService(vault, store), AIService(vault, store)
+    auth, ai = AuthService(vault, store, runtime_dir=Path(data_dir) / 'runtime'), AIService(vault, store)
     errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error}
     modules = ModuleManager(store, vault, auth, ai, root=modules_root, data=data_dir, exception_handlers=errors)
     ai.harness = Harness(modules)

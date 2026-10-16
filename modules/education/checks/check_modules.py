@@ -148,11 +148,11 @@ async def check(data):
             selected = (await client.get('/api/v1/modules/assistant/context')).json()
             assert any(item['kind'] == 'lessons' and item['body_text'] for item in selected['items'])
             plugins = (await client.get('/api/v1/ai/plugins')).json()['plugins']
-            assert len(plugins) == 1 and plugins[0]['id'] == 'deadlines' and plugins[0]['status'] == 'ready'
+            assert next(item for item in plugins if item['id'] == 'deadlines')['status'] == 'ready'
             task = await client.post('/api/v1/modules/assistant/run', json={'prompt': '整理课程资料', 'plugins': ['deadlines']})
             assert task.status_code == 200 and task.json()['citations'] and not task.json()['tools'][0]['is_error'], task.text
             assert (await client.put('/api/v1/modules/deadlines', json={'enabled': False})).status_code == 200
-            assert (await client.get('/api/v1/ai/plugins')).json()['plugins'][0]['status'] == 'disabled'
+            assert next(item for item in (await client.get('/api/v1/ai/plugins')).json()['plugins'] if item['id'] == 'deadlines')['status'] == 'disabled'
             assert (await client.get('/api/v1/modules/assistant/chat')).status_code == 200
             assert (await client.put('/api/v1/modules/deadlines', json={'enabled': True})).status_code == 200
             assert len(fixture.calls) == calls_before, 'Aggregates must read the existing caches offline'

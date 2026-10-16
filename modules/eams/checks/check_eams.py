@@ -128,6 +128,13 @@ assert [(course["code"], course["credits"], course["terms"], course["required"])
 assert document["groups"][1]["courses"][0]["terms"] == [4] and document["groups"][1]["courses"][0]["required"] is False
 assert document["groups"][0]["courses"][0]["note"] == "大一大二需参加讲座"
 assert [course["title"] for group in document["groups"] for course in group["courses"]] == ["形势与政策", "像素着色艺术"]
+assert '非必修课' in document['notes'][0]
+with_credits = reader['plan'](PLAN.replace('<tr><td colspan="6">备注', '<tr><td>应修学分</td><td>145</td></tr><tr><td colspan="6">备注'))
+assert with_credits['requirements'][0]['text'] == '应修学分 145'
+catalogue = '''<table class="gridtable"><tr><th></th><th>代码</th><th>名称</th><th>学分</th><th>操作</th></tr><tr><td></td><td>DEMO100</td><td>合成课程</td><td>4</td><td><a href="/eams/courseSearchOther!info.action?syllabusIds=9">课程</a></td></tr></table><script>page.pageInfo(1,20,1);</script>'''
+catalogue_result = package.search.__globals__['courses'](catalogue)
+assert catalogue_result['scope'] == 'course_catalog' and catalogue_result['total'] == 1
+assert catalogue_result['items'][0]['syllabus_id'] == 9 and catalogue_result['items'][0]['credits'] == 4
 
 result = reader["fetch"](remote(httpx.MockTransport(handler)), {})
 assert result["issues"] == [] and result["metadata"]["semester"] == "2026-2027学年秋季" and result["metadata"]["student_id"] == "15098"

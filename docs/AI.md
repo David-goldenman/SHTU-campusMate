@@ -93,7 +93,7 @@ modules/<id>/
 
 `GET /ai/plugins` 列出带 `harness/` 的模块，返回已启用、停用或加载失败的记录；调用方按 `status: "ready"` 选择可用能力。插件的 `id` 是宿主模块 ID，`package.json.name` 是 npm 包名。纯插件模块可以只提供 `module.json` 和 `harness/`，由共享 `/ai/run` 调用。通过现有模块管理启用、停用和刷新，调用时显式选择 1–16 个模块 ID。
 
-服务端签名为 `context.ai.run(prompt, context=None, *, plugins)`。共享 AI 方法是同步调用，在异步模块路由中使用线程池：
+服务端签名为 `context.ai.run(prompt, context=None, *, plugins, plugin_env=None)`。共享 AI 方法是同步调用，在异步模块路由中使用线程池：
 
 ```python
 from fastapi.concurrency import run_in_threadpool
@@ -130,9 +130,15 @@ text = result["content"]
 
 原生 `apply(ctx, config)` 接收 Cordis 上下文。普通插件使用默认配置，专用配置和服务依赖由插件的原生 bundle 组合。Python 的 `ModuleContext` 由模块后端使用；工具 `execute(args, execution)` 接收经 schema 校验的模型参数和取消信号。模块通过公开校园数据 API 选择输入，将资料作为 `run.context` 文本提交；工具补充校验日期、标识和大小等业务约束，并响应 `execution.signal`。
 
+按需访问校园 API 的完整例子为 [首页学习助手](../modules/academic-assistant/README.md)。其后端创建短期任务令牌，通过 `plugin_env={"CAMPUS_PLUGIN_STUDY_URL": "本机模块工具地址", "CAMPUS_PLUGIN_STUDY_TOKEN": "当前任务令牌"}` 传入原生进程；插件使用 `fetch` 调用自己的受限工具路由，后端再通过 `context.api` 读取其他模块的公开接口。`plugin_env` 仅供受信任的 Python 调用方使用，只接受 `CAMPUS_PLUGIN_` 前缀的字符串键值；共享 HTTP `/ai/run` 不提供该字段。令牌不放入 prompt、context、工具参数或返回资料，任务结束即失效，本机请求绕过外部代理。工具路由只授权固定路径，并在读取与保存时核对账号版本。学习助手通过 `study_finish` 在任务内校验回答与引文，失败反馈交给模型修正，通过后保存已校验的结果。
+
+带前端的插件通过自己的页面与业务后端建立任务，基础 AI 助手为它们提供页面链接；纯工具插件仍在“插件任务”中选择。`/ai/plugins` 保留所有插件及其 `has_frontend`、`category` 元数据，模块启停统一管理。新增工具先声明实际读取资料及外部发送范围，再实现所需 API 调用；个人档案的写入、清除和引用校验由相应业务模块负责。
+
 业务后端在返回或保存结果前校验输出 schema、资料引用、账号版本及工具错误。持久化使用模块的 Store 或 data_dir。涉及写入时，由相应公开接口校验当前账号和操作参数；普通插件配置及源代码保存非秘密配置，用户秘密由模块 `context.secrets` 或共享 Vault 管理。
 
-当前任务配置将默认工具范围交给所选插件，并关闭官方最小配置中的 Shell、文件工具、目录切换工具和会话日志上传组件。包安装、缓存、工作目录和 SDK 会话位于本项目 `.codex/`，任务结束时释放运行时并删除临时会话。每次启动会产生额外等待；一次任务可以多轮调用模型，SDK 单次请求或通知等待上限为 90 秒，每轮输出上限为 6000 tokens。业务持久结果仍由模块保存到自己的数据目录。
+当前任务配置将默认工具范围交给所选插件，并关闭官方最小配置中的 Shell、文件工具、目录切换工具和会话日志上传组件。运行数据位于 `.private/runtime/`：包管理缓存独立保存，临时任务在 `tmp/harness-*/` 中创建 `home/` 与 `workspace/`；SDK 的 `cwd` 指向当前工作区，插件通过 `process.cwd()` 在其中读写。学习插件将每次工具的参数与结果保存为工作区 JSON，短期令牌只用于请求头。任务结束释放运行时并删除该任务的工作区、配置及会话；业务持久结果由模块的 Store 和 data_dir 管理。整个私有目录由 Git 忽略。
+
+每次启动会产生额外等待；一次任务可以多轮调用模型，SDK 单次请求或通知等待上限为 90 秒，每轮输出上限为 6000 tokens。校园工具任务显式使用 `reasoning_effort="low"`，用于资料核对与规划。插件工具定义遵循锁定运行时的 schema DSL，数值与字符串边界在业务 API 使用 Pydantic 校验。
 
 插件是受信任的本地代码，与宿主拥有相同系统权限，所选插件也会运行在持有 AI 凭据的进程内。安装前审核代码与外部访问行为；宿主目录约定用于协作和数据管理。工具的注册和清理由 Cordis 的 effect 生命周期管理，后台工作同样需要在插件释放时结束。
 

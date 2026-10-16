@@ -1,0 +1,9 @@
+{
+  "name": "campus-academic-assistant",
+  "version": "0.1.0",
+  "description": "通过校园 API 提供带来源的学习规划、作业与选课辅助",
+  "type": "module",
+  "main": "index.js",
+  "peerDependencies": {"@deepseek-ai/cordis": "*", "@deepseek-ai/dsh-tools": "*"},
+  "peerDependenciesMeta": {"@deepseek-ai/cordis": {"optional": true}, "@deepseek-ai/dsh-tools": {"optional": true}}
+}

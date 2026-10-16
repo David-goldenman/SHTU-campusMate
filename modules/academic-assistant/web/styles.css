@@ -1,0 +1,48 @@
+.academic-chat .study-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:22px; }
+.academic-chat .study-intro h3 { margin-bottom:8px; }
+.academic-chat .study-intro p { color:var(--muted); }
+.academic-chat .study-intro button { flex:none; }
+.academic-chat .study-layout { display:grid; grid-template-columns:minmax(0,2fr) minmax(230px,1fr); gap:26px; align-items:start; }
+.academic-chat .study-conversation { min-width:0; }
+.academic-chat .study-messages { position:relative; min-height:220px; max-height:560px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--paper); padding:18px; overscroll-behavior:contain; }
+.academic-chat .study-welcome { padding:26px 6px; color:var(--muted); }
+.academic-chat .study-welcome h4 { margin:0 0 12px; color:var(--text); font-size:18px; }
+.academic-chat .study-message { padding:18px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+.academic-chat .study-message:first-child { padding-top:0; }
+.academic-chat .study-message:last-child { border-bottom:0; padding-bottom:0; }
+.academic-chat .study-message header { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 14px; margin-bottom:10px; }
+.academic-chat .study-message header span { color:var(--muted); font-size:13px; }
+.academic-chat .study-user { color:var(--link); }
+.academic-chat .study-text { white-space:pre-wrap; line-height:1.85; }
+.academic-chat .study-references { margin-top:14px; }
+.academic-chat summary { cursor:pointer; min-height:44px; display:list-item; padding:8px 0; font-weight:500; }
+.academic-chat .study-references article { margin:12px 0; padding:14px; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+.academic-chat .study-references h4 { margin:0 0 8px; font-size:15px; }
+.academic-chat .study-references blockquote { margin:0 0 10px; padding-left:12px; border-left:3px solid var(--accent); white-space:pre-wrap; font-size:14px; }
+.academic-chat .study-references article>div { display:flex; gap:18px; flex-wrap:wrap; }
+.academic-chat .study-references a { display:inline-flex; align-items:center; min-height:30px; }
+.academic-chat .study-used-tools { margin-top:12px; color:var(--muted); font-size:13px; }
+.academic-chat .study-progress { margin-top:14px; padding:14px 16px; background:var(--surface); border-left:3px solid var(--accent); }
+.academic-chat .study-progress p { font-size:14px; }
+.academic-chat .study-progress ol { margin:8px 0 0; padding-left:20px; color:var(--muted); font-size:14px; }
+.academic-chat .study-progress ol:empty { display:none; }
+.academic-chat .study-examples { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0; }
+.academic-chat [data-chat-form] { display:grid; gap:10px; }
+.academic-chat [data-chat-form] textarea { resize:vertical; min-height:110px; max-height:340px; }
+.academic-chat .study-send { display:flex; justify-content:space-between; gap:16px; align-items:center; }
+.academic-chat .study-send .field-hint { margin:0; }
+.academic-chat .study-error { font-size:14px; }
+.academic-chat .study-error:empty { display:none; }
+.academic-chat .study-profile { min-width:0; border:1px solid var(--border); border-radius:8px; padding:12px 18px; background:var(--surface); }
+.academic-chat .study-profile fieldset { min-width:0; border:0; padding:0; margin:0; display:grid; gap:16px; }
+.academic-chat .study-profile input,.academic-chat .study-profile textarea { background:var(--paper); }
+.academic-chat .study-profile .form-actions { gap:8px 14px; }
+@media (max-width:1180px) { .academic-chat .study-layout { grid-template-columns:1fr; } }
+@media (max-width:540px) {
+  .academic-chat .study-intro { flex-direction:column; gap:10px; }
+  .academic-chat .study-messages { padding:14px; max-height:65vh; }
+  .academic-chat .study-examples { gap:8px; }
+  .academic-chat .study-examples button { flex:1; padding-inline:12px; }
+  .academic-chat .study-send { align-items:flex-start; }
+  .academic-chat .study-send .field-hint { max-width:170px; }
+}
