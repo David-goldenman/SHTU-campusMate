@@ -27,7 +27,7 @@ export async function sourcePanel(container, context, render) {
     button.disabled = snapshot.status === 'syncing';
     container.querySelector('[data-status]').textContent = (labels[snapshot.status] || snapshot.status) + (snapshot.updated_at ? ' · ' + time(snapshot.updated_at) : '');
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
-    await render(container.querySelector('[data-content]'), snapshot, context);
+    await render(container.querySelector('[data-content]'), snapshot, context, refresh);
     if (snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
   }
   button.addEventListener('click', async () => {
