@@ -169,9 +169,14 @@ def plan(page):
     if not table:
         raise SourceError("教务培养方案页没有返回课程表，已保留上次数据。")
     head = node.select_one("p")
-    groups, levels = {}, ["", "", ""]
+    groups, levels, requirements, notes = {}, ["", "", ""], [], []
     for row in table.select("tr"):
         cells = row.select("td")
+        text = row.get_text(' ', strip=True)
+        if cells and any(label in text for label in ('应修学分', '学分小计', '全程总计')):
+            requirements.append({'path': [part for part in levels if part], 'text': text})
+        if cells and cells[0].get_text(strip=True) == '备注':
+            notes.append(text)
         position = next((index for index, cell in enumerate(cells) if "course" in (cell.get("class") or [])), None)
         if not position:
             continue
@@ -189,7 +194,7 @@ def plan(page):
             "note": " ".join(part for part in tail[2:] if part)})
     if not groups:
         raise SourceError("教务培养方案没有课程记录，已保留上次数据。")
-    return {"title": plain(head.get_text(" ", strip=True)) if head else "", "groups": [{"path": list(path), "courses": courses} for path, courses in groups.items()]}
+    return {"title": plain(head.get_text(" ", strip=True)) if head else "", "groups": [{"path": list(path), "courses": courses} for path, courses in groups.items()], "requirements": requirements, "notes": notes}
 
 
 def fetch(remote, previous):

@@ -100,7 +100,8 @@ def check_vault(directory):
 def check_service(directory):
     vault = MemoryVault()
     store = Store(directory / "state.sqlite3")
-    service = AuthService(vault, store)
+    service = AuthService(vault, store, runtime_dir=directory / 'runtime')
+    assert service.browser._directory('ids') == directory / 'runtime' / 'auth' / 'ids'
     server = {"posts": 0, "expired": False, "reject": False}
 
     def respond(request):

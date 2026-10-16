@@ -25,7 +25,10 @@ async def check(directory):
     shutil.copytree(PROJECT / "modules" / "deadlines" / "harness", plugin)
     manifest = {"id": "planner", "name": "截止时间整理", "version": "0.1.0", "category": "assistant", "api_version": 1}
     (plugin.parent / "module.json").write_text(json.dumps(manifest), encoding="utf-8")
-    requests, started, release = [], threading.Event(), threading.Event()
+    study = directory / "modules" / "study"
+    shutil.copytree(PROJECT / "modules" / "academic-assistant" / "harness", study / "harness")
+    (study / "module.json").write_text(json.dumps({**manifest, "id": "study", "name": "学习工具"}), encoding="utf-8")
+    requests, workspaces, started, release = [], [], threading.Event(), threading.Event()
     items = [{"id": "late", "title": "实验", "due_at": "2026-10-21T12:00:00+08:00"},
              {"id": "early", "title": "阅读", "due_at": "2026-10-20T12:00:00+08:00"}]
 
@@ -35,7 +38,16 @@ async def check(directory):
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.path == '/tools/query':
+                assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
+                assert body == {'area': 'assignments', 'pending': True}
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'items': [{'source_id': 'synthetic:assignment', 'text': '合成作业'}]}).encode())
+                return
             requests.append((body, self.headers.get("Authorization")))
+            study_task = any(tool['function']['name'] == 'study_query' for tool in body['tools'])
             first = not any(message["role"] == "tool" for message in body["messages"])
             if first:
                 started.set()
@@ -43,9 +55,16 @@ async def check(directory):
                 calls = [{"index": index, "id": "call-" + str(index), "type": "function", "function": {
                     "name": "order_deadlines", "arguments": json.dumps({"items": value})}}
                          for index, value in enumerate((items, [{**items[0], "due_at": "tomorrow"}]))]
+                if study_task:
+                    calls = [{'index': 0, 'id': 'study-call', 'type': 'function', 'function': {'name': 'study_query', 'arguments': json.dumps({'area': 'assignments', 'pending': True})}}]
                 delta, finish = {"tool_calls": calls}, "tool_calls"
             else:
-                delta, finish = {"content": "已按截止时间整理"}, "stop"
+                if study_task:
+                    output = json.loads(next(message['content'] for message in body['messages'] if message['role'] == 'tool'))
+                    artifact = workspaces[-1] / output['workspace_file']
+                    saved = artifact.read_text(encoding='utf-8')
+                    assert json.loads(saved)['arguments']['area'] == 'assignments' and 'synthetic-tool-token' not in saved
+                delta, finish = {"content": "已读取合成作业" if study_task else "已按截止时间整理"}, "stop"
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
@@ -62,6 +81,8 @@ async def check(directory):
     app = create_app(active_port=17666, store=store, vault=MemoryVault(), modules_root=plugin.parent.parent, data_dir=directory / "private")
 
     def runtime(**options):
+        workspaces.append(Path(options['cwd']))
+        assert workspaces[-1].is_relative_to(directory / 'private' / 'runtime' / 'tmp')
         return DeepSeekHarness(**{**options, "base_url": f"http://127.0.0.1:{server.server_port}/v1"})
 
     try:
@@ -108,6 +129,7 @@ async def check(directory):
                     for payload, authorization in requests:
                         assert authorization == "Bearer synthetic-harness-key"
                         assert "synthetic-harness-key" not in json.dumps(payload)
+                        assert payload['thinking']['type'] == 'enabled' and payload['reasoning_effort'] == 'low'
                         assert [tool["function"]["name"] for tool in payload["tools"]] == ["order_deadlines"]
                     package.pop("dsh")
                     package["main"] = "../outside.js"
@@ -115,6 +137,12 @@ async def check(directory):
                     (plugin.parent / "outside.js").write_text("export function apply() {}", encoding="utf-8")
                     refreshed = (await client.post("/api/v1/modules/reload")).json()["modules"]
                     assert refreshed[0]["status"] == "error" and "harness 目录" in refreshed[0]["error"]
+                    result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'],
+                                                    plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
+                    assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
+                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_finish'}
+                    assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
+                    assert not any(path.exists() for path in workspaces)
     finally:
         release.set()
         server.shutdown()

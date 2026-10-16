@@ -20,7 +20,7 @@ from checks.check_auth import MemoryVault, cookie
 
 def check_identity(directory):
     vault, store = MemoryVault(), Store(directory / 'identity.sqlite3')
-    auth = AuthService(vault, store)
+    auth = AuthService(vault, store, runtime_dir=directory / 'runtime')
     auth.browser = SimpleNamespace(state=lambda provider: {'cookies': [cookie()]}, close=lambda provider: None)
     vault.save('auth:session:gradescope', {'cookies': [cookie()]})
     context = SimpleNamespace(auth=auth, store=store, data_dir=directory)
@@ -129,7 +129,7 @@ def check_device(directory):
 
 def check_setup(directory):
     vault, store = MemoryVault(), Store(directory / 'setup.sqlite3')
-    auth = AuthService(vault, store)
+    auth = AuthService(vault, store, runtime_dir=directory / 'runtime')
     opened = []
     auth.browser = SimpleNamespace(open=lambda *args, **kwargs: opened.append((args,kwargs)),
         state=lambda provider: {'cookies': []}, close_all=lambda: None)

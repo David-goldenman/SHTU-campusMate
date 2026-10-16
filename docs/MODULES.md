@@ -30,6 +30,8 @@ modules/notes/
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
 
+带页面的插件由所属页面发起业务任务，基础 AI 助手提供对应分类链接；纯工具插件在“插件任务”中选择。完整例子为首页分类的 [academic-assistant](../modules/academic-assistant/README.md)，同时拥有聊天界面、公开业务 API 与原生工具。其工具通过一次任务有效的令牌调用本模块后端，后端复用 `context.api`；内部运行时配置见 [AI 插件接口](AI.md#原生-harness-插件)。新增业务保持在独立模块内，主框架维护身份、AI 调用和生命周期。
+
 模块列表的 `has_frontend` 表示代码目录提供了页面入口，独立于启停和加载状态；侧栏据此保留已启用页面的加载错误入口。`frontend_url` 仅在页面就绪时提供可导入的地址。
 
 ## 前端入口
@@ -124,7 +126,7 @@ def create_router(context):
 
 ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们的 Source 使用 `state_prefix="campus:"`，将全局后台同步进度与原有逐课同步进度分开。共享快照可读取同模块、同账号版本的原有缓存，使已同步的课次和帖子直接进入聚合；调用者仍只依赖公开 API。
 
-`backend.services.campus.files.download` 在一次认证上下文内获取文件，逐跳校验 HTTPS 目标与端口，将内容暂存 `.codex/tmp/<module_id>/`，通过 FileResponse 交付后删除。模块提供固定的服务域名列表与按需解析文件链接的函数，临时签名地址留在后端。
+`backend.services.campus.files.download` 在一次认证上下文内获取文件，逐跳校验 HTTPS 目标与端口，将内容暂存模块 `context.data_dir/tmp/downloads/`，通过 FileResponse 交付后删除。模块提供固定的服务域名列表与按需解析文件链接的函数，临时签名地址留在后端。
 
 模块可定义 `authorize_write(context, request) -> bool` 接受自己的专用 Bearer 令牌。宿主仍先校验 Host、Origin 与跨站请求；钩子必须精确限制路径和令牌。正常网页写请求使用框架 CSRF。邮件模块仅为专用 Agent 写标签接口启用此能力，密钥由该模块 `context.secrets` 保存。
 

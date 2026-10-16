@@ -98,6 +98,7 @@ def check_download():
 
     with sandbox("files", handler) as context:
         response = download(context, "ids", ["example.edu"], lambda remote: ("https://example.edu/file", "synthetic.pdf"), threading.Event())
+        assert Path(response.path).is_relative_to(context.data_dir / 'tmp' / 'downloads')
         assert Path(response.path).read_bytes() == b"%PDF-synthetic"
         asyncio.run(response.background())
         assert not Path(response.path).exists()
@@ -114,7 +115,7 @@ def check_auth_cancellation():
     from backend.services.auth import AuthService
     from checks.module_support import Memory
     with sandbox("auth-cancel") as context:
-        auth = AuthService(Memory(), context.store)
+        auth = AuthService(Memory(), context.store, runtime_dir=context.data_dir / 'runtime')
         cancelled, finished = threading.Event(), threading.Event()
 
         def waiting():
