@@ -37,7 +37,7 @@ class Auth:
         return {"username": "synthetic@example.edu", "has_session": True, "account_revision": self.revision}
 
     @contextmanager
-    def authenticated_client(self, provider, target=None):
+    def authenticated_client(self, provider, target=None, *, cancelled=None):
         with httpx.Client(transport=self.transport, follow_redirects=True) as client:
             yield client
 
@@ -74,7 +74,7 @@ def sandbox(module, handler=lambda request: httpx.Response(200, json={})):
         root = Path(temporary)
         store = Store(root / "state.sqlite3", "module:" + module)
 
-        async def api(module_id, path="/snapshot"):
+        async def api(module_id, path="/snapshot", **kwargs):
             return httpx.Response(404, json={"detail": "Module not installed"})
 
         context = SimpleNamespace(id=module, store=store, secrets=Memory(), data_dir=root, auth=Auth(handler), ai=AI(), api=api)

@@ -86,7 +86,7 @@ def create_router(context):
 | `context.data_dir` | 本模块 `.private/modules/<id>/`，存放持久文件 |
 | `context.auth` | 共享认证服务，提供已登录 HTTP 客户端 |
 | `context.ai` | 共享 AI，提供 `generate`、`chat` 和安全配置状态 |
-| `await context.api(module_id, path="/snapshot")` | 通过公开 GET HTTP 接口读取其他模块，返回 `httpx.Response`；停用或未安装返回 404 |
+| `await context.api(module_id, path="/snapshot", method="GET", body=None)` | 调用其他模块公开 HTTP API，返回 `httpx.Response`；停用或未安装返回 404，跨模块写操作按公开接口协作 |
 
 每个模块的状态和秘密按模块 ID 分开。账号、密码、Cookie、Key、token 一律交给共享认证或 `context.secrets`，普通配置与缓存放在自己的 store，文件放在自己的 data_dir。模块通过公开 HTTP API 读取其他模块提供的数据；需要跨模块聚合时由集成人员确定公开请求/响应，调用方不得直接访问对方的数据库、文件或私有代码。
 
@@ -113,3 +113,5 @@ def create_router(context):
 `backend.services.campus.files.download` 在一次认证上下文内获取文件，逐跳校验 HTTPS 目标与端口，将内容暂存 `.codex/tmp/<module_id>/`，通过 FileResponse 交付后删除。模块提供固定的服务域名列表与按需解析文件链接的函数，临时签名地址留在后端。
 
 模块可定义 `authorize_write(context, request) -> bool` 接受自己的专用 Bearer 令牌。宿主仍先校验 Host、Origin 与跨站请求；钩子必须精确限制路径和令牌。正常网页写请求使用框架 CSRF。邮件模块仅为专用 Agent 写标签接口启用此能力，密钥由该模块 `context.secrets` 保存。
+
+模块启停与刷新按生命周期串行执行，停止钩子运行时释放注册表读取锁，允许后台任务完成已有的跨模块调用。开始停止前先关闭对应路由入口；正在执行的请求仍按原契约返回 409。

@@ -111,7 +111,7 @@ async def check(root):
             assert (await client.get("/api/v1/modules/alpha/state")).json()["version"] == "one"
             assert (await app.state.modules.entries["beta"].context.api("alpha", "/state")).json()["version"] == "one"
             try:
-                await app.state.modules.read_api("alpha", "/%2e%2e/beta/state")
+                await app.state.modules.call_api("alpha", "/%2e%2e/beta/state")
                 raise AssertionError("Module API traversal must be rejected")
             except ValueError:
                 pass
@@ -133,12 +133,23 @@ async def check(root):
             disabled = await client.put("/api/v1/modules/alpha", json={"enabled": False})
             assert disabled.status_code == 200
             assert (await client.get("/api/v1/modules/alpha/state")).status_code == 404
-            assert (await app.state.modules.read_api("alpha", "/state")).status_code == 404
+            assert (await app.state.modules.call_api("alpha", "/state")).status_code == 404
             assert (await client.get(second["frontend_url"])).status_code == 404
             assert (await client.get("/api/v1/modules/beta/state")).status_code == 200
             await client.put("/api/v1/modules/alpha", json={"enabled": True})
             assert (await client.get("/api/v1/modules/alpha/state")).json()["value"] == "alpha"
             assert (await client.get("/api/v1/modules/alpha/openapi.json")).json()["paths"]["/state"]
+            active = app.state.modules.entries["alpha"]
+            saved_stop = active.package.stop
+
+            def stop_with_api(context):
+                assert asyncio.run(context.api("beta", "/state")).status_code == 200
+                saved_stop(context)
+
+            active.package.stop = stop_with_api
+            assert (await client.put("/api/v1/modules/alpha", json={"enabled": False})).status_code == 200
+            await client.put("/api/v1/modules/alpha", json={"enabled": True})
+            assert (await app.state.modules.call_api("beta", "/state", method="PUT")).status_code == 200
             active = app.state.modules.entries["alpha"]
             original_stop = active.package.stop
 

@@ -127,7 +127,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.post("/api/v1/data/clear", tags=["设置"], summary="清除项目本地凭据或模块数据")
     def clear_data(body: ClearData):
-        with modules.lock:
+        with modules.lifecycle_lock:
             if body.scope in {"modules", "all"}:
                 modules.clear_data()
             else:

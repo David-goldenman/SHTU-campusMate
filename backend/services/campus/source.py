@@ -49,7 +49,7 @@ class Source:
         owner = self.owner()
         previous = self.snapshot()["data"]
         try:
-            with self.context.auth.authenticated_client(self.provider, target=self.target) as client:
+            with self.context.auth.authenticated_client(self.provider, target=self.target, cancelled=self.cancelled) as client:
                 remote = Remote(client, self.cancelled, self.hosts)
                 data = validate_bundle(self.fetch(remote, previous))
             with self.lock:
@@ -88,7 +88,14 @@ async def snapshots(context, modules):
     result, unavailable = {}, []
     for name, response in zip(modules, values):
         if response.status_code == 200:
-            result[name] = response.json()
+            try:
+                value = response.json()
+                if not isinstance(value, dict):
+                    raise ValueError
+                value["data"] = validate_bundle(value.get("data"))
+                result[name] = value
+            except (ValueError, TypeError):
+                unavailable.append(name)
         else:
             unavailable.append(name)
     return result, unavailable

@@ -121,9 +121,22 @@ class AuthService:
         return self.get_status(provider)
 
     @contextmanager
-    def authenticated_client(self, provider: str, target: str | None = None):
+    def _client_lock(self, provider, cancelled):
+        lock = self.locks[provider]
+        while not lock.acquire(timeout=0.2):
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("来源读取已停止。")
+        try:
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("来源读取已停止。")
+            yield
+        finally:
+            lock.release()
+
+    @contextmanager
+    def authenticated_client(self, provider: str, target: str | None = None, *, cancelled=None):
         target = protocols.checked_target(provider, target)
-        with self.locks[provider]:
+        with self._client_lock(provider, cancelled):
             state = self.vault.get("auth:session:" + provider)
             with protocols.http_client(state) as client:
                 try:

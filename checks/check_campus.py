@@ -110,8 +110,31 @@ def check_download():
         assert not any("foreign.example" in url for url in calls)
 
 
+def check_auth_cancellation():
+    from backend.services.auth import AuthService
+    from checks.module_support import Memory
+    with sandbox("auth-cancel") as context:
+        auth = AuthService(Memory(), context.store)
+        cancelled, finished = threading.Event(), threading.Event()
+
+        def waiting():
+            try:
+                with auth.authenticated_client("ids", cancelled=cancelled):
+                    raise AssertionError("Cancelled acquisition must not enter the client")
+            except RuntimeError:
+                finished.set()
+
+        with auth.locks["ids"]:
+            worker = threading.Thread(target=waiting)
+            worker.start()
+            cancelled.set()
+            assert finished.wait(2)
+            worker.join()
+
+
 if __name__ == "__main__":
     check_remote()
     check_source()
     check_download()
+    check_auth_cancellation()
     print("campus: retries, pagination bounds, malformed JSON, cache preservation, account isolation and worker cleanup passed")
