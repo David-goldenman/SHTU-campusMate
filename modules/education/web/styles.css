@@ -1,0 +1,9 @@
+[data-module-id="education"] .education-workspace { display: grid; gap: 18px; }
+[data-module-id="education"] .education-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+[data-module-id="education"] .education-row label { flex: 1; min-width: 180px; }
+[data-module-id="education"] .education-source { display: flex; align-items: flex-start; gap: 12px; border: 1px solid var(--border); padding: 16px; margin: 12px 0; border-radius: 10px; }
+[data-module-id="education"] .education-source input { width: auto; flex: 0 0 auto; }
+[data-module-id="education"] .education-source span { min-width: 0; }
+[data-module-id="education"] .education-text { display: block; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
+[data-module-id="education"] pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 440px; overflow: auto; }
+[data-module-id="education"] textarea { width: 100%; }

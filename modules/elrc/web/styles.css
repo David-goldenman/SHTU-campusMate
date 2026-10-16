@@ -1,0 +1,9 @@
+[data-module-id="elrc"] .elrc-workspace { display: grid; gap: 18px; }
+[data-module-id="elrc"] .elrc-toolbar, [data-module-id="elrc"] .elrc-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+[data-module-id="elrc"] .elrc-toolbar label { flex: 1; min-width: 180px; }
+[data-module-id="elrc"] .elrc-courses { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+[data-module-id="elrc"] .elrc-card { padding: 20px; overflow-wrap: anywhere; }
+[data-module-id="elrc"] .elrc-lessons { display: grid; gap: 10px; margin: 18px 0; }
+[data-module-id="elrc"] .elrc-lessons button { text-align: left; white-space: normal; }
+[data-module-id="elrc"] .elrc-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
+[data-module-id="elrc"] .elrc-time { color: var(--muted); font-variant-numeric: tabular-nums; }
