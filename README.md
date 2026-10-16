@@ -14,17 +14,30 @@
 
 ## 启动
 
-当前开发环境为 Windows + WSL Ubuntu-26.04：Python 服务在 WSL 运行，登录验证使用 Windows Edge，凭据使用当前 Windows 用户的 DPAPI 加密。需要 Python 3.12+、uv、Windows Node.js 22+ 和 Edge；原生 AI 插件包管理还需要 PATH 中的 pnpm。官方 Harness 运行时随 uv 依赖安装，网页界面使用原生 ES Modules。
+Windows 双击本目录的 `run.cmd`。启动器使用已有 Python，等待本机后台可访问后自动打开浏览器，默认地址为 http://127.0.0.1:16666/。启动失败会保留报错窗口，详细日志在 `.codex/logs/`，不会只闪一下就退出。
 
-在 Windows 双击 `run.cmd`，或运行：
+Windows 启动器不会安装 Ubuntu、Python 或依赖。它优先使用现有 `.codex/venv/Scripts/python.exe`，其次查找常见的 Anaconda/Miniconda 路径。需要 Python 3.12+；缺包或版本不符时列出缺项，由用户在选定环境补齐。已有项目环境能用时，不重复下载环境。Windows 环境缺少 IANA 时区数据时，会复用现有 Conda 的时区数据；找不到才提示自行补装 tzdata。
 
-```powershell
-.\run.ps1
-# 同时运行其他本地项目时可指定独立预览端口
+应用以未连接账号的状态启动，账号和共享 AI 在设置中配置。打开网页本身不执行登录或模型调用。
+
+- 双击 `stop.cmd`：请求当前目录后台正常结束，执行模块清理；关闭浏览器不会停止后台。
+- 重复双击 `run.cmd`：后台已就绪时复用当前实例并打开网页。
+- 改用其他已有环境：在 `python-path.txt` 中填写一行 python.exe 完整路径，或用 `--python`；该配置文件由 Git 忽略。
+- 设置端口后，未指定端口的下次启动会读取本地保存的值；端口已被其他程序占用时提示错误，不打开或停止那个程序。
+
+~~~powershell
+.\run.ps1 --check
+.\run.ps1 --no-browser
 .\run.ps1 --port 17666
-```
+.\run.ps1 --python 'D:\anaconda\python.exe' --check
+.\run.ps1 --stop
+~~~
 
-在 WSL 中运行 `bash ./run.sh`，打开 [本地工作台](http://127.0.0.1:16666)。默认端口为 16666，设置中修改端口后重启生效。所有路径从项目目录计算，可以整体移动项目目录。启动脚本把虚拟环境、uv 缓存、Python 缓存和临时文件统一放入 `.codex/`。
+`--check` 只检查选定环境，不启动服务。旧式 `-Port`、`-NoBrowser`、`-CheckRuntime`、`-PythonPath` 参数也可使用。日志和实例信息写入 `.codex/`；停止时验证进程创建时间和所属目录，避免误停其他副本。
+
+Windows Node.js 22+ 和 Edge 用于登录验证；原生 AI 插件的包管理另需 pnpm。启动网页不执行插件包安装。凭据使用当前 Windows 用户的 DPAPI 加密。共享 AI 及账号需要在设置中自行配置。
+
+WSL 开发入口仍保留为 `bash ./run.sh`；它使用 WSL 内的 uv 环境并执行 `uv sync`。Windows 双击入口现在直接运行已有本机环境，不再依赖写死的 Ubuntu 发行版。
 
 ## AI 功能开发入口
 
