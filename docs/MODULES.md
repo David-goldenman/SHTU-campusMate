@@ -23,7 +23,7 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
-`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js` 与 `server/__init__.py` 至少提供一个。模块可以只提供页面或后端服务；配置能力放在自己的页面或模块 API 内。
+`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`eams`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js` 与 `server/__init__.py` 至少提供一个。模块可以只提供页面或后端服务；配置能力放在自己的页面或模块 API 内。
 
 ## 前端入口
 

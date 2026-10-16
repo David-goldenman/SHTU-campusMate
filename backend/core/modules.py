@@ -26,7 +26,7 @@ class Manifest(BaseModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,47}$")
     name: str = Field(min_length=1, max_length=80)
     version: str = Field(min_length=1, max_length=40)
-    category: Literal["dashboard", "mail", "timetable", "courses", "assignments", "notifications", "assistant"]
+    category: Literal["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant"]
     api_version: Literal[1]
 
 
