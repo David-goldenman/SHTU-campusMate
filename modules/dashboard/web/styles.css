@@ -1,4 +1,4 @@
-.campus-overview .overview-stats { display:grid; grid-template-columns:repeat(3,1fr); padding:4px 0 22px; border-bottom:1px solid var(--border); }
+.campus-overview .overview-stats { display:grid; grid-template-columns:repeat(4,1fr); padding:4px 0 22px; border-bottom:1px solid var(--border); }
 .campus-overview .overview-stats a { display:flex; flex-direction:column; padding-left:24px; border-left:1px solid var(--border); color:var(--text); }
 .campus-overview .overview-stats a:first-child { border-left:0; padding-left:0; }
 .campus-overview .overview-stats strong { font-size:30px; line-height:1.4; color:var(--link); font-variant-numeric:tabular-nums; }

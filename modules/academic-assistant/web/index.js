@@ -5,8 +5,9 @@ export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const card = container.closest('.module-card');
-  let busy = false, profileDirty = false, currentRequest, frame, follow = true;
-  const cleanup = () => {currentRequest?.abort();cancelAnimationFrame(frame);removeStyle();card.classList.remove('study-chat-card');};
+  const title = card.querySelector('.module-card-heading');
+  let busy = false, profileDirty = false, currentRequest, frame, observer, follow = true;
+  const cleanup = () => {currentRequest?.abort();cancelAnimationFrame(frame);observer?.disconnect();removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai, presets;
   try { [history,profile,ai,presets] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets')]); }
@@ -15,6 +16,7 @@ export async function mount(container, context) {
   const configured = ai.enabled && ai.key_saved;
   container.classList.add('academic-chat');
   card.classList.add('study-chat-card');
+  title.hidden = true;
   container.innerHTML = `
     <header class="study-header"><div><h2>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)}<span> · AI 设置</span></a></div>
       <div class="study-actions"><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><details class="study-menu"><summary aria-label="对话操作">更多</summary><div><button class="text-button danger-text" data-clear-chat type="button">清空对话</button></div></details></div>
@@ -39,6 +41,8 @@ export async function mount(container, context) {
   const send = container.querySelector('[data-send]'), stop = container.querySelector('[data-stop]');
   const profileToggle = container.querySelector('[data-profile-toggle]');
   const latest = container.querySelector('[data-latest]');
+  observer = new ResizeObserver(() => container.style.setProperty('--study-top',(card.getBoundingClientRect().top + window.scrollY) + 'px'));
+  observer.observe(card.parentElement);
   function showProfile(open) {
     container.querySelector('.study-profile').hidden = !open;
     profileToggle.setAttribute('aria-expanded',String(open));
@@ -126,7 +130,7 @@ export async function mount(container, context) {
           container.querySelector('[data-steps]').innerHTML = steps.map(step => '<li>' + e(step.label) + '<span>' + ({running:'处理中',done:'完成',error:'需补充资料'})[step.status] + '</span></li>').join('');
         }
         if (value.type === 'reset') {text='';if (!frame) frame=requestAnimationFrame(paint);}
-        if (value.type === 'delta') {text+=value.text;progressText.textContent='正在撰写回答…';if (!frame) frame=requestAnimationFrame(paint);}
+        if (value.type === 'delta') {text+=value.text;if (progressText.textContent !== '正在撰写回答…') progressText.textContent='正在撰写回答…';if (!frame) frame=requestAnimationFrame(paint);}
         if (value.type === 'complete') answer = value.message;
       }});
       if (context.signal.aborted) return;

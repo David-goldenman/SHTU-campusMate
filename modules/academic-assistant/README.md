@@ -44,6 +44,8 @@ PDF、PPTX 和 UTF-8 文本按需通过 Blackboard／Gradescope 文件 API 下�
 
 使用合成 API 与文档验证工具、引用、账号隔离和个人信息更新；使用官方运行时验证实际工具调用。真实服务验收由用户在设置连接后进行。
 
+启动 demo 后运行 `node modules/academic-assistant/checks/check_web.mjs http://127.0.0.1:16666`，在独立 Edge 窗口验证渐进 Markdown 渲染、引用分组、复制、阅读位置、桌面／手机尺寸的输入框、停止、失败重试、连接中断及 AI 设置跳转。测试窗口阻止真实 API 请求，使用合成流与资料；截图及浏览器资料保存在项目开发目录。
+
 ## 校园规则与技能
 
 `harness/AGENTS.md` 定义校园学习场景、简明沟通、证据与个人信息边界；`server/instruction.md` 约定工具和回答校验；`harness/prompts.json` 提供首页常用问题。`harness/skills/` 内的文件阅读、作业规划与培养方案技能通过官方注册表及 `skill` 工具按需加载。新增技能遵循相同结构，使用工作台现有工具，随插件启停。规则不包含开发环境要求。

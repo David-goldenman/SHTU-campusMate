@@ -22,6 +22,10 @@
 
 设置按“账号连接、AI 服务、功能模块、本地设置”分组，使用可键盘切换的标签页。登录和 AI 配置由核心设置统一维护。
 
+## 主题覆写
+
+默认启用 Nord 精调主题：`web/index.html` 引入 `web/themes/nord-refined.css`，HTML 的 `data-ui-theme="nord-refined"` 限定覆写范围。颜色、圆角、间距、导航和卡片外观集中在这个文件；公共组件与模块原有样式继续由对应目录维护。修改外观优先调整主题；调整交互或接口时同步修改所属脚本与检查，避免在主题中隐藏失败状态或业务信息。协作范围与验证步骤见 [UI 主题维护](UI_THEME.md)。
+
 ## 视觉基础
 
 配色采用 [Nord 官方调色盘](https://www.nordtheme.com/)。主内容为明亮的 Snow Storm，216px 固定侧栏采用 Polar Night，Frost 用于强调、选中和键盘焦点。

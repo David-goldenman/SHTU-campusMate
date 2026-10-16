@@ -1,5 +1,5 @@
 .study-chat-card>.module-card-heading { display:none; }
-.academic-chat { padding:0; display:flex; flex-direction:column; height:calc(100dvh - 376px); min-height:360px; max-height:1100px; }
+.academic-chat { padding:0; display:flex; flex-direction:column; height:calc(100dvh - var(--study-top,352px) - 24px); min-height:360px; max-height:1100px; }
 .academic-chat .study-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 22px; border-bottom:1px solid var(--border); flex:none; }
 .academic-chat .study-header>div:first-child { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
 .academic-chat .study-header h2 { font-size:18px; }
@@ -82,9 +82,8 @@
 .academic-chat .study-profile-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .academic-chat .study-profile .field-hint { font-size:13px; margin:8px 0 14px; }
 .academic-chat .study-profile fieldset { min-width:0; border:0; padding:0; margin:0; display:grid; gap:16px; }
-@media (max-width:1200px) { .academic-chat { height:calc(100dvh - 390px); } }
 @media (max-width:600px) {
-  .academic-chat { height:calc(100dvh - 390px); min-height:430px; }
+  .academic-chat { min-height:360px; }
   .academic-chat .study-header { padding:10px 14px; align-items:flex-start; }
   .academic-chat .study-header>div:first-child { display:block; }
   .academic-chat .study-header h2 { font-size:17px; }.academic-chat .study-model { font-size:12px; min-height:28px; }
@@ -93,6 +92,6 @@
   .academic-chat .study-messages { padding:8px 14px 20px; }.academic-chat .study-composer { padding:0 14px 10px; }
   .academic-chat .study-welcome h3 { font-size:18px; }.academic-chat .study-welcome { padding:16px 0; gap:8px; }
   .academic-chat .study-text { font-size:15px; }.academic-chat .study-text p { font-size:15px; }
-  .academic-chat .study-user { margin-left:8%; }.academic-chat .study-privacy { font-size:11px; }
+  .academic-chat .study-user { margin-left:8%; }.academic-chat .study-privacy { font-size:12px; }
 }
 @media (prefers-reduced-motion:reduce) { .academic-chat .spinner { animation:none; } }

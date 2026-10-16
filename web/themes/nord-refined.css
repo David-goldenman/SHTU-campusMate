@@ -1,0 +1,94 @@
+/* Nord presentation overrides. Shared and module components keep their own styles.
+   Remove data-ui-theme from <html> to compare with the base appearance. */
+:root[data-ui-theme="nord-refined"] {
+  --bg:#f3f5f9; --paper:#fff; --surface:#eaf0f6; --muted:#5b687d;
+  --border:#dce3ed; --sidebar-width:248px; --radius:14px;
+  --shadow:0 4px 20px #2e344005;
+  scroll-padding-top:90px;
+}
+.skip-link { position:fixed; top:-100px; left:16px; z-index:200; padding:12px 18px; border-radius:8px; background:var(--paper); color:var(--link); box-shadow:0 4px 24px #2e344026; }
+.skip-link:focus { top:12px; }
+[data-ui-theme="nord-refined"] body { min-width:0; }
+[data-ui-theme="nord-refined"] h1 { font-size:30px; font-weight:700; }
+[data-ui-theme="nord-refined"] :is(input,select,textarea) { border-radius:8px; }
+[data-ui-theme="nord-refined"] .sidebar { max-width:calc(100vw - 48px); padding:28px 16px; }
+[data-ui-theme="nord-refined"] #navigation { gap:6px; }
+[data-ui-theme="nord-refined"] #navigation a { min-height:46px; padding:10px 14px; border-radius:9px; font-size:14px; }
+[data-ui-theme="nord-refined"] #navigation a.active { background:#43536a; color:#fff; }
+[data-ui-theme="nord-refined"] .nav-icon svg { width:21px; height:21px; }
+[data-ui-theme="nord-refined"] .topbar { position:sticky; top:0; z-index:20; min-height:72px; padding:14px 32px; border-bottom:1px solid var(--border); background:var(--paper); }
+[data-ui-theme="nord-refined"] main { max-width:1480px; padding:28px 32px 48px; }
+[data-ui-theme="nord-refined"] main:focus { outline:none; }
+[data-ui-theme="nord-refined"] .page-heading { margin-bottom:24px; }
+[data-ui-theme="nord-refined"] .panel { border-radius:var(--radius); box-shadow:var(--shadow); }
+[data-ui-theme="nord-refined"] .module-card { scroll-margin-top:92px; }
+[data-ui-theme="nord-refined"] .module-card-heading { padding:20px 24px 0; }
+/* Keep single-module headings available to assistive technology, including errors. */
+[data-ui-theme="nord-refined"] :is(.module-zone[data-count="1"] .module-card,.overview-card)>.module-card-heading {
+  display:flex; position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+}
+[data-ui-theme="nord-refined"] .module-card:has(.module-status.status-error)>.module-card-heading {
+  display:flex; position:static; width:auto; height:auto; padding:20px 24px 0; margin:0; overflow:visible; clip-path:none; white-space:normal;
+}
+[data-ui-theme="nord-refined"] .button { min-height:44px; padding:10px 16px; border-radius:8px; }
+[data-ui-theme="nord-refined"] .icon-button { min-width:44px; min-height:44px; }
+[data-ui-theme="nord-refined"] :is(.module-status,.status-badge) { border-radius:99px; }
+[data-ui-theme="nord-refined"] .settings-tabs { gap:8px; margin-bottom:24px; }
+[data-ui-theme="nord-refined"] .settings-tabs button { min-height:46px; padding:9px 16px; border-radius:8px 8px 0 0; }
+[data-ui-theme="nord-refined"] .settings-tabs button[aria-selected="true"] { background:var(--surface); }
+[data-ui-theme="nord-refined"] .settings-section { padding:28px; }
+[data-ui-theme="nord-refined"] .provider-card { padding:24px; border-radius:12px; background:#fbfcfe; }
+[data-ui-theme="nord-refined"] .section-heading p { font-size:14px; }
+[data-ui-theme="nord-refined"] #toast { left:calc(50% + var(--sidebar-width)/2); }
+.page-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.module-shortcuts { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.module-shortcuts button { min-height:44px; max-width:100%; padding:9px 16px; border:1px solid var(--border); border-radius:9px; background:var(--paper); color:var(--link); font-size:14px; overflow-wrap:anywhere; }
+.module-shortcuts button:hover { background:var(--surface); border-color:var(--nord9); }
+[data-ui-theme="nord-refined"] .campus-overview .overview-onboarding { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 20px; margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+[data-ui-theme="nord-refined"] .overview-onboarding strong { font-size:16px; }
+[data-ui-theme="nord-refined"] .overview-onboarding p { grid-column:1; color:var(--muted); font-size:14px; }
+[data-ui-theme="nord-refined"] .overview-onboarding a { grid-column:2; grid-row:1/3; align-self:center; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-stats { grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; padding:0; margin-bottom:24px; border:0; }
+html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a { min-width:0; padding:20px; border:1px solid var(--border); border-radius:12px; background:#f8fafc; transition:background .15s; }
+html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a:hover { background:var(--surface); text-decoration:none; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-stats strong { font-size:34px; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-stats span { font-size:13px; overflow-wrap:anywhere; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-columns { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; padding:0; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-columns>section { min-width:0; padding:20px; border:1px solid var(--border); border-radius:12px; }
+[data-ui-theme="nord-refined"] .overview-heading { flex-wrap:wrap; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-day p { flex-wrap:wrap; }
+[data-ui-theme="nord-refined"] .overview-day a { min-width:0; overflow-wrap:anywhere; }
+[data-ui-theme="nord-refined"] .campus-overview .overview-sources { padding:12px 20px; border:1px solid var(--border); border-radius:12px; }
+[data-ui-theme="nord-refined"] .overview-sources summary { min-height:44px; padding:8px 0; cursor:pointer; font-size:14px; color:var(--text); }
+[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats { grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+html[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats a { padding:8px 12px; }
+[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats strong { font-size:25px; }
+@media (max-width:1100px) {
+  [data-ui-theme="nord-refined"] .campus-overview .overview-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:850px) {
+  [data-ui-theme="nord-refined"] .topbar { padding:12px 20px; gap:12px; }
+  [data-ui-theme="nord-refined"] main { padding:24px; }
+  [data-ui-theme="nord-refined"] #toast { left:50%; }
+}
+@media (max-width:600px) {
+  [data-ui-theme="nord-refined"] .campus-overview .overview-columns { grid-template-columns:1fr; }
+  [data-ui-theme="nord-refined"] .campus-overview .overview-onboarding { grid-template-columns:1fr; }
+  [data-ui-theme="nord-refined"] .overview-onboarding a { grid-column:1; grid-row:auto; justify-self:start; margin-top:8px; }
+}
+@media (max-width:540px) {
+  [data-ui-theme="nord-refined"] h1 { font-size:28px; }
+  [data-ui-theme="nord-refined"] .topbar { padding-inline:12px; }
+  [data-ui-theme="nord-refined"] #workspace-date { margin-left:auto; font-size:12px; }
+  [data-ui-theme="nord-refined"] main { padding:24px 16px 36px; }
+  [data-ui-theme="nord-refined"] .settings-section { padding:20px; }
+  [data-ui-theme="nord-refined"] .provider-card { padding:18px; }
+  [data-ui-theme="nord-refined"] .settings-tabs { gap:0; }
+  [data-ui-theme="nord-refined"] .settings-tabs button { padding-inline:12px; font-size:14px; }
+  [data-ui-theme="nord-refined"] .campus-overview .overview-stats { gap:12px; }
+  html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a { padding:14px; }
+  [data-ui-theme="nord-refined"] .campus-overview .overview-stats strong { font-size:30px; }
+  [data-ui-theme="nord-refined"] .campus-overview .overview-columns>section { padding:16px; }
+  html[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats a { padding:8px 4px; }
+  [data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats span { font-size:12px; }
+}

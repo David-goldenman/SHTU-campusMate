@@ -191,4 +191,4 @@ if __name__ == "__main__":
     temporary.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="check-harness-", dir=temporary) as directory:
         asyncio.run(check(Path(directory)))
-    print("PASS: official runtime, native tools/bundles, tool validation, lifecycle locks, hot updates and credential boundary")
+    print("PASS: official runtime streaming/cancellation, native tools/bundles, lifecycle locks, credentials and workspace cleanup")
