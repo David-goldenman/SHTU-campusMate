@@ -46,6 +46,12 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | POST | `/auth/<provider>/login` | 可选 `{target}`，登录或验证会话，返回状态 |
 | POST | `/auth/<provider>/browser` | 可选 `{target}`，打开独立验证窗口 |
 | POST | `/auth/<provider>/import-session` | 可选 `{target}`，导入、探测、加密保存并关闭临时窗口 |
+| POST | `/auth/<provider>/refresh` | 可选 `{target}`，主动探测并恢复登录 |
+| POST | `/auth/ids/device/browser` | 打开学校账号安全页 |
+| POST | `/auth/ids/device/start` | `{confirmation:"REGISTER_THIS_DEVICE"}`，打开验证引导并在复核通过后自动绑定 |
+| POST | `/auth/ids/device/bind` | `{confirmation:"REGISTER_THIS_DEVICE"}`，确认后绑定本机免密码设备 |
+| POST | `/auth/ids/device/recover` | 验证待确认的设备绑定 |
+| DELETE | `/auth/ids/device` | 删除本机设备凭据，学校端登记需另行撤销 |
 | DELETE | `/auth/<provider>` | 清除此提供方的本地凭据、会话与临时验证资料 |
 
 `ProviderStatus` 含 `id`、`name`、`username`、`has_password`、`has_session`、`status` 以及可选的 `message`、`checked_at`、`targets`。Cookie、密码、登录票据和 Coremail sid 仅由服务端使用。二次验证在用户可见的登录窗口完成。Python 内部使用 `context.auth.authenticated_client(provider, target=None)`，完整例子与过期策略见 [认证文档](AUTH.md)。

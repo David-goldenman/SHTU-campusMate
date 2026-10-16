@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 from copy import deepcopy
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from backend.main import create_app
 
 
 class MemoryVault:
+    transaction = staticmethod(nullcontext)
     def __init__(self):
         self.values = {}
 

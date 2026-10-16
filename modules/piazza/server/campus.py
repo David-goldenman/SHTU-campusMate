@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from backend.services.campus import Remote, Source
+from backend.services.campus.accounts import AccountCache
 from .reader import fetch, parse_post, rpc
 from .snapshot import with_watched_courses
 
@@ -10,14 +11,16 @@ _source = None
 def create_router(context):
     global _source
     _source = Source(context, "piazza", ["piazza.com"], fetch, state_prefix="campus:")
-    if context.store.read("library_owner") is None:
-        context.store.write("library_owner", _source.owner())
+    accounts = AccountCache(context, "piazza")
     router = APIRouter()
 
     @router.get("/snapshot")
     def snapshot():
+        current = accounts.capture()
         value = _source.snapshot()
-        return with_watched_courses(context, value) if context.store.read("library_owner") == _source.owner() else value
+        result = with_watched_courses(current, value)
+        accounts.check(current)
+        return result
 
     router.add_api_route("/sync", _source.sync, methods=["POST"], status_code=202)
 

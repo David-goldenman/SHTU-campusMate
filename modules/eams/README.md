@@ -17,10 +17,10 @@
 
 `GET /snapshot` 为共享校园快照，`POST /sync` 启动同步（202）。`data` 使用校园数据契约：
 
-- `courses`：成绩明细，`id` 为 `eams:grade:<课程序号>`，附带 `credits`、`score`、`point`、`category`、`published_at`、`kind:"grade"`。
+- `courses`：成绩明细，`id` 为 `eams:grade:<规范学期>:<课程序号>`（如 `eams:grade:2025-fall:GEMA1001.01`），同一课程序号跨学年、跨学期分别保留。附带 `credits`、`score`、`point`、`category`、`published_at`、`kind:"grade"`。
 - `assignments`：考试安排，附带 `kind:"exam"`、`exam_kind`、`date`、`start_time`、`window`、`location`、`status`、`note`、`due_at`（Asia/Shanghai）与指向成绩课程的 `course_id`；考试不会进入待办筛选。
 - `metadata`：`semester`、`semester_id`、`student_id`、`semesters`、`exams{batch,batch_id,batches}`、`gpa{overall,weighted_credits,earned_credits,semesters}`、`study_plan{title,groups[path,courses]}`。
-- `issues`：某个板块读取失败时保留该板块上次数据并写入提示，其余板块照常更新；整轮失败时框架保留上次成功快照。
+- `issues`：某个板块读取失败（含 HTTP 403/404）时保留该板块上次数据并写入提示，其余板块照常更新；登录失效继续交给共享登录恢复，整轮失败时框架保留上次成功快照。
 
 总绩点按明细中学分与绩点加权计算，未给出绩点的课程不计入；累计获得学分按学期汇总相加。
 
@@ -37,6 +37,8 @@
 
 `/ask` 只发送上述摘要（约 10 KB，上限 20000 字符），不发送 Cookie、会话或页面原始 HTML；未启用统一 AI 服务时返回 409。
 
+`/exams` 与 `/ask` 在读取快照、使用认证客户端或调用 AI，以及返回结果时检查账号版本。处理中账号变化返回 409，丢弃原账号结果；排队中的 AI 请求在执行前再次检查，避免发送已过期的账号资料。考试 `course_id` 与成绩使用相同的规范学期和课程序号。
+
 ## 页面
 
 考试板块可用学期下拉切换往年考试，批次多于一个时另给批次下拉，结果在本次页面内缓存，没有考试时显示「当学期没有安排考试时间，请等待」。GPA 板块显示总绩点、各学期汇总与可展开的成绩明细。培养方案板块默认折叠。教务问答为单轮基本问答。
@@ -44,7 +46,7 @@
 ## 检查
 
 ```sh
-uv run python modules/eams/checks/check_eams.py   # 合成页面，含访问过快重试、板块降级与接口
+uv run python modules/eams/checks/check_eams.py   # 合成页面、跨学期成绩、板块降级及账号切换隔离
 node --check modules/eams/web/index.js
 ```
 

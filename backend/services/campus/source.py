@@ -50,9 +50,10 @@ class Source:
         owner = self.owner()
         previous = self.snapshot()["data"]
         try:
-            with self.context.auth.authenticated_client(self.provider, target=self.target, cancelled=self.cancelled) as client:
+            def read(client):
                 remote = Remote(client, self.cancelled, self.hosts)
-                data = validate_bundle(self.fetch(remote, previous))
+                return validate_bundle(self.fetch(remote, previous))
+            data = self.context.auth.read_with_recovery(self.provider, read, target=self.target, cancelled=self.cancelled)
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
                     return

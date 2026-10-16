@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from .protocols import PROVIDERS
 
@@ -11,6 +12,10 @@ class Credentials(BaseModel):
 
 class LoginOptions(BaseModel):
     target: str | None = None
+
+
+class DeviceConsent(BaseModel):
+    confirmation: Literal["REGISTER_THIS_DEVICE"]
 
 
 def create_router(service):
@@ -40,6 +45,30 @@ def create_router(service):
     @router.post("/{provider}/browser")
     def browser(provider: str, body: LoginOptions | None = None):
         return service.open_browser(checked(provider), body.target if body else None)
+
+    @router.post("/{provider}/refresh")
+    def refresh(provider: str, body: LoginOptions | None = None):
+        return service.refresh(checked(provider), body.target if body else None)
+
+    @router.post("/ids/device/browser")
+    def device_browser():
+        return service.open_device_browser()
+
+    @router.post("/ids/device/bind")
+    def bind_device(body: DeviceConsent):
+        return service.bind_device()
+
+    @router.post("/ids/device/start")
+    def start_device(body: DeviceConsent):
+        return service.start_device_setup()
+
+    @router.post("/ids/device/recover")
+    def recover_device():
+        return service.recover_device()
+
+    @router.delete("/ids/device")
+    def forget_device():
+        return service.forget_device()
 
     @router.post("/{provider}/import-session")
     def import_session(provider: str, body: LoginOptions | None = None):

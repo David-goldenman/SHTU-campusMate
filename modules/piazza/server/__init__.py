@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.services.auth import LoginRequired
+from backend.services.campus.accounts import AccountCache
 
 from .courses import course_catalog, school_reference
 from .source import Piazza, identifier, parse_post
@@ -58,31 +59,41 @@ def create_router(context):
     global _source
     router = APIRouter()
     lock = threading.Lock()
+    accounts = AccountCache(context, "piazza")
 
-    def selected(course_id):
+    def selected(course_id, current):
         identifier(course_id)
-        if not any(course["id"] == course_id for course in context.store.read("courses", [])):
+        if not any(course["id"] == course_id for course in current.store.read("courses", [])):
             raise HTTPException(404, "请先保存要关注的 Piazza 课程。")
 
     @router.get("/courses")
     def courses():
-        return {"courses": context.store.read("courses", []), "status": context.store.read("status", {})}
+        current = accounts.capture()
+        result = {"courses": current.store.read("courses", []), "status": current.store.read("status", {})}
+        accounts.check(current)
+        return result
 
     @router.get("/catalog")
     def catalog():
-        return context.store.read("catalog", {"courses": [], "reference_semester": None, "checked_at": None})
+        current = accounts.capture()
+        result = current.store.read("catalog", {"courses": [], "reference_semester": None, "checked_at": None})
+        accounts.check(current)
+        return result
 
     @router.post("/discover")
     def discover(body: Discover):
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "Piazza 正在读取数据，请稍后再试。")
         try:
+            current = accounts.capture()
             reference = school_reference(body.current_semester.model_dump() if body.current_semester else None)
             with context.auth.authenticated_client("piazza") as client:
+                accounts.check(current)
                 available = course_catalog(Piazza(client).courses(), reference)
             result = {"courses": available, "reference_semester": reference,
                       "checked_at": datetime.now(UTC).isoformat()}
-            context.store.write("catalog", result)
+            accounts.check(current)
+            current.store.write("catalog", result)
             return result
         finally:
             lock.release()
@@ -90,7 +101,7 @@ def create_router(context):
     @router.put("/courses")
     def save_courses(body: Courses):
         with lock:
-            context.store.write("courses", [course.model_dump() for course in body.courses])
+            accounts.capture().store.write("courses", [course.model_dump() for course in body.courses])
         return courses()
 
     @router.post("/courses/{course_id}/sync")
@@ -98,10 +109,12 @@ def create_router(context):
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "Piazza 正在采集，请稍后再试。")
         try:
-            selected(course_id)
-            posts = context.store.read("posts:" + course_id, {})
+            current = accounts.capture()
+            selected(course_id, current)
+            posts = current.store.read("posts:" + course_id, {})
             failures, saved = [], 0
             with context.auth.authenticated_client("piazza") as client:
+                accounts.check(current)
                 source = Piazza(client)
                 rows = source.feed(course_id, body.offset)
                 for row in rows:
@@ -116,7 +129,7 @@ def create_router(context):
                         post["read"] = bool(old.get("read")) if same else False
                         posts[post["id"]] = post
                         # Commit each successful post; a later login/network error cannot erase it.
-                        context.store.write("posts:" + course_id, posts)
+                        current.store.write("posts:" + course_id, posts)
                         saved += 1
                     except LoginRequired:
                         raise
@@ -127,15 +140,16 @@ def create_router(context):
                       "next_offset": body.offset if failures else body.offset + len(rows) if len(rows) == 20 else None,
                       "checked_at": datetime.now(UTC).isoformat(),
                       "message": "部分帖子失败；继续采集会重试本页。" if failures else "本页已更新；按更新时间分页，可能重复，缓存会去重。"}
-            status = context.store.read("status", {})
+            accounts.check(current)
+            status = current.store.read("status", {})
             status[course_id] = report
-            context.store.write("status", status)
+            current.store.write("status", status)
             return report
         except Exception:
-            status = context.store.read("status", {})
+            status = current.store.read("status", {})
             status[course_id] = {"status": "error", "offset": body.offset, "next_offset": body.offset,
                                  "message": "采集未完成，已保存的帖子保留；请检查连接后重试。"}
-            context.store.write("status", status)
+            current.store.write("status", status)
             raise
         finally:
             lock.release()
@@ -145,23 +159,27 @@ def create_router(context):
               offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100),
               level: Literal["all", "high", "medium", "normal"] = "all",
               q: str = Query("", max_length=200)):
-        selected(course_id)
-        items = list(context.store.read("posts:" + course_id, {}).values())
+        current = accounts.capture()
+        selected(course_id, current)
+        items = list(current.store.read("posts:" + course_id, {}).values())
         items = [item for item in items if (level == "all" or item["level"] == level)
                  and (not q or q.casefold() in (item["title"] + "\n" + item["body"]).casefold())]
         items.sort(key=lambda item: (item.get("updated_at") or item.get("created_at") or 0, item["id"]), reverse=True)
+        accounts.check(current)
         return {"items": items[offset:offset + limit], "total": len(items),
                 "next_offset": offset + limit if offset + limit < len(items) else None}
 
     @router.put("/courses/{course_id}/posts/{post_id}/read")
     def mark_read(course_id: str, post_id: str, body: ReadState):
-        selected(course_id)
+        current = accounts.capture()
+        selected(course_id, current)
         with lock:
-            posts = context.store.read("posts:" + course_id, {})
+            posts = current.store.read("posts:" + course_id, {})
             if post_id not in posts:
                 raise HTTPException(404, "帖子不存在。")
             posts[post_id]["read"] = body.read
-            context.store.write("posts:" + course_id, posts)
+            accounts.check(current)
+            current.store.write("posts:" + course_id, posts)
         return {"read": body.read}
 
     router.include_router(campus.create_router(context))

@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 from copy import deepcopy
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ from backend.services.auth import protocols
 
 
 class MemoryVault:
+    transaction = staticmethod(nullcontext)
     def __init__(self):
         self.values = {}
 
@@ -113,6 +115,8 @@ def check_service(directory):
         if request.url.path == "/account":
             logged_in = "session=synthetic-cookie" in request.headers.get("cookie", "") and not server["expired"]
             return httpx.Response(200, text='<div id="account-show"></div>' if logged_in else '<form action="/login"></form>')
+        if request.url.path == "/account/edit":
+            return httpx.Response(200, text='<script>gon.primary_email={"user":{"id":123}};</script>')
         return httpx.Response(200, json={"synthetic": True}, headers={"set-cookie": "rotated=synthetic-rotated; Secure; HttpOnly; Path=/"})
 
     original_client = httpx.Client
