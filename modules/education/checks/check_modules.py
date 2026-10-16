@@ -90,6 +90,12 @@ class Sources:
         source = body['sources'][0]
         return {"model": "synthetic", "content": {"mode": body['mode'], "answer": "这是一份用于集成检查的合成回答。", "citations": [{"source_id": source['source_id'], "quote": "伪造引文" if self.forge_quote else source['text'][:10]}], "uncertainty": [], "next_steps": []}}
 
+    def run(self, prompt, context, plugins):
+        assert plugins == ['deadlines']
+        source = next(item for item in json.loads(context)['items'] if item['kind'] == 'lessons')
+        answer = {'text': '已根据所选课程资料整理。', 'insufficient_context': False, 'citation_ids': [source['id']], 'labels': []}
+        return {'model': 'synthetic', 'content': json.dumps(answer), 'tools': [{'id': 'synthetic-call', 'name': 'order_deadlines', 'is_error': False}]}
+
 
 def app_fixture(data):
     data.mkdir(parents=True, exist_ok=True)
@@ -98,6 +104,7 @@ def app_fixture(data):
     app.state.auth.authenticated_client = fixture.authenticated_client
     app.state.auth.browser = SimpleNamespace(close_all=lambda: None)
     app.state.ai.chat = fixture.chat
+    app.state.ai.run = fixture.run
     return app, fixture
 
 
@@ -137,6 +144,14 @@ async def check(data):
             assert (await client.get('/api/v1/modules/dashboard/snapshot')).status_code == 200
             selected = (await client.get('/api/v1/modules/assistant/context')).json()
             assert any(item['kind'] == 'lessons' and item['body_text'] for item in selected['items'])
+            plugins = (await client.get('/api/v1/ai/plugins')).json()['plugins']
+            assert len(plugins) == 1 and plugins[0]['id'] == 'deadlines' and plugins[0]['status'] == 'ready'
+            task = await client.post('/api/v1/modules/assistant/run', json={'prompt': '整理课程资料', 'plugins': ['deadlines']})
+            assert task.status_code == 200 and task.json()['citations'] and not task.json()['tools'][0]['is_error'], task.text
+            assert (await client.put('/api/v1/modules/deadlines', json={'enabled': False})).status_code == 200
+            assert (await client.get('/api/v1/ai/plugins')).json()['plugins'][0]['status'] == 'disabled'
+            assert (await client.get('/api/v1/modules/assistant/chat')).status_code == 200
+            assert (await client.put('/api/v1/modules/deadlines', json={'enabled': True})).status_code == 200
             assert len(fixture.calls) == calls_before, 'Aggregates must read the existing caches offline'
             assert (await client.get('/api/v1/modules/elrc/sync')).json()['course_id'] == 'demo-course'
             print('PASS shared integration: legacy caches, official semester, dashboard, assistant context and separate sync state')

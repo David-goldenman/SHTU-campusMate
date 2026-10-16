@@ -13,6 +13,9 @@ modules/notes/
     styles.css
   server/
     __init__.py
+  harness/
+    package.json
+    index.js
   checks/
     check_notes.py
 ```
@@ -24,6 +27,8 @@ modules/notes/
 ```
 
 `id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 可为 `dashboard`、`mail`、`timetable`、`courses`、`assignments`、`notifications` 或 `assistant`。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
+
+新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
 
 ## 前端入口
 
@@ -104,6 +109,8 @@ def create_router(context):
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
 
 原生 AI 插件位于 `harness/`，使用标准 npm package.json 与 Cordis 接口，也支持官方 `dsh.bundle.patch`。模块清单响应的 `harness: true` 表示该模块提供原生插件；它与模块共用启停和刷新。`context.ai.run(..., plugins=[模块ID])` 在独立官方运行时中加载所选插件，并在结束时释放。执行期间插件所属模块保持活动请求计数。详见 [AI 与插件文档](AI.md#原生-harness-插件)。
+
+插件工具按声明的 schema 接收模型参数，并通过 `execution.signal` 响应取消；注册和清理由 Cordis effect 管理。Python 模块选择公开 API 中的资料，在线程池调用同步 AI 服务，再校验引用、输出和账号版本。模块 README 记录工具名、所需 Cordis 服务、输入输出、外部访问与写入范围、持久化和检查方式；版本升级随功能分支更新清单、调用方和文档。
 
 模块属于受信任本地代码，运行权限与框架一致。目录分层和注入上下文用于团队分工与状态隔离；安装模块前审核其代码及外部访问行为。
 
