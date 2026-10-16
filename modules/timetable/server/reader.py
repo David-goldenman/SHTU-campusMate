@@ -11,6 +11,66 @@ from backend.services.campus import SourceError, course, identity
 from backend.services.campus.data import digest
 
 BASE = "https://eams.shanghaitech.edu.cn"
+INDEX_URL = BASE + "/eams/courseTableForStd.action"
+TABLE_URL = BASE + "/eams/courseTableForStd!courseTable.action"
+CALENDAR_URL = BASE + "/eams/dataQuery.action"
+SEASONS = {"1": "秋季", "2": "春季", "3": "夏季"}
+LOGIN = '#loginForm, form[action="/login"], input[type="password"]'
+CHROME = re.compile(r"contextPath\s*:\s*['\"]/eams")
+TABLE_MARKERS = ("CourseTable", "marshalTable", "unitCount", "TaskActivity")
+BLOCK_MARKERS = ("请不要过快", "过于频繁", "操作太快", "访问受限")
+DEFAULT_WEEKS, DEFAULT_UNITS = 18, 13
+
+
+def read(remote, method, url, **kwargs):
+    """读取页面；教务提示访问过快时等待后重试，不把提示内容当作数据。"""
+    for attempt in range(3):
+        page = remote.request(method, url, **kwargs).text
+        if not any(marker in page for marker in BLOCK_MARKERS):
+            return page
+        if attempt == 2:
+            break
+        remote.cancelled.wait(2.0)
+    raise SourceError("教务提示访问过快，已保留上次数据，请稍后再同步。")
+
+
+def catalogue(page):
+    """学期目录给出编号、学年与季节，供页面按学年和学期切换。"""
+    values = re.findall(r'\{id:(\d+),schoolYear:"([^"]+)",name:"(\d+)"\}', page)
+    if not values:
+        raise SourceError("教务没有返回学期目录，已保留上次数据。")
+    return [{"id": value, "school_year": year, "season": SEASONS.get(season, season), "name": year + "学年" + SEASONS.get(season, season)} for value, year, season in values]
+
+
+def current(terms, today=None):
+    """按当天日期定位当前学期：九月到一月是秋季，二月到六月是春季，七八月是夏季。"""
+    now = today or date.today()
+    if now.month == 1:
+        year, season = now.year - 1, "秋季"
+    elif now.month >= 9:
+        year, season = now.year, "秋季"
+    elif now.month <= 6:
+        year, season = now.year - 1, "春季"
+    else:
+        year, season = now.year - 1, "夏季"
+    return next((item for item in terms if item["school_year"] == str(year) + "-" + str(year + 1) and item["season"] == season), None)
+
+
+def index(page):
+    """课表首页给出学生编号和教务默认学期。"""
+    soup = BeautifulSoup(page, "html.parser")
+    if soup.select_one(LOGIN):
+        raise LoginRequired("教务会话已失效，请在设置重新连接 IDS。")
+    student = re.search(r"addInput\(\s*form\s*,\s*['\"]ids['\"]\s*,\s*['\"](\d+)['\"]", page) or re.search(r"tutorRedirectstudentId=(\d+)", page)
+    term = re.search(r"semesterCalendar\s*\(\s*\{[^}]*\bvalue\s*:\s*['\"]?(\d+)", page)
+    if not student or not term:
+        raise SourceError("教务未返回当前学生或学期。")
+    return {"student": student[1], "semester_id": term[1]}
+
+
+def table(remote, student, semester_id):
+    """按学期读取课表页面；没有发布课表的学期会返回不含课表脚本的页面。"""
+    return read(remote, "POST", TABLE_URL, data={"ignoreHead": "1", "setting.kind": "std", "startWeek": "", "semester.id": semester_id, "ids": student, "tutorRedirectstudentId": student})
 
 
 def weeks(mask, year, first, start, end):
@@ -61,14 +121,17 @@ def literal(value):
 
 def parse(html, term):
     soup = BeautifulSoup(html, "html.parser")
-    if soup.select_one('#loginForm, input[type="password"]'):
+    if soup.select_one(LOGIN):
         raise LoginRequired("教务会话已失效，请在设置重新连接 IDS。")
     script = "\n".join(node.get_text() for node in soup.select("script"))
-    table = re.search(r"new\s+CourseTable\s*\(\s*(\d{4})\s*,\s*(\d+)", script)
+    header = re.search(r"new\s+CourseTable\s*\(\s*(\d{4})\s*,\s*(\d+)", script)
     span = re.search(r"\.marshalTable\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", script)
-    if not table or not span:
+    if not header or not span:
+        # 学期还没发布课表时教务返回应用页面但没有课表脚本；其他形态仍按结构变化处理。
+        if CHROME.search(html) and not any(marker in script for marker in TABLE_MARKERS):
+            return {"courses": [], "timetable": [], "metadata": {"semester": term, "week_count": None, "units": None}, "issues": ["该学期还没有发布课表。"]}
         raise SourceError("教务没有返回课表结构，请确认学期或稍后重试。")
-    year, count = map(int, table.groups())
+    year, count = map(int, header.groups())
     first, start, end = map(int, span.groups())
     units_match = re.search(r"\bunitCount\s*=\s*(\d+)", script)
     units = int(units_match[1]) if units_match else count // 7
@@ -115,21 +178,16 @@ def parse(html, term):
 
 
 def fetch(remote, previous):
-    page = remote.request("GET", BASE + "/eams/courseTableForStd.action").text
-    student = re.search(r"addInput\(\s*form\s*,\s*['\"]ids['\"]\s*,\s*['\"](\d+)['\"]", page)
-    term = re.search(r"semesterCalendar\s*\(\s*\{[^}]*\bvalue\s*:\s*['\"]?(\d+)", page)
-    if not student or not term:
-        if "loginForm" in page or "authserver" in page:
-            raise LoginRequired("教务需要重新登录 IDS。")
-        raise SourceError("教务未返回当前学生或学期。")
-    calendar = remote.request("POST", BASE + "/eams/dataQuery.action", data={"tagId": "semester", "dataType": "semesterCalendar", "value": term[1], "empty": "false"}).text
-    entry = re.search(r"\{\s*id\s*:\s*" + term[1] + r"\s*,[^}]*\}", calendar)
-    year = re.search(r'schoolYear\s*:\s*"([^"]+)"', entry[0]) if entry else None
-    name = re.search(r'name\s*:\s*"([^"]+)"', entry[0]) if entry else None
-    if not year or not name:
-        raise SourceError("教务学期目录没有返回当前学期名称。")
-    term_name = year[1] + "学年" + {"1": "秋季", "2": "春季", "3": "夏季"}.get(name[1], name[1])
-    html = remote.request("POST", BASE + "/eams/courseTableForStd!courseTable.action", data={"ignoreHead": "1", "setting.kind": "std", "startWeek": "", "semester.id": term[1], "ids": student[1], "tutorRedirectstudentId": student[1]}).text
-    result = parse(html, term_name)
-    result["metadata"]["semester_id"] = term[1]
+    metadata = previous.get("metadata", {}) if isinstance(previous, dict) else {}
+    value = index(read(remote, "GET", INDEX_URL))
+    terms = catalogue(read(remote, "POST", CALENDAR_URL, data={"tagId": "semester", "dataType": "semesterCalendar", "value": value["semester_id"], "empty": "false"}))
+    # 教务保存的学期可能停留在上一学期，以日期定位的当前学期为准，找不到时沿用教务默认。
+    chosen = current(terms) or next((item for item in terms if item["id"] == value["semester_id"]), None) or {"id": value["semester_id"], "name": metadata.get("semester", "")}
+    result = parse(table(remote, value["student"], chosen["id"]), chosen["name"])
+    result["metadata"].update({"semester_id": chosen["id"], "student_id": value["student"], "semesters": terms})
+    fallback = metadata if metadata.get("semester_id") == chosen["id"] else {}
+    if not result["metadata"].get("week_count"):
+        result["metadata"]["week_count"] = fallback.get("week_count") or DEFAULT_WEEKS
+    if not result["metadata"].get("units"):
+        result["metadata"]["units"] = fallback.get("units") or DEFAULT_UNITS
     return result

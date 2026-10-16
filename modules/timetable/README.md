@@ -1,5 +1,7 @@
 # 教务课程表
 
-分类为课程表，使用共享 IDS 的 `timetable` 目标。`GET /snapshot` 返回课程与 `timetable` 活动；`POST /sync` 启动同步。活动包含星期 1–7、起止节次、教学周数组、教师、教室和课程 ID；页面可按教学周筛选。学期、每天节数与周次范围从原站读取。跨年周次遵循 EAMS 活动位串规则。
+分类为课程表，使用共享 IDS 的 `timetable` 目标。`GET /snapshot` 返回课程与 `timetable` 活动；`POST /sync` 启动同步；`GET /table?semester_id=<编号>` 按指定学期即时读取课表，供页面切换学年与学期。
 
-同步经过共享认证与有界重试，解析缺少学期、课程映射或节次时保留缓存并显示错误。`stop(context)` 取消后续请求并等待同步退出。运行 `bash ./check.sh`，或在项目 uv 环境运行 `python modules/timetable/checks/check_timetable.py`；检查使用合成页面。
+活动包含星期 1–7、起止节次、教学周数组、教师、教室和课程 ID。页面按星期分列、节次分行显示课程、教室与教师，可用学年、学期和教学周筛选，`全部周次` 时在教学周标签上给出每门课的周次范围。
+
+同步经过共享认证与有界重试。学期以当天日期定位（九月到一月是秋季，二月到六月是春季，七八月是夏季），教务保存的学期停留在其他学期时不再沿用；学期还没有发布课表时返回空课表和提示，解析缺少学期、课程映射或节次时保留缓存并显示错误。`stop(context)` 取消后续请求并等待同步退出。运行 `bash ./check.sh`，或在项目 uv 环境运行 `python modules/timetable/checks/check_timetable.py`；检查使用合成页面。
