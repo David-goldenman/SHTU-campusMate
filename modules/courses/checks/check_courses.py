@@ -44,6 +44,16 @@ async def check():
             assert (await client.get('/snapshot')).json()['data']['courses'][0]['title'] == '合成分组'
             assert (await client.put('/groups',json={'groups':[{'id':'bad','title':'错误分组','course_ids':['gradescope:1','gradescope:1']}]})).status_code == 422
             assert (await client.post('/sync')).status_code == 202
+            selected = await client.post('/context',json={'context_ids':[]})
+            assert selected.status_code == 200 and selected.json()['items'] == []
+            assert (await client.post('/context',json={'course_id':'missing'})).status_code == 404
+            assert (await client.post('/context',json={'context_ids':['unknown']})).status_code == 422
+            async def changed_account(module,path='/snapshot',**kwargs):
+                context.auth.revision += '-changed'
+                return await api(module,path,**kwargs)
+            context.api = changed_account
+            assert (await client.post('/context',json={})).status_code == 409
+            assert (await client.get('/snapshot')).status_code == 409
 
 
 asyncio.run(check())

@@ -1,14 +1,14 @@
 # Campus Framework
 
-本地校园工作台，统一提供 Nord 界面、导航、设置、加密凭据、学校登录、DeepSeek 基础 AI 服务与官方 Harness 插件运行时。已整合总览、邮箱、时间表、课程聚合、作业、教务系统、通知、AI 助手，以及 Blackboard、Gradescope、ELRC、Piazza、教育问答和截止时间插件模块。时间表汇总每周课程、带时间的 quiz／作业与教务考试。侧栏按模块启停显示相应分类，顺序由框架统一维护，设置始终可用。
+本地校园工作台，统一提供 Nord 界面、导航、设置、加密凭据、学校登录、DeepSeek 基础 AI 服务与官方 Harness 插件运行时。已整合首页学习助手、总览、邮箱、时间表、课程聚合、作业、教务系统、通知、AI 助手，以及 Blackboard、Gradescope、ELRC、Piazza、教育问答和截止时间插件模块。首页可以对话查询学习资料、规划作业、引用课件页码并结合成绩与培养方案讨论选课；时间表汇总每周课程、带时间的 quiz／作业与教务考试。侧栏按模块启停显示相应分类，顺序与文案由模块清单声明，框架统一呈现，设置始终可用。
 
 ## 下一阶段开发方向
 
 近期目标是完成一条可演示的真实使用链路：连接学校账号 → 识别本学期 → 汇总课程与作业 → 查看通知 → 用课程原文回答问题。按以下顺序推进：
 
 1. **真实来源验收与登录恢复。** 六个来源已完成真实账号的登录与基础同步验证，最近完成课表、Blackboard、Gradescope、Coremail 的重复同步和重启检查。已提供 IDS 本机免密码设备入口、过期恢复和按已验证账号隔离缓存；验证范围及限制见 [真实来源验收](docs/LIVE_ACCEPTANCE.md)，用户连接步骤见 [认证文档](docs/AUTH.md)。继续覆盖学校协议变化、验证码与各来源文件正文，未知提交状态不列为未提交。
-2. **通过 Harness 插件完成带引用的学习助手闭环。** 将课程检索、课次时间定位、课件正文提取和长转写检索作为独立工具或工作流模块接入官方运行时；复用教育模块的原文校验，选择课程后能回答问题、展示原文片段并打开对应来源。AI 调用前展示实际资料范围，模块后端校验结果与账号版本后再保存。
-3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。修复启动脚本对单一 WSL 发行版的依赖，准备一套合成演示数据和 5 分钟演示脚本。网页主链路验收后再接 Electron。
+2. **验证带引用的学习建议。** 首页 [学习助手插件](modules/academic-assistant/README.md) 已接入按需查询、PDF／PPTX 页级文字、录播检索、历史成绩、培养方案及课程目录／大纲查询。继续用真实问题核对作业建议与课程要求；界面说明发送至 DeepSeek 的资料范围，后端校验实际引用和账号版本后保存。扫描件与未公布的学期开课安排需要用户补充。
+3. **收敛演示界面与启动流程。** 课程中心负责课程总入口，来源面板突出连接状态和同步范围；统一失败重试、过期提示、空状态与首次引导。本机 Windows 启动器复用已有 Python 并自动打开网页，WSL 开发入口也保留；接下来准备合成演示数据和 5 分钟演示脚本，按 [交付与移植规范](docs/DELIVERY.md) 验收后再接 Electron。
 
 每项工作从最新主分支建立功能分支，仍按模块分工；共享身份、聚合契约和启动流程的变更作为集成任务处理。
 
@@ -18,7 +18,7 @@ Windows 双击本目录的 `run.cmd`。启动器使用已有 Python，等待本�
 
 Windows 启动器不会安装 Ubuntu、Python 或依赖。它优先使用现有 `.codex/venv/Scripts/python.exe`，其次查找常见的 Anaconda/Miniconda 路径。需要 Python 3.12+；缺包或版本不符时列出缺项，由用户在选定环境补齐。已有项目环境能用时，不重复下载环境。Windows 环境缺少 IANA 时区数据时，会复用现有 Conda 的时区数据；找不到才提示自行补装 tzdata。
 
-应用以未连接账号的状态启动，账号和共享 AI 在设置中配置。打开网页本身不执行登录或模型调用。
+首次使用时，在设置中连接账号并配置共享 AI；已有账号资料继续保存在本机。打开网页本身不执行登录或模型调用。
 
 - 双击 `stop.cmd`：请求当前目录后台正常结束，执行模块清理；关闭浏览器不会停止后台。
 - 重复双击 `run.cmd`：后台已就绪时复用当前实例并打开网页。
@@ -39,11 +39,13 @@ Windows 启动器不会安装 Ubuntu、Python 或依赖。它优先使用现有 
 
 Windows Node.js 22+ 和 Edge 用于登录验证；原生 AI 插件的包管理另需 pnpm。启动网页不执行插件包安装。凭据使用当前 Windows 用户的 DPAPI 加密。共享 AI 及账号需要在设置中自行配置。
 
-WSL 开发入口仍保留为 `bash ./run.sh`；它使用 WSL 内的 uv 环境并执行 `uv sync`。Windows 双击入口现在直接运行已有本机环境，不再依赖写死的 Ubuntu 发行版。
+WSL 入口保留为 `bash ./run.sh`；它按上游流程在 `.private/runtime/venv` 准备运行环境。应用缓存、登录验证与 Harness 工作区由 `.private/runtime/` 管理；本机 Windows 启动器复用已有 `.codex/venv`，启动控制与开发日志留在 `.codex/`。Windows 双击入口直接使用本机环境，不依赖 WSL。
 
 ## AI 功能开发入口
 
 AI 工具和工作流统一使用官方 DeepSeek Harness 后端运行时。每项新增能力在独立 `modules/<id>/harness/` 中实现原生 Cordis 插件，由模块管理负责启停与刷新；框架维护凭据、运行时适配和生命周期。基础文本对话和生成使用共享 `chat`、`generate`，插件任务使用 `context.ai.run(..., plugins=[模块ID])`。示例为 [截止时间整理](modules/deadlines/README.md)，可在 AI 助手的“插件任务”中选择。
+
+需要按问题调用校园 API 的能力参考 [首页学习助手](modules/academic-assistant/README.md)：业务后端创建任务与工具授权，通过内部 `plugin_env` 注入本机调用信息，原生插件负责模型工具接口。带页面的插件从所属页面发起，纯工具插件从“插件任务”选择。学校会话和 API Key 留在共享服务，工具只把回答所需资料交给模型。
 
 开始开发前阅读 [团队开发流程](docs/DEVELOPMENT.md#开发流程)、[AI 插件接口](docs/AI.md#原生-harness-插件) 和 [模块契约](docs/MODULES.md)。`main` 保存已整合且可运行的版本；功能在独立分支开发，完成验证与文档后通过 PR 合并。
 
@@ -57,12 +59,13 @@ AI 工具和工作流统一使用官方 DeepSeek Harness 后端运行时。每�
 | `backend/services/ai/` | DeepSeek 配置、基础对话和官方 Harness 适配；AI 服务维护者负责 |
 | `modules/<id>/` | 一项独立业务或 AI 插件模块，按需提供 `web/`、`server/`、`harness/` 与 `checks/` |
 | `.private/` | 加密凭据、普通设置、各模块用户数据；整目录加入 Git 忽略规则 |
+| `.private/runtime/` | 程序创建的运行环境、登录验证目录、Harness 工作区与缓存；随私有目录忽略 |
 | `.codex/` | 当前项目的开发环境、缓存和验证临时数据；整目录加入 Git 忽略规则 |
 | `checks/`、`docs/` | 框架和共享服务的最小检查、接口及团队规范 |
 
 项目以空配置启动。账号、密码、Cookie、登录参数、AI Key 和模块秘密统一写入 `.private/vault.dpapi`；接口只返回配置及会话状态。普通设置保存在 `.private/settings.sqlite3`，模块文件存放在 `.private/modules/<id>/`。设置中可分别清除凭据、模块数据，或重置全部本地数据。私有资料和开发环境遵循项目 `.gitignore`。
 
-DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需重新配置凭据。登录验证窗口临时资料位于 `.codex/auth/`，导入会话后关闭并删除临时资料。Windows 会话密钥由操作系统管理，项目内保存密文。
+DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需重新配置凭据。登录验证窗口临时资料位于 `.private/runtime/auth/`，导入会话后关闭并删除临时资料。Windows 会话密钥由操作系统管理，项目内保存密文。
 
 ## 统一开发方式
 
@@ -88,5 +91,8 @@ Nord 变量统一在 `web/styles.css` 定义：Polar Night 用于侧栏与正文
 - [AI 接入与上下文约定](docs/AI.md)
 - [Nord 界面与组件](docs/DESIGN.md)
 - [团队开发与修改边界](docs/DEVELOPMENT.md)
+- [四人协作、打包与迁移](docs/DELIVERY.md)
 
 交互式 API 页面从 jsDelivr 加载 Swagger UI；离线时可直接使用 OpenAPI JSON 和项目内接口文档。学校登录协议、二次验证和会话有效期由相应网站决定；以真实登录探测结果确认会话状态。
+
+模块边界、独立启停与完整主分支约定见 [AGENTS.md](AGENTS.md) 和 [架构决策](docs/architecture/0001-module-boundaries.md)。完整检查自动覆盖当前安装模块，移除业务模块后仍可启动框架设置页。

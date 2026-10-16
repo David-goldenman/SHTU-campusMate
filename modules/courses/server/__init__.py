@@ -4,7 +4,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.services.campus.source import snapshots
+from backend.services.campus.analysis import account_revision
+from .context import build_context
 from .catalog import SOURCES, combine, current_semester, query
+
+
+class Selection(BaseModel):
+    course_id: str | None = Field(default=None, max_length=160)
+    context_ids: list[str] | None = Field(default=None, max_length=400)
 
 
 class Group(BaseModel):
@@ -22,11 +29,23 @@ def create_router(context):
 
     @router.get("/snapshot")
     async def snapshot():
+        owner = account_revision(context)
         values, unavailable = await snapshots(context, SOURCES)
+        if owner != account_revision(context):
+            raise HTTPException(409, "账号已更新，请刷新课程资料。")
         data = combine(values, context.store.read("groups", []), current_semester(values))
         if unavailable:
             data["issues"].append("以下来源模块未启用或暂时不可用：" + "、".join(unavailable))
         return {"status": "syncing" if any(value.get("status") == "syncing" for value in values.values()) else "ready" if values else "not_connected", "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable}
+
+    @router.post("/context")
+    async def selected_context(body: Selection):
+        owner = account_revision(context)
+        data = (await snapshot())["data"]
+        selected = build_context(data, owner, body.course_id, body.context_ids)
+        if owner != account_revision(context):
+            raise HTTPException(409, "账号已更新，请重新选择资料。")
+        return selected
 
     @router.post("/sync", status_code=202)
     async def sync():

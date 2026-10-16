@@ -89,8 +89,11 @@ async def check(root):
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:17666") as client:
             initial = (await client.get("/api/v1/bootstrap")).json()
-            assert [item["id"] for item in initial["categories"]] == ["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant", "settings"]
-            assert next(item["label"] for item in initial["categories"] if item["id"] == "timetable") == "时间表"
+            assert [item["id"] for item in initial["categories"]] == ["settings"]
+            health = (await client.get("/api/v1/health")).json()
+            assert health == {"application": "campus-framework", "version": initial["version"], "launch_id": app.state.launch_id}
+            assert "csrf_token" not in health and len(health["launch_id"]) == 32
+            assert (await client.get("/api/v1/health", headers={"Host": "other.example"})).status_code == 403
             assert initial["modules"] == []
             assert all(not item["has_password"] and not item["has_session"] for item in (await client.get("/api/v1/auth/providers")).json()["providers"])
             assert (await client.get("/api/v1/ai/settings")).json() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
@@ -105,9 +108,16 @@ async def check(root):
             assert invalid.status_code == 422 and private_marker not in invalid.text and '"input"' not in invalid.text
             alpha = fixture(modules, "alpha", "one")
             fixture(modules, "beta", "two")
+            manifest_path = alpha / "module.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest.update(category="research", navigation={"label": "Research <lab>", "icon": "R", "description": "Independent category", "order": 5})
+            manifest_path.write_text(json.dumps(manifest))
             discovered = (await client.post("/api/v1/modules/reload")).json()["modules"]
             assert len(discovered) == 2 and all(item["status"] == "ready" for item in discovered), discovered
             first = next(item for item in discovered if item["id"] == "alpha")
+            categories = (await client.get("/api/v1/modules")).json()["categories"]
+            assert [item["id"] for item in categories] == ["research", "courses", "settings"]
+            assert categories[0]["label"] == "Research <lab>"
             assert first["has_frontend"] is True
             assert (await client.get(first["frontend_url"])).status_code == 200
             traversal = first["frontend_url"].split("web/")[0] + "web/%2e%2e/server/__init__.py"

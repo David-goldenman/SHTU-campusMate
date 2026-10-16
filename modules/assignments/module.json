@@ -1,1 +1,13 @@
-{"id":"assignments","name":"作业管理","version":"0.1.0","category":"assignments","api_version":1}
+{
+  "id": "assignments",
+  "name": "作业管理",
+  "version": "0.1.0",
+  "category": "assignments",
+  "api_version": 1,
+  "navigation": {
+    "label": "作业管理",
+    "icon": "◷",
+    "description": "查看明确开放的待办及各课程作业状态。",
+    "order": 50
+  }
+}

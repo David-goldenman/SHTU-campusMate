@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -57,6 +57,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "filelock" },
     { name = "httpx" },
+    { name = "pypdf" },
     { name = "shanghaitech-ids-passkey" },
     { name = "uvicorn" },
 ]
@@ -69,6 +70,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "filelock", specifier = ">=3" },
     { name = "httpx", specifier = ">=0.28" },
+    { name = "pypdf", specifier = ">=6.20.1" },
     { name = "shanghaitech-ids-passkey", git = "https://github.com/vvbbnn00/shanghaitech-ids-passkey.git?rev=7c4df62716ceb3d94452d22f3d07f19ff1b8db8b" },
     { name = "uvicorn", specifier = ">=0.34" },
 ]
@@ -606,6 +608,15 @@ wheels = [
     { url = "https://mirrors.nju.edu.cn/pypi/web/packages/3d/81/f02de95eec7794dfc7a5bc69a834f0e834b31b3009014ce6de903855f775/pydantic_core-2.50.1-graalpy312-graalpy250_312_native-macosx_11_0_arm64.whl", hash = "sha256:a51eee75939cf811ac09b278745a6cee7dc873ccfbc8b9af3cc88fe4b7ce25b5" },
     { url = "https://mirrors.nju.edu.cn/pypi/web/packages/4d/16/227746ed3771d9bf2304568b55134849ece34e13b38b1d76de763015c77f/pydantic_core-2.50.1-graalpy312-graalpy250_312_native-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:ae28183297fb0d2b8dc46a1f01d51f5e45825fc5afe76a835a6cb7fb34821295" },
     { url = "https://mirrors.nju.edu.cn/pypi/web/packages/e5/b9/7664d1592a0e5a74903f357cd5b28ceb7336f3473256c5a4e8c8432f1881/pydantic_core-2.50.1-graalpy312-graalpy250_312_native-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:88e492e8b9d0312e7dc13667c30222abf284dc3b79b5302b3607b41a5784ce61" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.20.1"
+source = { registry = "https://mirrors.nju.edu.cn/pypi/web/simple" }
+sdist = { url = "https://mirrors.nju.edu.cn/pypi/web/packages/e2/c1/da25a099164cf4b210d63b957c902ad687139f4b8c12c20aec7953a4a266/pypdf-6.20.1.tar.gz", hash = "sha256:28f5a9d2fdc2749264612d94e6a58de54c11d730d9f0cabf8ad34117c4942b45" }
+wheels = [
+    { url = "https://mirrors.nju.edu.cn/pypi/web/packages/71/f8/4cbd09988b4b158260b7e0df38bf16f19e998bf0e257a18661a8da04280e/pypdf-6.20.1-py3-none-any.whl", hash = "sha256:aa5a55ddcffdc5e5ab291d5decb23f6383f4e56f8e3263dc39af41fff03885ad" },
 ]
 
 [[package]]

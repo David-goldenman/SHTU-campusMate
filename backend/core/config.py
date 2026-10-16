@@ -1,17 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 VERSION = "0.1.0"
-CATEGORIES = [
-    {"id": "dashboard", "label": "总览"},
-    {"id": "mail", "label": "邮箱"},
-    {"id": "timetable", "label": "时间表"},
-    {"id": "courses", "label": "课程中心"},
-    {"id": "assignments", "label": "作业管理"},
-    {"id": "eams", "label": "教务系统"},
-    {"id": "notifications", "label": "通知"},
-    {"id": "assistant", "label": "AI助手"},
-    {"id": "settings", "label": "设置"},
-]
 
 
 class Settings(BaseModel):

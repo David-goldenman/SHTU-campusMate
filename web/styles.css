@@ -262,3 +262,10 @@ main:focus { outline:none; }
   .settings-section { padding:20px; }
   .settings-section h2 { font-size:18px; }
 }
+
+.module-card { scroll-margin-top:92px; }
+.module-card-heading .module-version { display:none; }
+.module-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+.module-shortcuts button { min-height:44px; max-width:100%; padding:9px 16px; border:1px solid var(--border); border-radius:9px; background:var(--paper); color:var(--link); font-size:14px; overflow-wrap:anywhere; }
+.module-shortcuts button:hover { background:var(--surface); border-color:var(--nord9); }
+@media (max-width:540px) { .module-shortcuts button { padding-inline:12px; font-size:13px; } }

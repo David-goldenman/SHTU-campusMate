@@ -1,1 +1,13 @@
-{"id":"mail","name":"校园邮箱","version":"0.1.0","category":"mail","api_version":1}
+{
+  "id": "mail",
+  "name": "校园邮箱",
+  "version": "0.1.0",
+  "category": "mail",
+  "api_version": 1,
+  "navigation": {
+    "label": "邮箱",
+    "icon": "✉",
+    "description": "阅读校园邮件，按规则、手动或 AI 整理分类。",
+    "order": 20
+  }
+}

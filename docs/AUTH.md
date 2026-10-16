@@ -96,7 +96,7 @@ ELRC/Piazza 原有本地资料、关注课程和阅读状态按账号分区；�
 
 `backend/core/vault.py` 的 `Vault` 默认写入项目 `.private/vault.dpapi`，使用 Windows DPAPI `CurrentUser` 加密整份 JSON，先写加密临时文件再原子替换。`get()` 返回副本，`save()`、`delete()`、`delete_prefix()` 与 `clear()` 统一管理秘密。认证键为 `auth:credentials:{provider}` 和 `auth:session:{provider}`；账号、密码、Cookie、sid 与其他密钥全部留在加密 Vault。普通认证状态写入 Store 的 `auth:state:{provider}`，其中只含状态、提示、阻断标志与探测时间。DPAPI 文件与当前 Windows 账号绑定，运行于该账号或启用 Windows 互操作的 WSL。
 
-验证浏览器的临时用户目录固定在项目 `.codex/auth/{provider}`。成功导入会话、删除提供方或正常退出服务时，先关闭框架创建的独立窗口，再删除该目录中的 Cookie、localStorage 与缓存。导入失败时保留窗口供用户继续验证；下次重新打开验证窗口会处理上次留下的目录。`.private` 与 `.codex` 均在项目忽略范围内，打包和交付不包含这两处目录。
+验证浏览器的临时用户目录位于 `.private/runtime/auth/{provider}`。成功导入会话、删除提供方或正常退出服务时，先关闭框架创建的独立窗口，再删除该目录中的 Cookie、localStorage 与缓存。导入失败时保留窗口供用户继续验证；下次重新打开验证窗口会处理上次留下的目录。私有运行数据由 Git 忽略，打包和交付按代码文件清单进行。
 
 `AuthService.clear_all()` 清除四个提供方的账号、会话、状态与验证窗口；`close()` 在服务退出时关闭窗口并清理临时目录。完整凭据清理由框架统一调用 Vault 清空方法，模块不直接打开 Vault 文件。认证开发只修改 `backend/services/auth/`、`backend/core/vault.py`、`scripts/browser.mjs`、`scripts/dpapi.ps1` 及对应文档和检查。
 

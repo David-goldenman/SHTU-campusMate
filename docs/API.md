@@ -13,11 +13,14 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/bootstrap` | `{version, csrf_token, categories, settings, modules}`；分类按侧栏顺序返回 |
+| GET | `/health` | `{application:"campus-framework",version,launch_id}`；启动器校验本次服务已可访问 |
 | GET | `/settings` | `{port, active_port, restart_required, storage:{directory,encryption}}` |
 | PUT | `/settings` | 请求 `{port:16666}`，返回完整设置；修改后重启生效 |
 | POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope}` |
 
 端口范围为 1024–65535，浏览器限制端口在系统边界拒绝。默认保存端口 16666，`--port` 只覆盖当次运行端口。
+
+`launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.codex/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
 
 清除 `credentials` 时停止模块及登录窗口，清除 Vault 中所有共享和模块秘密、认证状态，并关闭 AI，再挂载模块；普通模块数据保留。清除 `modules` 时停止模块、清除全部模块状态、秘密和文件，再挂载模块；共享登录、AI 与框架设置保留。`all` 执行两类清除并恢复默认设置，当前监听端口持续到服务重启。模块代码与清单始终由开发者维护，数据清除操作只处理本地数据。
 
@@ -25,12 +28,14 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
-| GET | `/modules` | `{modules:[ModuleInfo]}` |
-| POST | `/modules/reload` | 扫描模块目录、释放并重新加载，返回 `{modules:[ModuleInfo]}` |
-| PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo]}` |
+| GET | `/modules` | `{modules:[ModuleInfo],categories:[Category]}` |
+| POST | `/modules/reload` | 扫描模块目录、释放并重新加载，返回 `{modules:[ModuleInfo],categories:[Category]}` |
+| PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo],categories:[Category]}` |
 | 任意 | `/modules/<id>/<route>` | 模块自己的公开后端接口，由该模块文档说明 |
 
-`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
+`Category` 包含 `id,label,icon,description,order`，从已安装模块的导航声明生成，最后附加框架设置。清单、启停和刷新均返回同一分类列表；页面只显示存在已启用前端模块的业务分类。
+
+`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
@@ -62,6 +67,8 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 ## 共享 AI
 
+首页学习助手的业务入口为 `/modules/academic-assistant/chat`，会按问题调用所需数据 API，再由官方 Harness 组织回答；共享 AI 继续提供运行时与模型服务。业务接口和外部发送范围见下方及 [模块说明](../modules/academic-assistant/README.md)。
+
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/ai/settings` | `{enabled, model, key_saved}` |
@@ -88,4 +95,22 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | 422 | 共享任务请求长度不符、插件数组为空或模块 ID 重复 |
 | 502 | 插件安装、模型、运行时失败，或任务未完整结束 |
 
-新增 AI 工具与工作流使用独立模块的原生插件，统一经过 `/ai/run`；基础文本功能使用 `/ai/chat` 和 `/ai/generate`。共享契约维持 `api_version:1`，业务输出 schema、资料引用与持久化约定由模块 API 定义，并随功能 PR 更新。
+新增 AI 工具与工作流使用独立模块的原生插件，统一经过共享 `context.ai.run`（HTTP 入口为 `/ai/run`）；基础文本功能使用 `/ai/chat` 和 `/ai/generate`。共享契约维持 `api_version:1`，业务输出 schema、资料引用与持久化约定由模块 API 定义，并随功能 PR 更新。
+
+## 首页学习助手与课程查询
+
+| 方法 | 路径 | 请求或响应 |
+| --- | --- | --- |
+| GET | `/modules/academic-assistant/chat` | `{messages}`，当前账号组合的本机历史 |
+| POST | `/modules/academic-assistant/chat` | `{message}` → `{role,text,citations,navigation,tools,model,created_at}` |
+| DELETE | `/modules/academic-assistant/chat` | 清空当前对话，保留学习档案 |
+| GET | `/modules/academic-assistant/profile` | `{profile,academic,courses_count}` |
+| PUT | `/modules/academic-assistant/profile` | `{major,cohort_year,direction,weekly_hours,notes}`，需要已验证 IDS |
+| DELETE | `/modules/academic-assistant/profile` | 清除当前 IDS 的学习偏好与助手学业记录 |
+| GET | `/modules/academic-assistant/activity` | `{active,steps:[{name,label,status}]}`，状态为 `running/done/error` |
+| GET | `/modules/eams/course-search?q=&page=1` | 学校课程目录 `{items,page,page_size,total,scope,notice}` |
+| GET | `/modules/eams/course-info?syllabus_id=` | 教学大纲 `{id,title,text,url,scope,truncated}` |
+
+学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、历史成绩、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+
+课程查询复用 IDS 的教务会话，实时读取课程名称／代码及教学大纲；`scope` 分别为 `course_catalog` 和 `course_syllabus`。这两个接口提供课程目录与课程要求，学期实际开课和可选资格仍需核对学校公布的选课安排。培养方案快照新增原始 `requirements` 和 `notes`，见 [教务模块](../modules/eams/README.md)。

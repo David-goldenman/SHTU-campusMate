@@ -1,5 +1,8 @@
 import argparse
+import json
+import os
 import secrets
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -13,7 +16,7 @@ from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .core.config import CATEGORIES, VERSION, Settings
+from .core.config import VERSION, Settings
 from .core.modules import ModuleManager
 from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
@@ -57,7 +60,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     vault = vault or Vault()
     active_port = Settings(port=active_port or store.read("settings", {"port": 16666})["port"]).port
     csrf = secrets.token_urlsafe(32)
-    auth, ai = AuthService(vault, store), AIService(vault, store)
+    auth, ai = AuthService(vault, store, runtime_dir=Path(data_dir) / 'runtime'), AIService(vault, store)
     errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error}
     modules = ModuleManager(store, vault, auth, ai, root=modules_root, data=data_dir, exception_handlers=errors)
     ai.harness = Harness(modules)
@@ -78,6 +81,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                   dependencies=[Security(APIKeyHeader(name="X-Framework-Token", auto_error=False, description="写操作填写 GET /api/v1/bootstrap 返回的 csrf_token。"))])
     app.state.modules, app.state.auth, app.state.ai = modules, auth, ai
     app.state.store, app.state.vault, app.state.port = store, vault, active_port
+    app.state.launch_id = secrets.token_hex(16)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -104,7 +108,11 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.get("/api/v1/bootstrap", tags=["框架"], summary="初始化网页与模块清单")
     def bootstrap():
-        return {"version": VERSION, "csrf_token": csrf, "categories": CATEGORIES, "settings": settings(), **modules.list()}
+        return {"version": VERSION, "csrf_token": csrf, "settings": settings(), **modules.list()}
+
+    @app.get("/api/v1/health", tags=["框架"], summary="本机启动器就绪检查")
+    def health():
+        return {"application": "campus-framework", "version": VERSION, "launch_id": app.state.launch_id}
 
     @app.get("/api/v1/settings", tags=["设置"], summary="读取全局设置与存储说明")
     def get_settings():
@@ -165,10 +173,21 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 def main():
     parser = argparse.ArgumentParser(description="Campus Framework 本地网页服务")
     parser.add_argument("--port", type=int)
+    parser.add_argument("--launch-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
     app = create_app(active_port=args.port)
+    if args.launch_id:
+        app.state.launch_id = args.launch_id
+    ready = DATA / "runtime" / "launcher" / "server.json"
+    ready.parent.mkdir(parents=True, exist_ok=True)
+    state = {"launch_id": app.state.launch_id, "port": app.state.port, "pid": os.getpid()}
+    ready.write_text(json.dumps(state), encoding="utf-8")
     print(f"Campus Framework: http://127.0.0.1:{app.state.port}", flush=True)
-    uvicorn.run(app, host="127.0.0.1", port=app.state.port, access_log=False)
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=app.state.port, access_log=False)
+    finally:
+        if ready.exists() and json.loads(ready.read_text(encoding="utf-8")).get("launch_id") == app.state.launch_id:
+            ready.unlink()
 
 
 if __name__ == "__main__":

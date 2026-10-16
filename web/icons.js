@@ -20,6 +20,9 @@ const paths = {
   inbox:'<path d="m5 4-3 10v6h20v-6L19 4H5Zm-3 10h6l2 3h4l2-3h6"/>',
 };
 
+const aliases = {'◫':'dashboard','✉':'mail','▦':'calendar','▥':'book','◷':'check','✎':'school','☷':'bell','✧':'sparkles','⚙':'settings','✦':'sparkles'};
+
 export function icon(name) {
+  name = aliases[name] || name;
   return '<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (paths[name] || paths.dashboard) + '</svg>';
 }

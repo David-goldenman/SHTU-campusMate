@@ -13,13 +13,8 @@ function dueDate(value, escape) {
 }
 
 export async function mount(container,context) {
-  const style = document.createElement('link');
-  style.rel = 'stylesheet';
-  style.href = new URL('./styles.css',import.meta.url);
-  document.head.append(style);
+  const cleanup = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const e = context.ui.escape;
-  const cleanup = () => style.remove();
-  context.signal.addEventListener('abort',cleanup,{once:true});
   try {
     const stop = await sourcePanel(container,context,(body,snapshot) => {
       const metadata = snapshot.data.metadata?.source_metadata || {};
@@ -30,7 +25,7 @@ export async function mount(container,context) {
       const noConnection = Object.keys(metadata).length > 0 && Object.values(metadata).every(source => source.status === 'not_connected');
       const issues = container.querySelector('[data-issues]');
       if (noConnection) {
-        const otherIssues = (snapshot.data.issues || []).filter(issue => !Object.entries(metadata).some(([id,source]) => source.status === 'not_connected' && String(issue).startsWith(id + ':')));
+        const otherIssues = (snapshot.data.issues || []).filter(issue => metadata[String(issue).split(/[:：]/,1)[0].trim()]?.status !== 'not_connected');
         issues.textContent = ['连接课程来源后，课程、作业与资料会汇总到这里。',snapshot.message,...otherIssues].filter(Boolean).join('；');
         container.querySelector('[data-status]').textContent = '等待连接账号';
       }

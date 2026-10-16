@@ -15,7 +15,7 @@ function browser(action) {
   assert.equal(result.status,0,result.stderr);
 }
 
-function fixture(initial) {
+function fixture(initial, categories) {
   const savedFetch = window.fetch.bind(window);
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
   const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,calls:[],unexpected:[],failLogin:true};
@@ -25,16 +25,16 @@ function fixture(initial) {
     if (!new URL(url,location.origin).pathname.startsWith('/api/v1/')) return savedFetch(url,options);
     const method = options.method || 'GET', body = options.body ? JSON.parse(options.body) : {};
     state.calls.push({path,method,target:body.target});
-    if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules});
+    if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',categories,modules:state.modules});
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
     if (path === '/ai/settings') return json({model:'deepseek-flash',enabled:false,key_saved:false});
     if (path === '/auth/providers') return json({providers});
-    if (path === '/modules' || path === '/modules/reload') return json({modules:state.modules});
+    if (path === '/modules' || path === '/modules/reload') return json({categories,modules:state.modules});
     const toggle = path.match(/^\/modules\/([^/]+)$/);
     if (toggle && method === 'PUT') {
       const item = state.modules.find(item => item.id === toggle[1]);
       item.enabled = body.enabled; item.status = body.enabled ? 'ready' : 'disabled';
-      return json({modules:state.modules});
+      return json({categories,modules:state.modules});
     }
     const auth = path.match(/^\/auth\/([^/]+)\/(.+)$/);
     if (auth) {
@@ -56,7 +56,7 @@ function fixture(initial) {
       return json(provider);
     }
     if (path === '/modules/dashboard/snapshot') {
-      if (state.dashboardEmpty) return json({status:'partial',stats:{courses:0,pending:0,materials:0,ready_sources:0},upcoming:[],notifications:[],data:{issues:['piazza: 请先连接账号。','作业管理模块未启用或暂时不可用。'],metadata:{source_metadata:{piazza:{status:'not_connected'}}},courses:[]}});
+      if (state.dashboardEmpty) return json({status:'partial',stats:{courses:0,pending:0,materials:0,ready_sources:0},upcoming:[],notifications:[],data:{issues:['piazza: 请先连接账号。','piazza：请在设置连接账号，然后同步。','作业管理模块未启用或暂时不可用。'],metadata:{source_metadata:{piazza:{status:'not_connected'}}},courses:[]}});
       const due = new Date(Date.now()+86400000).toISOString();
       return json({status:'ready',updated_at:due,stats:{courses:6,pending:2,materials:12,ready_sources:1},upcoming:[{id:'test-task',title:'合成课程 · 项目报告',course_title:'界面测试课程',due_at:due,url:'https://example.invalid/task'}],notifications:[{title:'合成通知：有新附件',summary:'仅用于界面回归检查，不代表真实来源已接入。',citations:[{title:'合成附件来源',url:'https://example.invalid/post'}]}],data:{issues:[],metadata:{source_metadata:{piazza:{status:'ready',updated_at:due}}},courses:[{id:'test-course',title:'合成课程',current:true,url:'https://example.invalid/course',source:'synthetic',term:'合成学期'}]}});
     }
@@ -103,9 +103,15 @@ try {
     await evaluate(`window.scrollTo(0,0);true`);
     await writeFile(resolve('.codex/tmp/ui-overview-' + label + '.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   }
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1060,deviceScaleFactor:1,mobile:false});
+  const jumpResult = await evaluate(`(()=>{const jump=document.querySelector('[data-module-jump="dashboard"]');if(!jump)return null;const hash=location.hash;jump.click();return {hash:location.hash===hash,focused:document.activeElement.textContent};})()`);
+  if (jumpResult) {
+    assert.deepEqual(jumpResult,{hash:true,focused:'校园总览'},'Page shortcuts preserve route and focus the section');
+    await writeFile(resolve('.codex/tmp/ui-dashboard-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  }
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   await command('Network.setBlockedURLs',{urls:[base + '/api/v1/*']});
-  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)})`});
+  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
   await command('Page.navigate',{url:'about:blank'});
   await command('Page.navigate',{url:base + '/#settings'});
   await evaluate(`window.waitFor = async condition => {for(let n=0;n<100;n++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out at ' + location.hash + ': ' + document.body.innerText.slice(0,1800));}; waitFor(()=>window.webCheck && document.querySelector('[data-credentials=gradescope]'))`);
@@ -171,6 +177,7 @@ try {
   await evaluate(`webCheck.dashboardEmpty=true;location.hash='dashboard';waitFor(()=>document.querySelector('.dashboard-connect-notice'))`);
   assert.deepEqual(await evaluate(`[...document.querySelectorAll('.stat-value')].map(node=>node.textContent)`),['—','—','—','—']);
   assert.match(await evaluate(`document.querySelector('[data-issues]').textContent`),/作业管理模块未启用/,'Connection guidance preserves unrelated failures');
+  assert.doesNotMatch(await evaluate(`document.querySelector('[data-issues]').textContent`),/请先连接账号|请在设置连接账号/,'Repeated source connection instructions are collapsed');
   assert.deepEqual(await evaluate(`webCheck.unexpected`),[]);
   console.log('PASS: desktop/tablet/mobile dashboards, source status, settings shortcuts, dashboard cleanup, combined timetable, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
 } finally {

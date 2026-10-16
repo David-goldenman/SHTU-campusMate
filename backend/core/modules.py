@@ -22,12 +22,21 @@ from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
 
 
+class Navigation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str = Field(min_length=1, max_length=80)
+    icon: str = Field(default="▧", min_length=1, max_length=8)
+    description: str = Field(default="", max_length=240)
+    order: int = Field(default=100, ge=0, le=10000)
+
+
 class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,47}$")
     name: str = Field(min_length=1, max_length=80)
     version: str = Field(min_length=1, max_length=40)
-    category: Literal["dashboard", "mail", "timetable", "courses", "assignments", "eams", "notifications", "assistant"]
+    category: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,47}$")
+    navigation: Navigation | None = None
     api_version: Literal[1]
 
 
@@ -55,7 +64,16 @@ class ModuleManager:
 
     def list(self):
         with self.lock:
-            return {"modules": [dict(entry.info) for entry in self.entries.values()]}
+            modules = [dict(entry.info) for entry in self.entries.values()]
+            categories = {}
+            # Explicit declarations win over compatibility fallbacks. Module ID breaks ties.
+            for info in sorted(modules, key=lambda item: (item.get("navigation") is None, item["id"])):
+                category = info["category"]
+                if category and category != "settings" and category not in categories:
+                    categories[category] = {"id": category, **(info.get("navigation") or {"label": category, "icon": "▧", "description": "", "order": 100})}
+            ordered = sorted(categories.values(), key=lambda item: (item["order"], item["id"]))
+            ordered.append({"id": "settings", "label": "设置", "icon": "⚙", "description": "管理模块、账号、AI服务和本地数据。", "order": 10001})
+            return {"modules": modules, "categories": ordered}
 
     def _idle(self, entries):
         if any(entry.requests for entry in entries):
@@ -77,7 +95,7 @@ class ModuleManager:
             entry.package = None
 
     def _load(self, folder):
-        info = {"id": folder.name, "name": folder.name, "version": "", "category": "dashboard", "enabled": False, "status": "error", "has_frontend": False, "frontend_url": None}
+        info = {"id": folder.name, "name": folder.name, "version": "", "category": None, "enabled": False, "status": "error", "has_frontend": False, "frontend_url": None}
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
@@ -87,6 +105,8 @@ class ModuleManager:
                 raise ValueError("module.json 的 id 必须与目录名称一致。")
             if manifest.id == "reload":
                 raise ValueError("reload 是框架保留的模块标识。")
+            if manifest.category == "settings":
+                raise ValueError("settings 是框架保留的设置分类。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
             plugin = folder / "harness" / "package.json"

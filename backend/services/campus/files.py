@@ -5,7 +5,6 @@ from urllib.parse import unquote, urljoin, urlsplit
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from backend.core.paths import PROJECT
 from ..auth import LoginRequired
 from .remote import Remote, SourceError
 
@@ -33,7 +32,7 @@ def download(context, provider, hosts, resolve, cancelled, target=None):
                     media_type = response.headers.get("content-type", "application/octet-stream").split(";", 1)[0]
                     if media_type in {"text/html", "application/xhtml+xml", "application/json"}:
                         raise SourceError("来源返回了页面或错误对象，请重新同步后下载。")
-                    directory = PROJECT / ".codex" / "tmp" / context.id
+                    directory = context.data_dir / 'tmp' / 'downloads'
                     directory.mkdir(parents=True, exist_ok=True)
                     with tempfile.NamedTemporaryFile(dir=directory, delete=False) as output:
                         temporary = Path(output.name)

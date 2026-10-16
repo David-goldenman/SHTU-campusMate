@@ -3,5 +3,11 @@
   "name": "课程学习助手 · QJQ",
   "version": "0.1.0",
   "category": "assistant",
-  "api_version": 1
+  "api_version": 1,
+  "navigation": {
+    "label": "AI助手",
+    "icon": "✧",
+    "description": "选择缓存资料，进行课程问答、总结和报告。",
+    "order": 80
+  }
 }

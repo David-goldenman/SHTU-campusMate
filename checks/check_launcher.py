@@ -42,7 +42,8 @@ def check(project):
         http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with http.open(f"http://127.0.0.1:{port}/api/v1/bootstrap", timeout=3) as response:
             value = json.loads(response.read())
-        assert len(value["modules"]) == 14, len(value["modules"])
+        expected = {path.parent.name for path in (project / "modules").glob("*/module.json")}
+        assert {item["id"] for item in value["modules"]} == expected
         for route in ("/api/v1/modules/courses/snapshot", "/api/v1/modules/dashboard/snapshot"):
             with http.open(f"http://127.0.0.1:{port}" + route, timeout=3) as response:
                 snapshot = json.loads(response.read())
@@ -77,7 +78,7 @@ def check(project):
         "instance": "a" * 32, "identity": {"created": 0, "image": "wrong"},
     }), encoding="utf-8")
     assert "无需停止" in command("--stop")
-    print("PASS: existing runtime, paths with spaces, ready page/assets, Shanghai time zone, course/dashboard data, 14 modules, reuse, graceful stop, busy port and stale PID protection")
+    print("PASS: existing runtime, paths with spaces, ready page/assets, Shanghai time zone, course/dashboard data, installed modules, reuse, graceful stop, busy port and stale PID protection")
 
 
 if __name__ == "__main__":

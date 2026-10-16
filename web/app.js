@@ -2,11 +2,6 @@ import {icon} from './icons.js';
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
 import * as settings from './settings.js';
 
-const navigation = [
-  ['dashboard','dashboard','总览'], ['mail','mail','邮箱'], ['timetable','calendar','时间表'],
-  ['courses','book','课程中心'], ['assignments','check','作业管理'],
-  ['eams','school','教务系统'], ['notifications','bell','通知'], ['assistant','sparkles','AI助手'], ['settings','settings','设置'],
-];
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
 const scrim = document.querySelector('#menu-scrim');
@@ -15,14 +10,8 @@ let state;
 let pageScope;
 let revision = 0;
 
-const labels = new Map(navigation.map(([id,,label]) => [id,label]));
+let labels = new Map();
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
-const categoryDescriptions = {
-  dashboard:'本学期课程、近期作业与重要通知。', mail:'阅读校园邮件，按规则、手动或 AI 整理分类。',
-  timetable:'查看上课安排、quiz 与作业截止时间，以及教务考试。', courses:'按课程与平台查看资料、讨论、成绩和录播。',
-  assignments:'查看明确开放的待办及各课程作业状态。', eams:'查看考试安排、学期成绩与培养方案。', notifications:'提炼带来源的重要事项，跟踪已读状态。',
-  assistant:'选择缓存资料，进行课程问答、总结和报告。', settings:'管理模块、账号、AI服务和本地数据。',
-};
 
 function closeMenu() {
   document.body.classList.remove('menu-open');
@@ -78,8 +67,9 @@ async function mountModule(module, container, scope) {
   body.dataset.moduleId = module.id;
   const card = document.createElement('section');
   card.className = 'panel module-card';
+  card.id = 'module-card-' + module.id;
   if (container.dataset.single === 'true') card.classList.add('module-card-single');
-  card.innerHTML = '<header class="module-card-heading"><div><h2>' + escape(module.name) + '</h2><span class="module-version">v' + escape(module.version) + '</span></div><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></header>';
+  card.innerHTML = '<header class="module-card-heading"><div><h2 tabindex="-1">' + escape(module.name) + '</h2><span class="module-version">v' + escape(module.version) + '</span></div><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></header>';
   card.append(body);
   container.append(card);
   if (module.status === 'error') {
@@ -87,6 +77,10 @@ async function mountModule(module, container, scope) {
     return;
   }
   body.innerHTML = '<div class="module-loading" role="status"><span class="spinner" aria-hidden="true"></span>正在打开模块…</div>';
+  const lifetime = new AbortController();
+  const abort = () => lifetime.abort();
+  scope.controller.signal.addEventListener('abort',abort,{once:true});
+  if (scope.controller.signal.aborted) abort();
   try {
     const url = new URL(module.frontend_url,location.origin);
     const prefix = '/module-assets/' + encodeURIComponent(module.id) + '/';
@@ -96,13 +90,15 @@ async function mountModule(module, container, scope) {
     if (typeof entry.mount !== 'function') throw new Error('模块入口需要导出 mount(container, context)。');
     body.replaceChildren();
     const cleanup = await entry.mount(body,{
-      api:moduleApi(module.id,scope.controller.signal), ui, navigate, module:{...module},
-      signal:scope.controller.signal, services:services(scope.controller.signal),
+      api:moduleApi(module.id,lifetime.signal), ui, navigate, module:{...module},
+      signal:lifetime.signal, services:services(lifetime.signal),
     });
     if (cleanup !== undefined && typeof cleanup !== 'function') throw new Error('模块 mount 需要返回清理函数或不返回值。');
     if (scope.controller.signal.aborted) { if (cleanup) await cleanup(); }
     else if (cleanup) scope.cleanups.push(cleanup);
   } catch (error) {
+    abort();
+    scope.controller.signal.removeEventListener('abort',abort);
     if (scope.controller.signal.aborted) return;
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块暂时无法打开</h3><p>' + escape(error.message) + '</p></div>';
     card.classList.add('has-error');
@@ -115,12 +111,15 @@ async function render() {
   const current = ++revision;
   await dispose();
   if (current !== revision) return;
+  const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
+  labels = new Map(navigation.map(([id,,label]) => [id,label]));
+  const descriptions = new Map(state.categories.map(item => [item.id,item.description]));
   const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
   const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
   const requested = location.hash.slice(1);
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
-  document.querySelector('#navigation').innerHTML = items.map(([id,iconName,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon(iconName) + '</span><span class="nav-label">' + label + '</span>' + '</a>').join('');
+  document.querySelector('#navigation').innerHTML = items.map(([id,iconName,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + icon(iconName) + '</span><span class="nav-label">' + escape(label) + '</span>' + '</a>').join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {
@@ -128,13 +127,26 @@ async function render() {
     link.classList.toggle('active',active);
     if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
   });
-  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">' + (page === 'dashboard' ? 'YOUR CAMPUS, AT A GLANCE' : 'CAMPUS WORKSPACE') + '</p><h1 id="page-title">' + labels.get(page) + '</h1><p class="page-description">' + categoryDescriptions[page] + '</p></div><div class="page-heading-note">' + (page === 'dashboard' ? '今天，先看重要的事。' : '你的个人学习空间') + '</div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
-  main.dataset.page = page;
+  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">CAMPUS WORKSPACE</p><h1 id="page-title">' + escape(labels.get(page)) + '</h1><p class="page-description">' + escape(descriptions.get(page)) + '</p></div><div class="page-heading-note">你的个人学习空间</div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
   zone.dataset.single = String(visible.length === 1 && visible[0].status === 'ready');
+  if (visible.length > 1) {
+    const shortcuts = document.createElement('nav');
+    shortcuts.className = 'module-shortcuts';
+    shortcuts.setAttribute('aria-label','页面分区');
+    shortcuts.innerHTML = visible.map(module => '<button type="button" data-module-jump="' + escape(module.id) + '">' + escape(module.name) + '</button>').join('');
+    zone.before(shortcuts);
+    shortcuts.addEventListener('click',event => {
+      const button = event.target.closest('[data-module-jump]');
+      if (!button) return;
+      const card = document.getElementById('module-card-' + button.dataset.moduleJump);
+      card.querySelector('h2').focus({preventScroll:true});
+      card.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    },{signal:scope.controller.signal});
+  }
   const work = visible.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
@@ -153,7 +165,7 @@ async function reloadModules() {
   ++revision;
   await dispose();
   main.innerHTML = '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>正在刷新模块…</div>';
-  try { state.modules = (await api('/modules/reload',{method:'POST'})).modules; }
+  try { Object.assign(state,await api('/modules/reload',{method:'POST'})); }
   finally { await render(); }
   toast('模块列表已更新。');
 }
@@ -161,13 +173,13 @@ async function reloadModules() {
 async function setEnabled(id, enabled) {
   ++revision;
   await dispose();
-  try { state.modules = (await api('/modules/' + encodeURIComponent(id),{method:'PUT',body:{enabled}})).modules; }
+  try { Object.assign(state,await api('/modules/' + encodeURIComponent(id),{method:'PUT',body:{enabled}})); }
   finally { await render(); }
   toast(enabled ? '模块已启用。' : '模块已停用。');
 }
 
 async function refresh() {
-  state.modules = (await api('/modules')).modules;
+  Object.assign(state,await api('/modules'));
   await render();
 }
 
