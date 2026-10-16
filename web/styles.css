@@ -79,6 +79,8 @@ main { width:100%; max-width:1580px; min-width:0; flex:1; margin:0 auto; padding
 .panel { min-width:0; border:1px solid var(--border); border-radius:12px; background:var(--paper); }
 .module-zone { display:grid; gap:24px; }
 .module-card { overflow:hidden; }
+.module-zone.module-focus>.module-card:not(.module-focused) { display:none; }
+main:has(.module-focus) .module-shortcuts { display:none; }
 .module-card-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; padding:20px 24px 0; }
 .module-card-heading>div { display:flex; align-items:baseline; flex-wrap:wrap; gap:10px 14px; min-width:0; }
 .module-card-heading h2 { font-size:19px; overflow-wrap:anywhere; }

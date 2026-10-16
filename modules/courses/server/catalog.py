@@ -38,15 +38,30 @@ def combine(snapshots, groups, current):
         if snapshot.get("message"):
             result["issues"].append(source + "：" + str(snapshot["message"]))
     manual = {member: group for group in groups for member in group["course_ids"]}
+    def code_of(item):
+        return re.sub(r'[\s_-]', '', str(item.get('code') or '')).upper()
+
+    def automatic(item):
+        code, term = code_of(item), semester(item.get('term'))
+        return 'course:' + digest([code, term]) if re.fullmatch(r'[A-Z]{2,}\d{2,}[A-Z]?', code) and re.fullmatch(r'20\d{2}-(fall|spring|summer)', term) else None
+
+    titles = {}
+    for item in raw_courses:
+        if item['id'] not in manual and automatic(item):
+            key = (re.sub(r'\s+', '', item['title']).casefold(), semester(item.get('term')))
+            titles.setdefault(key, set()).add(automatic(item))
     buckets = {}
     for item in raw_courses:
-        code, term = str(item.get("code") or ""), semester(item.get("term"))
+        code, term = code_of(item), semester(item.get("term"))
         group = manual.get(item["id"])
-        group_id = "manual:" + group["id"] if group else "course:" + digest([code, term]) if re.fullmatch(r"[A-Z]{2,}\d{2,}[A-Z]?", code) and re.fullmatch(r"20\d{2}-(fall|spring|summer)", term) else "course:" + digest(item["id"])
+        matches = titles.get((re.sub(r'\s+', '', item['title']).casefold(), term), set()) if not code else set()
+        group_id = 'manual:' + group['id'] if group else automatic(item) or (next(iter(matches)) if len(matches) == 1 else 'course:' + digest(item['id']))
         merged = buckets.setdefault(group_id, {"id": group_id, "source": "catalog", "title": group["title"] if group else item["title"], "code": code, "term": term, "current": False, "course_ids": [], "sources": [], "url": item.get("url", "")})
         merged["current"] = merged["current"] or term == current
         merged["course_ids"].append(item["id"])
         merged["sources"].append(item)
+        if not merged['code'] and code:
+            merged['code'] = code
     result["courses"] = sorted(buckets.values(), key=lambda item: (not item["current"], item["term"], item["code"], item["title"]))
     return result
 

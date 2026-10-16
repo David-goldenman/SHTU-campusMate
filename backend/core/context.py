@@ -38,3 +38,4 @@ class ModuleContext:
     auth: Any
     ai: Any
     api: Any
+    modules: Any = None

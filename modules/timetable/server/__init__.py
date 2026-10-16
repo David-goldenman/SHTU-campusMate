@@ -1,11 +1,13 @@
 import asyncio
 from datetime import date, datetime
 from uuid import uuid4
+from pydantic import Field
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from backend.services.campus import Source, timestamp
+from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
@@ -15,6 +17,11 @@ from .school_calendar import SchoolCalendar, term_key
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
 _source = None
 _calendar = None
+
+
+class ImportedEvent(Event):
+    origin_id: str = Field(min_length=1, max_length=300)
+    account_revision: str = Field(min_length=1, max_length=100)
 
 
 def create_router(context):
@@ -71,25 +78,48 @@ def create_router(context):
     @router.post('/events', status_code=201)
     def add_event(body: Event):
         item = {**body.model_dump(mode='json'), 'id': 'local:' + uuid4().hex, 'source': 'local', 'at': body.starts_at.astimezone(ZONE).isoformat()}
-        context.store.write('events:' + source.owner(), [*local_events(), item])
+        with source.lock:
+            context.store.write('events:' + source.owner(), [*local_events(), item])
+        return item
+
+    @router.post('/events/import')
+    def import_event(body: ImportedEvent):
+        identity = 'local:import:' + digest(body.origin_id)
+        with source.lock:
+            owner = source.owner()
+            key = 'events:' + owner
+            if body.account_revision != account_revision(context):
+                raise HTTPException(409, '账号已更新，请重新确认安排。')
+            items = context.store.read(key, [])
+            existing = next((item for item in items if item['id'] == identity), None)
+            if existing:
+                return {**existing, 'existing': True}
+            item = {**body.model_dump(mode='json', exclude={'account_revision'}), 'id': identity, 'source': 'local', 'at': body.starts_at.astimezone(ZONE).isoformat()}
+            if owner != source.owner():
+                raise HTTPException(409, '账号已更新，请重新确认安排。')
+            context.store.write(key, [*items, item])
         return item
 
     @router.put('/events/{event_id}')
     def update_event(event_id: str, body: Event):
-        items = local_events()
-        item = next((item for item in items if item['id'] == event_id), None)
-        if item is None:
-            raise HTTPException(404, '未找到这条安排。')
-        item.update(**body.model_dump(mode='json'), at=body.starts_at.astimezone(ZONE).isoformat())
-        context.store.write('events:' + source.owner(), items)
+        with source.lock:
+            owner = source.owner()
+            items = context.store.read('events:' + owner, [])
+            item = next((item for item in items if item['id'] == event_id), None)
+            if item is None:
+                raise HTTPException(404, '未找到这条安排。')
+            item.update(**body.model_dump(mode='json'), at=body.starts_at.astimezone(ZONE).isoformat())
+            context.store.write('events:' + owner, items)
         return item
 
     @router.delete('/events/{event_id}')
     def delete_event(event_id: str):
-        items = local_events()
-        if not any(item['id'] == event_id for item in items):
-            raise HTTPException(404, '未找到这条安排。')
-        context.store.write('events:' + source.owner(), [item for item in items if item['id'] != event_id])
+        with source.lock:
+            owner = source.owner()
+            items = context.store.read('events:' + owner, [])
+            if not any(item['id'] == event_id for item in items):
+                raise HTTPException(404, '未找到这条安排。')
+            context.store.write('events:' + owner, [item for item in items if item['id'] != event_id])
         return {'deleted': True}
 
     @router.get("/schedule")

@@ -27,6 +27,7 @@ function fixture(modules,categories) {
     if(path==='/auth/providers')return response({providers:[]});
     if(path==='/ai/settings')return response({model:'deepseek-flash',enabled:false,key_saved:false});
     if(path==='/modules/academic-assistant/chat')return response({messages:[]});
+    if(path==='/modules/academic-assistant/conversations')return response({items:[],active_id:null});
     if(path==='/modules/academic-assistant/profile')return response({profile:{},academic:{}});
     if(path==='/modules/academic-assistant/presets')return response({items:[{label:'本周作业',message:'合成问题'}]});
     if(path==='/modules/dashboard/sync')return response({status:'ready'});

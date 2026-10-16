@@ -8,7 +8,7 @@ const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant'].
 const profile=resolve('.codex/tmp/chat-web-'+process.pid);await mkdir(profile,{recursive:true});
 function browser(action){const r=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);}
 function fixture(modules,categories){
- const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
+ const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],chats:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
  Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{state.clipboard=text;}}});
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
  const text='## 本周学习计划\n\n先复习 **向量叠加**，再安排作业。[1]\n\n- 阅读课件\n- 完成自检\n\n| 日期 | 内容 | 建议时长 | 说明 |\n| --- | --- | --- | --- |\n| 周一 | 向量复习 | 30 分钟 | 估计时长 |\n| 周二 | 练习 | 40 分钟 | 自行调整 |\n\n```python\nprint("review")\n```\n\n<script>bad()</script> [危险](javascript:alert(1)) ![外部图片](https://example.edu/tracker.png)\n\n'+Array.from({length:12},(_,i)=>'第 '+(i+1)+' 步：阅读课件后用自己的话解释这个概念，标出还需要补充的问题。').join('\n\n');
@@ -23,7 +23,17 @@ function fixture(modules,categories){
   if(path==='/modules/dashboard/snapshot')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
   if(path==='/modules/academic-assistant/presets')return json({items:[{label:'安排作业',prompt:'安排合成作业'},{label:'准备复习',prompt:'准备合成复习'}]});
   if(path==='/modules/academic-assistant/profile'){if(method==='PUT')state.profile=JSON.parse(options.body);return json({profile:state.profile,academic:{}});}
-  if(path==='/modules/academic-assistant/chat')return json({messages:state.messages});
+  if(path==='/modules/academic-assistant/chat')return json({messages:state.messages,conversation_id:state.active_id});
+  if(path==='/modules/academic-assistant/conversations'){
+    if(method==='POST'){state.active_id=String(state.chats.length+1).padStart(32,'0');state.messages=[];const item={id:state.active_id,title:'合成对话 '+(state.chats.length+1),archived:false,updated_at:'2026-10-17T00:00:0'+state.chats.length+'Z',messages:state.messages};state.chats.push(item);return json(item);}
+    return json({items:state.chats,active_id:state.active_id});
+  }
+  if(path.startsWith('/modules/academic-assistant/conversations/')){
+    const identity=path.split('/')[4],item=state.chats.find(item=>item.id===identity);
+    if(method==='PUT'){Object.assign(item,JSON.parse(options.body));return json(item);}
+    if(method==='DELETE'){state.chats=state.chats.filter(item=>item.id!==identity);if(state.active_id===identity){state.active_id=state.chats[0]?.id;state.messages=state.chats[0]?.messages||[];}return json({deleted:true});}
+    state.active_id=identity;state.messages=item.messages;return json({conversation:item,messages:item.messages});
+  }
   if(path==='/modules/academic-assistant/chat/stream'){
    const mode=state.mode,body=JSON.parse(options.body);let closed=false;
    const stream=new ReadableStream({start(controller){
@@ -69,6 +79,15 @@ try{
  assert.equal(result.headings,1);assert(result.strong>=2);assert.equal(result.tables,1);assert.equal(result.codes,1);assert.equal(result.scripts,0);assert.equal(result.images,0);assert.equal(result.groups,1);assert.match(result.labels,/第 3 页/);assert.match(result.labels,/第 4 页/);assert.equal(result.draft,'保留草稿');
  await evaluate(`document.querySelector('.study-copy-code').click();waitFor(()=>chatCheck.clipboard.includes('print('))`);
  await writeFile(resolve('.codex/tmp/chat-markdown-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+ assert(await evaluate(`document.querySelector('[data-messages]').clientHeight>=350`),'Focused conversation uses the viewport height');
+ assert(await evaluate(`document.querySelector('.study-assistant .study-text').getBoundingClientRect().width>=800`),'Desktop reply uses the available reading width');
+ await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
+ assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Empty new chat shows the homepage overview');
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelectorAll('[data-open-chat]')[1].click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden).then(()=>[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id).click()).then(()=>waitFor(()=>chatCheck.chats[0].archived))`);
+ assert(await evaluate(`document.querySelector('[data-send]').disabled`),'Archived conversation is readable and cannot receive messages');
+ await evaluate(`document.querySelector('[data-history-filter=archived]').click();document.querySelector('[data-archive-chat]').click();waitFor(()=>!chatCheck.chats[0].archived)`);
+ await evaluate(`document.querySelector('[data-history-filter=active]').click();[...document.querySelectorAll('[data-delete-chat]')].find(node=>node.dataset.deleteChat!==chatCheck.active_id).click();waitFor(()=>document.querySelector('dialog[open] [value=confirm]')).then(()=>document.querySelector('dialog[open] [value=confirm]').click()).then(()=>waitFor(()=>chatCheck.chats.length===1)).then(()=>document.querySelector('[data-history-close]').click())`);
  await command('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false});await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'small desktop input visible');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await evaluate(`new Promise(r=>setTimeout(r,200))`);

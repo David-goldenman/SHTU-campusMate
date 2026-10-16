@@ -5,7 +5,7 @@
   "category": "dashboard",
   "api_version": 1,
   "navigation": {
-    "label": "总览",
+    "label": "首页",
     "icon": "◫",
     "description": "本学期课程、近期作业与重要通知。",
     "order": 10
