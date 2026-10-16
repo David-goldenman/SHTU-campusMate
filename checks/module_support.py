@@ -55,6 +55,9 @@ class AI:
     def chat(self, **kwargs):
         return copy.deepcopy(self.result)
 
+    def settings(self):
+        return {"enabled": True, "key_saved": True, "model": "synthetic"}
+
 
 def load(module):
     path = PROJECT / "modules" / module / "server" / "__init__.py"
