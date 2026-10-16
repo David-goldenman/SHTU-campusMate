@@ -128,6 +128,18 @@ async def check(data):
             lesson = (await client.get('/api/v1/modules/elrc/courses/demo-course/lessons/7-lesson?offset=100')).json()
             assert lesson['total'] == 105 and len(lesson['transcript']) == 5
             assert lesson['summary'][0]['start_seconds'] == 30
+            calls_before = len(fixture.calls)
+            shared = (await client.get('/api/v1/modules/courses/snapshot')).json()
+            assert shared['data']['metadata']['current_semester'] == '2026-fall'
+            assert len(shared['data']['lessons']) == 1
+            assert '电场是矢量' in shared['data']['lessons'][0]['body_text']
+            assert len(shared['data']['posts']) == 2
+            assert (await client.get('/api/v1/modules/dashboard/snapshot')).status_code == 200
+            selected = (await client.get('/api/v1/modules/assistant/context')).json()
+            assert any(item['kind'] == 'lessons' and item['body_text'] for item in selected['items'])
+            assert len(fixture.calls) == calls_before, 'Aggregates must read the existing caches offline'
+            assert (await client.get('/api/v1/modules/elrc/sync')).json()['course_id'] == 'demo-course'
+            print('PASS shared integration: legacy caches, official semester, dashboard, assistant context and separate sync state')
             hits = (await client.get('/api/v1/modules/elrc/search?q=电场')).json()['items']
             assert hits and hits[0]['start_seconds'] == 30
             assert (await client.get('/api/v1/modules/elrc/search?q=电场&semester=2025-fall')).json()['items'] == []

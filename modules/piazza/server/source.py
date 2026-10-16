@@ -137,7 +137,7 @@ def parse_post(post, course_id):
 
 
 class Piazza:
-    READ_METHODS = {"network.get_my_feed", "content.get"}
+    READ_METHODS = {"user.status", "network.get_my_feed", "content.get"}
 
     def __init__(self, client):
         self.client = client
@@ -172,6 +172,9 @@ class Piazza:
         if len(rows) > 20 or any(not isinstance(row, dict) or not row.get("id") for row in rows):
             raise RuntimeError("Piazza 分页格式已变化。")
         return rows
+
+    def courses(self):
+        return self.rpc("user.status", {})
 
     def post(self, course_id, post_id):
         return self.rpc("content.get", {"nid": course_id, "cid": post_id, "student_view": None})

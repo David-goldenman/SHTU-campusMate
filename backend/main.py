@@ -85,7 +85,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
             return JSONResponse({"detail": "仅允许从本机地址访问。"}, status_code=403)
         if request.headers.get("origin") and request.headers["origin"] not in origins or request.headers.get("sec-fetch-site") == "cross-site":
             return JSONResponse({"detail": "请求来源不匹配。"}, status_code=403)
-        if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf):
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf) and not modules.authorize_write(request):
             return JSONResponse({"detail": "请刷新工作台后重试。"}, status_code=403)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
@@ -127,7 +127,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.post("/api/v1/data/clear", tags=["设置"], summary="清除项目本地凭据或模块数据")
     def clear_data(body: ClearData):
-        with modules.lock:
+        with modules.lifecycle_lock:
             if body.scope in {"modules", "all"}:
                 modules.clear_data()
             else:

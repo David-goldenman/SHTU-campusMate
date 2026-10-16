@@ -5,3 +5,6 @@
 [data-module-id="piazza"] .piazza-post { padding: 20px; margin-bottom: 16px; overflow-wrap: anywhere; }
 [data-module-id="piazza"] .piazza-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
 [data-module-id="piazza"] textarea { width: 100%; margin-bottom: 12px; }
+[data-module-id="piazza"] .piazza-course-choice { display: flex; align-items: flex-start; gap: 12px; padding: 14px; margin: 10px 0; border: 1px solid var(--border); border-radius: 10px; overflow-wrap: anywhere; }
+[data-module-id="piazza"] .piazza-course-choice input { flex: 0 0 auto; width: auto; }
+[data-module-id="piazza"] .piazza-course-choice > span { display: grid; gap: 4px; min-width: 0; }

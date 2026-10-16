@@ -17,10 +17,10 @@ let revision = 0;
 const labels = new Map(navigation.map(([id,,label]) => [id,label]));
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
 const categoryDescriptions = {
-  dashboard:'总览模块的内容会显示在这里。', mail:'邮箱模块的内容会显示在这里。',
-  timetable:'课程表模块的内容会显示在这里。', courses:'课程中心模块的内容会显示在这里。',
-  assignments:'作业管理模块的内容会显示在这里。', notifications:'通知模块的内容会显示在这里。',
-  assistant:'AI助手模块的内容会显示在这里。', settings:'管理模块、账号、AI服务和本地数据。',
+  dashboard:'本学期课程、近期作业与重要通知。', mail:'阅读校园邮件，按规则、手动或 AI 整理分类。',
+  timetable:'按教学周查看课程、节次与教室。', courses:'按课程与平台查看资料、讨论、成绩和录播。',
+  assignments:'查看明确开放的待办及各课程作业状态。', notifications:'提炼带来源的重要事项，跟踪已读状态。',
+  assistant:'选择缓存资料，进行课程问答、总结和报告。', settings:'管理模块、账号、AI服务和本地数据。',
 };
 
 function closeMenu() {

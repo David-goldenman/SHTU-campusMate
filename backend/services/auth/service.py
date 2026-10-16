@@ -1,4 +1,5 @@
 import threading
+import secrets
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -28,6 +29,7 @@ class AuthService:
         result = {
             "id": provider, "name": protocols.PROVIDERS[provider]["name"], "username": credentials.get("username", ""),
             "has_password": bool(credentials.get("password")), "has_session": bool(session),
+            "account_revision": self.store.read("auth:revision:" + provider, "initial"),
             "status": saved.get("status", "login_required" if credentials or session else "not_connected"),
         }
         for key in ("message", "checked_at", "target"):
@@ -65,6 +67,7 @@ class AuthService:
         if not username:
             raise ValueError("请填写账号。")
         with self.locks[provider]:
+            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
             self.browser.close(provider)
             self.vault.save("auth:credentials:" + provider, {"username": username, "password": password})
             self.vault.delete("auth:session:" + provider)
@@ -112,14 +115,28 @@ class AuthService:
                     self._failure(provider, target, error)
                     raise
                 self._save_session(provider, client, state)
+                self.store.write("auth:revision:" + provider, secrets.token_hex(12))
             self.browser.close(provider)
             self._record(provider, "ready", target, checked_at=now())
         return self.get_status(provider)
 
     @contextmanager
-    def authenticated_client(self, provider: str, target: str | None = None):
+    def _client_lock(self, provider, cancelled):
+        lock = self.locks[provider]
+        while not lock.acquire(timeout=0.2):
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("来源读取已停止。")
+        try:
+            if cancelled is not None and cancelled.is_set():
+                raise RuntimeError("来源读取已停止。")
+            yield
+        finally:
+            lock.release()
+
+    @contextmanager
+    def authenticated_client(self, provider: str, target: str | None = None, *, cancelled=None):
         target = protocols.checked_target(provider, target)
-        with self.locks[provider]:
+        with self._client_lock(provider, cancelled):
             state = self.vault.get("auth:session:" + provider)
             with protocols.http_client(state) as client:
                 try:
@@ -161,6 +178,7 @@ class AuthService:
             self.vault.delete("auth:credentials:" + provider)
             self.vault.delete("auth:session:" + provider)
             self.store.delete("auth:state:" + provider)
+            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
         return self.get_status(provider)
 
     def clear_all(self):
