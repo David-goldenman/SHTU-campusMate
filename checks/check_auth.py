@@ -115,9 +115,7 @@ def check_service(directory):
             return httpx.Response(200, text='<form action="/login"><input type="hidden" name="authenticity_token" value="synthetic"></form>')
         if request.url.path == "/account":
             logged_in = "session=synthetic-cookie" in request.headers.get("cookie", "") and not server["expired"]
-            return httpx.Response(200, text='<div id="account-show"></div>' if logged_in else '<form action="/login"></form>')
-        if request.url.path == "/account/edit":
-            return httpx.Response(200, text='<script>gon.primary_email={"user":{"id":123}};</script>')
+            return httpx.Response(200, text='<div id="account-show"></div><script>gon.page_context={"user_trn":"trn:user:us:gs::123"};</script>' if logged_in else '<form action="/login"></form>')
         return httpx.Response(200, json={"synthetic": True}, headers={"set-cookie": "rotated=synthetic-rotated; Secure; HttpOnly; Path=/"})
 
     original_client = httpx.Client
@@ -133,6 +131,9 @@ def check_service(directory):
             self.closed = 0
 
         def close(self, provider):
+            self.closed += 1
+
+        def forget(self, provider):
             self.closed += 1
 
         def close_all(self):
@@ -168,7 +169,7 @@ def check_service(directory):
         assert server["posts"] == 3 and service.get_status("gradescope")["status"] == "login_required"
         server.update(expired=False, reject=False)
         service.login("gradescope")
-        assert server["posts"] == 4
+        assert server["posts"] == 3
         service.open_browser("gradescope")
         service.import_session("gradescope")
         saved = vault.get("auth:session:gradescope")

@@ -17,7 +17,7 @@ export function records(items, escape) {
 
 export async function sourcePanel(container, context, render) {
   let timer;
-  container.innerHTML = '<div class="campus-toolbar"><button class="button button-primary" data-sync type="button">同步数据</button><a class="button button-secondary" href="#settings">账号设置</a><span data-status role="status"></span></div><div data-issues role="status"></div><div data-content></div>';
+  container.innerHTML = '<div class="campus-toolbar source-toolbar"><span data-status role="status"></span><div><a class="text-button" href="#settings" data-connect hidden>连接账号</a><button class="button button-secondary" data-sync type="button">同步</button></div></div><div data-issues role="status"></div><div data-content></div>';
   const button = container.querySelector('[data-sync]');
   const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'正在同步', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
   async function refresh() {
@@ -25,6 +25,7 @@ export async function sourcePanel(container, context, render) {
     const snapshot = await context.api('/snapshot');
     if (context.signal.aborted) return;
     button.disabled = snapshot.status === 'syncing';
+    container.querySelector('[data-connect]').hidden = !['not_connected','login_required','verification_required'].includes(snapshot.status);
     container.querySelector('[data-status]').textContent = (labels[snapshot.status] || snapshot.status) + (snapshot.updated_at ? ' · ' + time(snapshot.updated_at) : '');
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
     await render(container.querySelector('[data-content]'), snapshot, context, refresh);

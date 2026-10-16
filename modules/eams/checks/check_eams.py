@@ -32,14 +32,6 @@ EXAMS = """<table class="gridtable"><tr><th>课程序号</th><th>课程名称</t
 
 EMPTY_EXAMS = """<table class="gridtable"><tr><th>课程序号</th><th>课程名称</th><th>考试类别</th><th>考试日期</th><th>考试安排</th><th>考试地点</th><th>考试情况</th><th>其它说明</th></tr><tr></tr></table>"""
 
-GRADES = """<table class="gridtable"><tr><th>学年度</th><th>学期</th><th>门数</th><th>获得学分数</th><th>平均绩点</th></tr>
-<tr><td colspan="5">2025-2026学年 门数：2</td></tr>
-<tr><td>2025-2026</td><td>3</td><td>1</td><td>2</td><td>4</td></tr>
-<tr><td>2025-2026</td><td>2</td><td>10</td><td>25</td><td>3.49</td></tr></table>
-<table class="gridtable" id="grid1"><tr><th>学年学期</th><th>学期</th><th>课程代码</th><th>课程序号</th><th>课程名称</th><th>课程类别</th><th>学分</th><th>最终</th><th>绩点</th><th>发布时间</th></tr>
-<tr><td>2024-2025</td><td>1</td><td>GEMA1001</td><td>GEMA1001.01</td><td>高等数学I</td><td>小组</td><td>4</td><td>A</td><td>4.0</td><td>2025-01-24 15:03:27</td></tr>
-<tr><td>2024-2025</td><td>1</td><td>MT1025</td><td>MT1025.01</td><td>形势与政策（1）</td><td>阶段课程</td><td>0.5</td><td>P(60.0)</td><td></td><td>2025-01-22 11:10:43</td></tr></table>"""
-
 PLAN = """<html><body><div id="tabs1"><ul><li id="tab1">已修课程</li><li id="tab2">培养方案</li></ul><div id="tab1_target"></div><div id="tab2_target"><div id="PrintA">
 <p>本科 普通本科生 信息科学与技术学院 电子信息工程 专业培养计划(2026)</p>
 <table class="planTable" id="planInfoTable1"><thead>
@@ -62,7 +54,7 @@ class Blocked:
 
 def handler(request):
     pages = {"/eams/stdExamTable!innerIndex.action": INDEX, "/eams/dataQuery.action": CALENDAR,
-             "/eams/stdExamTable!examTable.action": EXAMS, "/eams/teach/grade/course/person!historyCourseGrade.action": GRADES,
+             "/eams/stdExamTable!examTable.action": EXAMS,
              "/eams/myPlan.action": PLAN}
     return httpx.Response(200, text=pages[request.url.path]) if request.url.path in pages else httpx.Response(404)
 
@@ -103,24 +95,6 @@ try:
 except SourceError:
     pass
 
-gpa, courses = reader["grades"](GRADES)
-assert (gpa["overall"], gpa["weighted_credits"], gpa["earned_credits"]) == (4.0, 4.0, 27.0)
-assert [item["label"] for item in gpa["semesters"]] == ["2025-2026学年夏季", "2025-2026学年春季"]
-assert len(courses) == 2 and courses[0]["credits"] == 4.0 and courses[0]["term"] == "2024-2025-1" and courses[0]["semester"] == "2024-fall"
-assert courses[0]["published_at"].startswith("2025-01-24T15:03:27") and courses[1]["point"] is None
-
-# A repeated section in another year or season is a distinct grade record.
-retakes = """<tr><td>2025-2026</td><td>1</td><td>GEMA1001</td><td>GEMA1001.01</td><td>高等数学I</td><td>小组</td><td>4</td><td>D</td><td>1.0</td><td>2026-01-24 15:03:27</td></tr>
-<tr><td>2025-2026</td><td>2</td><td>GEMA1001</td><td>GEMA1001.01</td><td>高等数学I</td><td>小组</td><td>4</td><td>C</td><td>2.0</td><td>2026-06-24 15:03:27</td></tr>"""
-retake_gpa, retake_courses = reader["grades"](GRADES.rsplit("</table>", 1)[0] + retakes + "</table>")
-normalized = validate_bundle({"courses": retake_courses})["courses"]
-assert len(normalized) == 4 and len({course["id"] for course in normalized}) == 4
-assert retake_gpa["overall"] == round(sum(course["point"] * course["credits"] for course in normalized if course["point"] is not None) / 12, 3)
-assert retake_gpa["weighted_credits"] == 12
-for term, course in zip(("2024-2025学年秋季", "2025-2026学年秋季", "2025-2026学年春季"), (normalized[0], normalized[2], normalized[3])):
-    linked = reader["exams"](EXAMS.replace("CHEM1120.03", "GEMA1001.01"), term, "https://eams.shanghaitech.edu.cn/")
-    assert linked[0]["course_id"] == course["id"]
-
 document = reader["plan"](PLAN)
 assert document["title"] == "本科 普通本科生 信息科学与技术学院 电子信息工程 专业培养计划(2026)"
 assert [group["path"] for group in document["groups"]] == [["人文社科通识课程", "思政理论课", "思政必修课"], ["人文社科通识课程", "创意与艺术课程群"]]
@@ -139,7 +113,7 @@ assert catalogue_result['items'][0]['syllabus_id'] == 9 and catalogue_result['it
 result = reader["fetch"](remote(httpx.MockTransport(handler)), {})
 assert result["issues"] == [] and result["metadata"]["semester"] == "2026-2027学年秋季" and result["metadata"]["student_id"] == "15098"
 assert result["metadata"]["exams"] == {"batch": "期末考试（考试周）", "batch_id": "9", "batches": [{"id": "9", "name": "期末考试（考试周）"}, {"id": "8", "name": "期中考试"}]}
-assert len(result["assignments"]) == 2 and len(result["courses"]) == 2 and result["metadata"]["gpa"]["overall"] == 4.0
+assert len(result["assignments"]) == 2 and result["courses"] == []
 assert result["metadata"]["study_plan"]["groups"][0]["courses"][0]["code"] == "MT1024"
 assert all(not result[kind] for kind in ("materials", "announcements", "posts", "lessons", "timetable", "messages"))
 
@@ -149,13 +123,12 @@ def broken(request):
 
 
 second = reader["fetch"](remote(httpx.MockTransport(broken)), result)
-assert second["issues"] == ["培养方案暂时无法读取，已保留上次数据。"] and second["metadata"]["study_plan"] == result["metadata"]["study_plan"] and len(second["courses"]) == 2
+assert second["issues"] == ["培养方案暂时无法读取，已保留上次数据。"] and second["metadata"]["study_plan"] == result["metadata"]["study_plan"] and second['courses'] == []
 
 # Permission/missing-page failures affect only the failed panel, not the full sync.
 previous = {"courses": [{"id": "eams:old-grade", "source": "eams"}], "assignments": [{"id": "eams:old-exam", "source": "eams"}],
             "metadata": {"gpa": {"overall": 1.0}, "study_plan": {"title": "旧培养方案"}, "semesters": result["metadata"]["semesters"]}}
 for path, label, panel in [("/eams/myPlan.action", "培养方案", "plan"),
-                           ("/eams/teach/grade/course/person!historyCourseGrade.action", "学期成绩", "grades"),
                            ("/eams/stdExamTable!examTable.action", "考试安排", "exams"),
                            ("/eams/dataQuery.action", "学期目录", "catalogue")]:
     for status in (403, 404):
@@ -164,9 +137,9 @@ for path, label, panel in [("/eams/myPlan.action", "培养方案", "plan"),
 
         partial = reader["fetch"](remote(httpx.MockTransport(unavailable)), previous)
         assert partial["issues"] == [label + "暂时无法读取，已保留上次数据。"]
-        assert partial["courses"] == (previous if panel == "grades" else result)["courses"]
+        assert partial["courses"] == previous['courses']
         assert partial["assignments"] == (previous if panel == "exams" else result)["assignments"]
-        assert partial["metadata"]["gpa"] == (previous if panel == "grades" else result)["metadata"]["gpa"]
+        assert partial['metadata']['gpa'] == previous['metadata']['gpa']
         assert partial["metadata"]["study_plan"] == (previous if panel == "plan" else result)["metadata"]["study_plan"]
         assert partial["metadata"]["semesters"] == result["metadata"]["semesters"]
 
@@ -193,9 +166,15 @@ async def check_api():
             older = (await client.get("/exams?semester_id=262&batch_id=8")).json()
             assert older["semester"] == "2025-2026学年秋季" and older["batch"] == "期中考试" and older["batch_id"] == "8" and len(older["exams"]) == 2
             assert (await client.get("/exams?semester_id=abc")).status_code == 422
-            answer = (await client.post("/ask", json={"question": "本学期有哪些考试？"})).json()
-            assert answer["answer"] == "合成回答" and answer["model"] == "synthetic"
-            assert (await client.post("/ask", json={"question": ""})).status_code == 422
+            assert (await client.post('/ask', json={'question': '合成问题'})).status_code == 404
+            saved = context.store.read('snapshot')
+            saved['data']['metadata']['gpa'] = {'overall': 4.0}
+            saved['data']['courses'] = [{'id':'eams:legacy', 'source':'eams', 'title':'已有课程', 'score':'A', 'point':4.0}]
+            context.store.write('snapshot', saved)
+            visible = (await client.get('/snapshot')).json()['data']
+            assert 'gpa' not in visible['metadata'] and 'point' not in visible['courses'][0] and 'score' not in visible['courses'][0]
+            assert visible['courses'][0]['title'] == '已有课程'
+            assert context.store.read('snapshot')['data']['courses'][0]['score'] == 'A'
         package.stop(context)
 
 
@@ -214,7 +193,7 @@ async def check_account_switch():
                 return value
 
             package._source.snapshot = switched_snapshot
-            for method, url, kwargs in [("GET", "/exams?semester_id=282", {}), ("POST", "/ask", {"json": {"question": "绩点？"}})]:
+            for method, url, kwargs in [("GET", "/exams?semester_id=282", {})]:
                 context.auth.revision = "synthetic-account-one"
                 response = await client.request(method, url, **kwargs)
                 assert response.status_code == 409 and "15098" not in response.text
@@ -247,43 +226,9 @@ async def check_account_switch():
                 assert len(requests) == (0 if stage == "open" else 2)
             context.auth.authenticated_client = authenticated_client
 
-            # Switching accounts while AI is running must discard the old answer.
-            context.auth.revision = "synthetic-account-one"
-            entered, release = threading.Event(), threading.Event()
-
-            def delayed_chat(**kwargs):
-                entered.set()
-                assert release.wait(5), "AI fixture was not released"
-                return {"content": "private-old-account-answer"}
-
-            context.ai.chat = delayed_chat
-            pending = asyncio.create_task(client.post("/ask", json={"question": "绩点？"}))
-            try:
-                assert await asyncio.to_thread(entered.wait, 5), "AI fixture did not start"
-                context.auth.revision = "synthetic-account-two"
-            finally:
-                release.set()
-            response = await pending
-            assert response.status_code == 409 and "private-old-account-answer" not in response.text
-
-            # A job queued before the switch must not send the stale data to AI.
-            context.auth.revision = "synthetic-account-one"
-            entered.clear()
-            run_in_threadpool = package.run_in_threadpool
-
-            async def switched_threadpool(function, *args, **kwargs):
-                context.auth.revision = "synthetic-account-two"
-                return await run_in_threadpool(function, *args, **kwargs)
-
-            package.run_in_threadpool = switched_threadpool
-            try:
-                assert (await client.post("/ask", json={"question": "绩点？"})).status_code == 409
-                assert not entered.is_set()
-            finally:
-                package.run_in_threadpool = run_in_threadpool
         package.stop(context)
 
 
 asyncio.run(check_api())
 asyncio.run(check_account_switch())
-print("eams: parsing, semester grade identities, panel 403/404 fallback, login propagation and account-switch isolation passed")
+print("eams: exams, curriculum, catalogue, panel errors and account-switch isolation passed")

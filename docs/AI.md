@@ -146,4 +146,18 @@ text = result["content"]
 
 ## 验证
 
-在 WSL 运行 `bash ./check.sh`。基础 AI 检查使用 `httpx.MockTransport` 与内存存储；`checks/check_harness.py` 启动实际官方运行时，对接本地模拟模型，覆盖工具执行、参数校验、原生 bundle、热更新、运行中生命周期与密钥边界。模块检查验证资料、输出 schema 和界面使用的接口；学习资料集成检查验证 ELRC/Piazza 缓存进入助手与插件任务。检查使用合成凭据，所有临时资料位于 `.codex/`，不产生官方 API 调用费用。
+在 Windows 运行 `check.ps1`，或在 WSL 运行 `bash ./check.sh`。基础 AI 检查使用 `httpx.MockTransport` 与内存存储；`checks/check_harness.py` 启动实际官方运行时，对接本地模拟模型，覆盖工具执行、参数校验、原生 bundle、热更新、运行中生命周期与密钥边界。模块检查验证资料、输出 schema 和界面使用的接口；学习资料集成检查验证 ELRC/Piazza 缓存进入助手与插件任务。检查使用合成凭据，所有临时资料位于 `.codex/`，不产生官方 API 调用费用。
+
+## 校园助手规则、技能与权限
+
+共享宿主读取所选插件 `harness/AGENTS.md`，合并为该任务的系统规则，并在临时工作区保存一份。规则只来自已选插件，不向上搜索开发仓库指令。首页助手的行为规则在 [校园助手规则](../modules/academic-assistant/harness/AGENTS.md)，工具调用与回答提交要求在模块 `server/instruction.md`，常用问题在 `harness/prompts.json`。
+
+提供 `harness/skills/` 的插件可使用官方 `dsh-skill` 注册表与 `dsh-tool-skill` 加载器；首页插件注册文件阅读、作业规划和培养方案三项技能，通过官方 `skill` 工具按需读取。新增技能放入 `<名称>/SKILL.md`，声明 name、description 和正文；本插件只加载自己的目录，随 Cordis effect 卸载。
+
+`study_query.area` 支持 `courses/assignments/timetable/course_history/degree_plan/notifications/mail/profile`；时间表可用 `week_start:YYYY-MM-DD` 指定一周，返回含具体日期的上课活动。已有课程记录只提供课程信息；完成情况不明确时由用户确认。培养方案、目录和大纲继续按问题读取。
+
+官方 SDK 自带 Windows x64 原生运行时，本项目采用相同 Python SDK 与 Cordis 接口，普通运行不依赖 WSL。包管理使用 pnpm，学校验证使用本机安装的 Edge。宿主将官方 sandbox-policy 配为 workspace-write，校园任务仍只开放经审核的业务工具，通用 Shell、文件工具和目录切换保持关闭。工作目录只管理任务文件，本身不是系统安全边界。
+
+官方 sandbox-local 按平台选择 Linux bwrap/Landlock、macOS Seatbelt 或 Windows restricted-token/ACL；Windows 的 enforcement 为 partial，涉及硬链接、读取与部分 ACL 边界，不能承诺完整系统隔离。当前学习助手通过固定工具与 API 限制模型的可操作范围；插件源码仍是受信任本地代码。以后开放代码执行时，必须接入官方受限执行器并校验实际 enforcement，不能仅修改提示词或当前目录。
+
+参考：[官方 Python SDK](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/python-sdk.md)、[沙箱机制](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/sandbox.md)、[技能接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md)。

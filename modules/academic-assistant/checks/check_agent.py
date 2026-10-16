@@ -92,6 +92,9 @@ async def check():
                 citations = [{'source_id': source['source_id'], 'quote': 'title: 合成作业\nsubmitted: false'}, {'source_id': document['source_id'], 'quote': 'Vector  superposition'}]
                 rejected = await client.post(base + '/tools/finish', json={'text': '合成回答', 'citations': [{'source_id': source['source_id'], 'quote': '不存在的作业'}]}, headers=headers)
                 assert rejected.status_code == 422
+                while len(package._agent.tasks[token].activity) < 24:
+                    assert (await client.post(base + '/tools/query', json={'area': 'assignments'}, headers=headers)).status_code == 200
+                assert (await client.post(base + '/tools/query', json={'area': 'assignments'}, headers=headers)).status_code == 429
                 response = await client.post(base + '/tools/finish', json={'text': '请先复习向量叠加，再安排合成作业。', 'citations': citations}, headers=headers)
                 assert response.status_code == 200 and response.json()['accepted']
 
@@ -99,6 +102,8 @@ async def check():
                 nonlocal last_token
                 last_token = plugin_env['CAMPUS_PLUGIN_STUDY_TOKEN']
                 assert last_token not in prompt + context and plugins == ['academic-assistant']
+                assert 'historical-private-context' not in context
+                assert len(json.loads(context)['history']) == (0 if mode == 'valid' else 2)
                 if mode == 'changed':
                     original.auth.revision = 'synthetic-account-two'
                     return {'content': json.dumps({'text': 'old-account-result'}), 'tools': [], 'model': 'synthetic'}
@@ -108,18 +113,19 @@ async def check():
 
             original = context
             context.ai.run = run
+            original.store.write('chat:' + package.account_revision(original), [{'role': 'user', 'text': '历史问题'}, {'role': 'assistant', 'text': 'historical-private-context'}])
             assert (await client.post(base + '/tools/query', json={'area': 'assignments'})).status_code == 401
             assert (await client.post(base + '/chat', json={'message': '记住我每周10小时，帮我准备作业。'})).status_code == 200
             value = (await client.get(base + '/chat')).json()['messages']
-            assert len(value) == 2 and value[1]['navigation'] == 'assignments'
-            assert value[1]['citations'][1]['page'] == 1
-            assert value[1]['citations'][1]['quote'] == 'Vector superposition'
-            assert 'due_at:' in value[1]['citations'][0]['quote']
+            assert len(value) == 4 and value[-1]['navigation'] == 'assignments'
+            assert value[-1]['citations'][1]['page'] == 1
+            assert value[-1]['citations'][1]['quote'] == 'Vector superposition'
+            assert 'due_at:' in value[-1]['citations'][0]['quote']
             assert (await client.get(base + '/profile')).json()['profile']['weekly_hours'] == 10
             assert (await client.post(base + '/tools/query', json={'area': 'assignments'}, headers={'Authorization': 'Bearer ' + last_token})).status_code == 401
             mode = 'invalid'
             assert (await client.post(base + '/chat', json={'message': '再规划一次。'})).status_code == 502
-            assert len((await client.get(base + '/chat')).json()['messages']) == 2
+            assert len((await client.get(base + '/chat')).json()['messages']) == 4
             mode = 'changed'
             response = await client.post(base + '/chat', json={'message': '处理中切换账号。'})
             assert response.status_code == 409 and 'old-account-result' not in response.text

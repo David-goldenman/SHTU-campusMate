@@ -1,13 +1,14 @@
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
 import * as settings from './settings.js';
+import {icon as navIcon} from './icons.js';
 
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
 const scrim = document.querySelector('#menu-scrim');
-const reloadButton = document.querySelector('#reload-modules');
 let state;
 let pageScope;
 let revision = 0;
+const selectedViews = new Map();
 
 let labels = new Map();
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
@@ -66,7 +67,7 @@ async function mountModule(module, container, scope) {
   body.dataset.moduleId = module.id;
   const card = document.createElement('section');
   card.className = 'panel module-card';
-  card.innerHTML = '<header class="module-card-heading"><div><h2>' + escape(module.name) + '</h2><span class="module-version">v' + escape(module.version) + '</span></div><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></header>';
+  card.innerHTML = '<header class="module-card-heading"><h2>' + escape(module.name) + '</h2><span class="module-status status-' + escape(module.status) + '"' + (module.status === 'ready' ? ' hidden' : '') + '>' + moduleStatuses[module.status] + '</span></header>';
   card.append(body);
   container.append(card);
   if (module.status === 'error') {
@@ -99,6 +100,7 @@ async function mountModule(module, container, scope) {
     if (scope.controller.signal.aborted) return;
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块暂时无法打开</h3><p>' + escape(error.message) + '</p></div>';
     card.querySelector('.module-status').textContent = '加载失败';
+    card.querySelector('.module-status').hidden = false;
     card.querySelector('.module-status').className = 'module-status status-error';
   }
 }
@@ -109,13 +111,12 @@ async function render() {
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
-  const descriptions = new Map(state.categories.map(item => [item.id,item.description]));
   const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
   const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
   const requested = location.hash.slice(1);
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
-  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + escape(icon) + '</span>' + escape(label) + '</a>').join('');
+  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>').join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {
@@ -123,12 +124,31 @@ async function render() {
     link.classList.toggle('active',active);
     if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
   });
-  main.innerHTML = '<div class="page-heading"><div><p class="eyebrow">LOCAL WORKSPACE</p><h1>' + escape(labels.get(page)) + '</h1><p class="page-description">' + escape(descriptions.get(page)) + '</p></div></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+  main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
-  const work = visible.map(module => mountModule(module,zone,scope));
+  zone.dataset.count = String(visible.length);
+  const tabbed = state.categories.find(item => item.id === page)?.layout === 'tabs' && visible.length > 1;
+  let mounted = visible;
+  if (tabbed) {
+    const selected = visible.find(item => item.id === selectedViews.get(page)) || visible.find(item => item.id === page) || visible[0];
+    mounted = [selected];
+    zone.dataset.count = '1';
+    zone.setAttribute('role','tabpanel');
+    zone.setAttribute('aria-labelledby','view-' + selected.id);
+    const tabs = document.createElement('div');
+    tabs.className = 'settings-tabs module-tabs';
+    tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label',labels.get(page));
+    tabs.innerHTML = visible.map(item => '<button type="button" id="view-' + item.id + '" role="tab" aria-controls="module-area" data-view="' + item.id + '" aria-selected="' + (item.id === selected.id) + '" tabindex="' + (item.id === selected.id ? '0' : '-1') + '">' + escape(item.name) + '</button>').join('');
+    zone.before(tabs);
+    tabs.querySelectorAll('button').forEach((button,index) => {
+      button.onclick = async () => {selectedViews.set(page,button.dataset.view);await render();main.querySelector('#view-' + button.dataset.view)?.focus();};
+      button.onkeydown = event => {const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];if (offset) {event.preventDefault();tabs.children[(index + offset + visible.length) % visible.length].click();}};
+    });
+  }
+  const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
       modules:state.modules, labels, signal:scope.controller.signal,
@@ -166,12 +186,10 @@ async function refresh() {
 async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
-  document.querySelector('#app-version').textContent = 'v' + state.version;
+  document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date());
   await render();
-  reloadButton.disabled = false;
 }
 
-reloadButton.onclick = safeAction(reloadButton,reloadModules);
 window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
 window.addEventListener('pagehide',() => { void dispose(); });
 

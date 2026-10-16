@@ -2,9 +2,9 @@
 .academic-chat .study-intro h3 { margin-bottom:8px; }
 .academic-chat .study-intro p { color:var(--muted); }
 .academic-chat .study-intro button { flex:none; }
-.academic-chat .study-layout { display:grid; grid-template-columns:minmax(0,2fr) minmax(230px,1fr); gap:26px; align-items:start; }
+.academic-chat .study-layout { display:grid; grid-template-columns:1fr; gap:26px; align-items:start; }
 .academic-chat .study-conversation { min-width:0; }
-.academic-chat .study-messages { position:relative; min-height:220px; max-height:560px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--paper); padding:18px; overscroll-behavior:contain; }
+.academic-chat .study-messages { position:relative; min-height:130px; max-height:480px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--paper); padding:18px; overscroll-behavior:contain; }
 .academic-chat .study-welcome { padding:26px 6px; color:var(--muted); }
 .academic-chat .study-welcome h4 { margin:0 0 12px; color:var(--text); font-size:18px; }
 .academic-chat .study-message { padding:18px 0; border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
@@ -21,7 +21,6 @@
 .academic-chat .study-references blockquote { margin:0 0 10px; padding-left:12px; border-left:3px solid var(--accent); white-space:pre-wrap; font-size:14px; }
 .academic-chat .study-references article>div { display:flex; gap:18px; flex-wrap:wrap; }
 .academic-chat .study-references a { display:inline-flex; align-items:center; min-height:30px; }
-.academic-chat .study-used-tools { margin-top:12px; color:var(--muted); font-size:13px; }
 .academic-chat .study-progress { margin-top:14px; padding:14px 16px; background:var(--surface); border-left:3px solid var(--accent); }
 .academic-chat .study-progress p { font-size:14px; }
 .academic-chat .study-progress ol { margin:8px 0 0; padding-left:20px; color:var(--muted); font-size:14px; }
@@ -46,3 +45,11 @@
   .academic-chat .study-send { align-items:flex-start; }
   .academic-chat .study-send .field-hint { max-width:170px; }
 }
+
+.academic-chat .study-actions { display:flex; gap:20px; flex:none; }
+.academic-chat .study-intro { align-items:center; margin-bottom:18px; }
+.academic-chat .study-intro p { font-size:14px; }
+.academic-chat .study-profile { order:-1; }
+.academic-chat .study-profile fieldset { display:grid; grid-template-columns:1fr 1fr; }
+.academic-chat .study-profile fieldset>label:last-of-type,.academic-chat .study-profile .form-actions { grid-column:1/-1; }
+@media (max-width:600px) { .academic-chat .study-profile fieldset { grid-template-columns:1fr; } }

@@ -63,7 +63,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 ## 时间表
 
-`GET /modules/timetable/schedule` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试；`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。原始上课数据继续通过 `/modules/timetable/snapshot`、`/modules/timetable/sync` 提供；事件字段与时间含义见 [时间表接口](../modules/timetable/README.md)。
+`GET /modules/timetable/schedule?week_start=YYYY-MM-DD` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试和个人安排，返回 `calendar{week_start,week_end,week_one,teaching_week,days:[{date,events}]}`；省略日期时使用北京时间本周。`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。`/calendar-settings` 的 GET/PUT/DELETE 读取、手动设置或恢复学期起始日期，`POST /calendar/refresh` 更新学校校历；手动值按账号与学期保存，自动更新保持同学期手动值。`/events` 提供本机 Quiz、展示、活动、讲座的增删改查。原始上课数据继续通过 `/snapshot`、`/sync` 提供；具体字段见 [时间表接口](../modules/timetable/README.md)。
 
 ## 共享 AI
 
@@ -104,13 +104,14 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | GET | `/modules/academic-assistant/chat` | `{messages}`，当前账号组合的本机历史 |
 | POST | `/modules/academic-assistant/chat` | `{message}` → `{role,text,citations,navigation,tools,model,created_at}` |
 | DELETE | `/modules/academic-assistant/chat` | 清空当前对话，保留学习档案 |
-| GET | `/modules/academic-assistant/profile` | `{profile,academic,courses_count}` |
+| GET | `/modules/academic-assistant/profile` | `{profile,academic}` |
 | PUT | `/modules/academic-assistant/profile` | `{major,cohort_year,direction,weekly_hours,notes}`，需要已验证 IDS |
 | DELETE | `/modules/academic-assistant/profile` | 清除当前 IDS 的学习偏好与助手学业记录 |
 | GET | `/modules/academic-assistant/activity` | `{active,steps:[{name,label,status}]}`，状态为 `running/done/error` |
+| GET | `/modules/academic-assistant/presets` | `{items:[{label,prompt}]}`，插件提供的常用学习问题 |
 | GET | `/modules/eams/course-search?q=&page=1` | 学校课程目录 `{items,page,page_size,total,scope,notice}` |
 | GET | `/modules/eams/course-info?syllabus_id=` | 教学大纲 `{id,title,text,url,scope,truncated}` |
 
-学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、历史成绩、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、已有课程记录、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
 
 课程查询复用 IDS 的教务会话，实时读取课程名称／代码及教学大纲；`scope` 分别为 `course_catalog` 和 `course_syllabus`。这两个接口提供课程目录与课程要求，学期实际开课和可选资格仍需核对学校公布的选课安排。培养方案快照新增原始 `requirements` 和 `notes`，见 [教务模块](../modules/eams/README.md)。

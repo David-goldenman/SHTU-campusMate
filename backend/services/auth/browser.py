@@ -63,6 +63,10 @@ class VerificationBrowser:
             process.wait(timeout=8)
             if process.stdout:
                 process.stdout.close()
+
+    def forget(self, provider):
+        self.close(provider)
+        directory = self._directory(provider)
         if directory.exists():
             for attempt in range(20):
                 try:
@@ -70,7 +74,7 @@ class VerificationBrowser:
                     break
                 except OSError:
                     if attempt == 19:
-                        raise RuntimeError("验证窗口已关闭，但临时登录目录仍被占用，请关闭验证窗口后重试。") from None
+                        raise RuntimeError("登录窗口仍占用账号资料，请关闭窗口后重试。") from None
                     time.sleep(0.1)
 
     def close_all(self):

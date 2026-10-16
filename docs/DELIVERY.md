@@ -1,6 +1,6 @@
 # 四人协作、打包与迁移
 
-当前交付物是 Windows + WSL 的本地网页工作台。`run.cmd` 解决开发电脑上的启动；正式安装包是后续独立的桌面集成工作。本文件约定四位成员从现在起共同遵守的边界，不重新分配已有模块负责人。
+当前交付物是 Windows 原生运行的本地网页工作台，WSL 是可选开发入口。`run.cmd` 启动 Python 后端、官方 Harness 与本机 Edge；正式安装包由后续桌面集成工作提供。本文件约定四位成员共同遵守的边界。
 
 ## 四人协作的共同约定
 
@@ -20,7 +20,7 @@
 ## 开发版迁移到另一台 Windows 电脑
 
 1. 复制 Git 跟踪的代码或克隆指定提交，保留 `uv.lock`、模块清单、前端资源与检查。不要把 `.private/`、`.codex/`、`.venv/`、`node_modules/`、`.env*`、浏览器配置和个人日志装进分享包。
-2. 目标机安装 WSL 和一个可用发行版、Linux uv、Windows Node.js 22+、Edge；使用 AI 原生插件还需 WSL 可用的 Node.js 22+ 与 pnpm。先运行 `run.cmd --check`，再双击 `run.cmd`。uv 按锁文件重建项目环境；首次联网安装失败时保留错误信息，不静默替换版本。
+2. 目标机安装 Windows uv、Git、Node.js 22+ 与 Edge，AI 插件安装另需 pnpm。先运行 `run.cmd --check`，再双击 `run.cmd`；uv 按锁文件创建 `.private/runtime/windows/venv`，官方 SDK 安装对应 Windows x64 运行时。选择 WSL 时使用 `--distro`，安装对应 Linux 工具。首次联网安装失败时显示错误，不静默替换版本。
 3. 在设置中重新连接学校账号、配置个人 AI Key。DPAPI 保险库及 IDS 本机设备私钥绑定原 Windows 用户环境，不能把复制 `vault.dpapi` 当作跨电脑登录迁移。学校端设备登记按需要重新绑定。
 4. 如需迁移用户资料，单独定义显式的导出/导入流程，只迁移用户选择的普通配置与数据，校验格式版本和账号归属。课程缓存、邮件和转写属于用户私有资料；默认在新机重新同步。数据库备份应在服务停止后进行。
 5. 即使只是同机移动目录，也不承诺 Python 虚拟环境可直接移动：虚拟环境可能引用原解释器的绝对路径。生成的互操作脚本在下一次启动时重建；失效的开发环境由 uv 重新创建，不修改业务代码来适配旧路径。
@@ -29,7 +29,7 @@
 
 建议先确定一个可验收目标：Windows x64、普通用户权限、用户不必预装开发工具。
 
-1. **原生运行基线。** 在干净 Windows x64 环境验证本地 Python 后端、Windows Node、DPAPI、学校验证窗口、官方 Harness 和原生插件。当前锁定的 Harness 运行时声明支持 Windows x64，但这不等于本项目已完成原生 Windows 全链路验收；完成后再确定发行运行时。WSL 继续作为开发入口。
+1. **原生运行基线。** 以 Windows x64 的 Python 后端、Node、DPAPI、Edge 验证窗口、官方 SDK 和原生插件为基线；Windows 使用 `check.ps1`，WSL 使用 `check.sh`。发布前仍需在干净 Windows 用户环境验收，区分本机原生验证和安装包验收。
 2. **资源与数据分离。** 安装目录放只读程序和模块资源；用户数据放 `%LOCALAPPDATA%/CampusWorkspace` 或桌面宿主提供的用户目录；缓存和日志另设子目录。先由框架扩展统一路径解析，模块继续使用注入上下文。当前 `backend/core/paths.py` 仍使用项目旁的 `.private`，不能直接把现有代码塞进只读 Program Files 后就认定可用。
 3. **固定并携带运行时。** 构建机按锁文件准备所选平台的 Python、Node、Python 依赖、Harness、插件及前端资源。插件安装在发布构建阶段预置或有明确安装流程；正常启动不依赖开发者的全局 PATH、邻近仓库，也不临时下载未锁定依赖。保留第三方许可证与依赖清单。
 4. **桌面宿主管理服务。** 按项目既定方向接入 Electron，由主进程负责单实例、选择本机端口、启动后端、等待健康检查、打开窗口和退出清理；学校登录使用共享浏览器接口。普通页面保持 Web/HTTP 边界。
@@ -41,15 +41,15 @@
 
 - 提交者：运行影响模块的检查，更新接口/README，提供合成输入与失败场景；不提交真实账号、Cookie、API Key 或私人页面。
 - 相应公共服务负责人：确认接口兼容与依赖变化；跨模块修改由集成人员明确纳入。
-- 集成人员：以合并后的实际提交运行 `bash check.sh`，确认 `run.cmd` 冷启动、重复启动、停止、端口冲突，以及启停/刷新模块。
+- 集成人员：以合并后的实际提交运行 Windows `check.ps1` 或 WSL `check.sh`，确认 `run.cmd` 冷启动、重复启动、停止、端口冲突，以及启停/刷新模块。
 - 发布候选：在没有开发环境缓存的干净 Windows 用户环境中，检查中文/空格路径、首次登录、过期恢复、AI Key 配置、原生插件、升级保留数据及卸载行为。CI 可使用合成服务；真实学校登录由受授权的验收者完成。
 
 开发版已验证的入口不等于干净机器的安装包验收。PR 和发布记录分别写清两者范围。
 
 ## 启动器维护与资料
 
-`run.cmd` 调用兼容 Windows PowerShell 5.1 的 `run.ps1`。发行版和工具探测、个人互操作脚本都留在启动层；生成文件位于 `.private/runtime/launcher`。`/api/v1/health` 和公开 `launch_id` 用于确认本目录实例已经就绪；与凭据、CSRF 和数据归属校验分开。
+`run.cmd` 调用兼容 Windows PowerShell 5.1 的 `run.ps1`。默认使用 Windows；显式选择 WSL 时探测发行版并创建互操作脚本。生成文件位于 `.private/runtime/launcher`，Windows 环境位于 `.private/runtime/windows`。`/api/v1/health` 和公开 `launch_id` 用于确认本目录实例就绪，与凭据、CSRF 和数据归属校验分开。
 
-最小检查：`powershell -NoProfile -ExecutionPolicy Bypass -File checks/check_launcher.ps1`、`run.cmd --check`；全量检查见 `check.sh`。手工验收保留启动窗口，重复启动应打开已有实例，按 Ctrl+C 应停止后端。实际启动故障和迁移故障应回到对应平台适配修复。
+最小检查：`powershell -NoProfile -ExecutionPolicy Bypass -File checks/check_launcher.ps1`、`run.cmd --check`；全量检查使用 Windows `check.ps1` 或 WSL `check.sh`。手工验收保留启动窗口，重复启动应打开已有实例，按 Ctrl+C 应停止后端。实际启动故障和迁移故障应回到对应平台适配修复。
 
 参考：[Microsoft WSL 命令](https://learn.microsoft.com/en-us/windows/wsl/basic-commands)、[uv 安装与本地安装选项](https://docs.astral.sh/uv/reference/installer/)、[Electron Forge 打包流程](https://www.electronjs.org/docs/latest/tutorial/tutorial-packaging)。

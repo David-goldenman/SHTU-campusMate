@@ -13,6 +13,7 @@ from .models import Answer, Chat, CourseSearch, Document, Navigate, Profile, Que
 from .tools import Task, profile_owner, read_profile
 
 INSTRUCTION = Path(__file__).with_name('instruction.md').read_text(encoding='utf-8')
+PRESETS = json.loads((Path(__file__).parents[1] / 'harness' / 'prompts.json').read_text(encoding='utf-8'))
 TOOL_NAMES = {'query': '查询学习资料', 'search': '检索课程原文', 'document': '读取作业或课件页码', 'course-search': '查询教务课程与大纲', 'remember': '更新学习档案', 'navigate': '打开工作台页面', 'finish': '核对回答与原文引用'}
 _agent = None
 
@@ -49,6 +50,10 @@ def create_router(context):
     agent = _agent = Agent(context)
     router = APIRouter()
 
+    @router.get('/presets')
+    def presets():
+        return {'items': PRESETS}
+
     @router.get('/chat')
     def history():
         return {'messages': agent.history()}
@@ -63,7 +68,7 @@ def create_router(context):
     def profile():
         value = read_profile(context)
         academic = value['academic']
-        return {'profile': value['profile'], 'academic': {key: academic[key] for key in ('gpa', 'plan_title', 'updated_at') if key in academic}, 'courses_count': len(academic.get('courses', []))}
+        return {'profile': value['profile'], 'academic': {key: academic[key] for key in ('plan_title', 'updated_at') if key in academic}}
 
     @router.put('/profile')
     async def save_profile(body: Profile):
@@ -96,7 +101,7 @@ def create_router(context):
             try:
                 previous = agent.history()
                 data = {'now': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'profile': read_profile(context)['profile'],
-                        'history': [{'role': item['role'], 'text': item['text'][:2500]} for item in previous[-8:]]}
+                        'history': [{'role': item['role'], 'text': item['text'][:2500]} for item in previous if item.get('context_version') == 2][-8:]}
                 origin = request.url.scheme + '://' + request.url.netloc
                 result = await run_in_threadpool(context.ai.run, prompt=INSTRUCTION + '\n用户本次请求：\n' + body.message,
                                                 context=json.dumps(data, ensure_ascii=False), plugins=[context.id],
@@ -106,8 +111,8 @@ def create_router(context):
                     raise HTTPException(502, '学习助手尚未完成回答与原文核对，请重试。')
                 created = datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()
                 reply = {'role': 'assistant', **task.answer,
-                         'navigation': task.navigation, 'tools': result['tools'], 'created_at': created, 'model': result['model']}
-                pair = [{'role': 'user', 'text': body.message, 'created_at': created}, reply]
+                         'navigation': task.navigation, 'tools': result['tools'], 'created_at': created, 'model': result['model'], 'context_version': 2}
+                pair = [{'role': 'user', 'text': body.message, 'created_at': created, 'context_version': 2}, reply]
                 task.check()
                 context.store.write('chat:' + task.owner, (previous + pair)[-60:])
                 return reply
@@ -116,7 +121,7 @@ def create_router(context):
 
     async def perform(name, body, request):
         task = agent.task(request)
-        if len(task.activity) >= 24:
+        if name != 'finish' and len(task.activity) >= 24:
             raise HTTPException(429, '本次工具调用已达 24 次，请先根据已读资料回答或缩小范围。')
         step = {'name': name, 'label': TOOL_NAMES[name], 'status': 'running'}
         task.activity.append(step)
