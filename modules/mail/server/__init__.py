@@ -43,8 +43,24 @@ def scoped(context, key, default):
     return saved.get("value", default) if saved.get("owner") == _source.owner() else default
 
 
-def save(context, key, value):
-    context.store.write(key, {"owner": _source.owner(), "value": value})
+def save(context, key, value, owner):
+    if owner != _source.owner():
+        raise HTTPException(409, "账号已更新，请重试。")
+    context.store.write(key, {"owner": owner, "value": value})
+
+
+def classify_values(messages, rules, labels):
+    values = dict(labels)
+    for item in messages:
+        if values.get(item["id"], {}).get("by") in {"manual", "agent"}:
+            continue
+        values.pop(item["id"], None)
+        for rule in rules:
+            words = [word.strip().casefold() for word in rule["contains"].split(",") if word.strip()]
+            if rule["enabled"] and any(word in str(item.get(rule["field"]) or "").casefold() for word in words):
+                values[item["id"]] = {"label": rule["label"], "reason": "匹配关键词：" + rule["contains"], "by": "rule"}
+                break
+    return values
 
 
 def agent_valid(context, request):
@@ -59,9 +75,21 @@ def authorize_write(context, request):
 
 def create_router(context):
     global _source
-    _source = Source(context, "coremail", ["mail.shanghaitech.edu.cn"], lambda remote, previous: inbox(remote, context.auth.session_parameters("coremail"), previous))
-    router = _source.router()
     lock = threading.RLock()
+
+    def refresh_inbox(remote, previous):
+        owner = _source.owner()
+        result = inbox(remote, context.auth.session_parameters("coremail"), previous)
+        with lock:
+            bodies = scoped(context, "bodies", {})
+            for item in result["messages"]:
+                item["body_text"] = bodies.get(item["id"], {}).get("body_text", item["body_text"])
+            values = classify_values(result["messages"], context.store.read("rules", DEFAULT_RULES), scoped(context, "labels", {}))
+            save(context, "labels", values, owner)
+        return result
+
+    _source = Source(context, "coremail", ["mail.shanghaitech.edu.cn"], refresh_inbox)
+    router = _source.router()
 
     def messages():
         return _source.snapshot()["data"]["messages"]
@@ -83,7 +111,7 @@ def create_router(context):
         with lock, _source.lock:
             bodies = scoped(context, "bodies", {})
             bodies[message_id] = detail
-            save(context, "bodies", bodies)
+            save(context, "bodies", bodies, owner)
             snapshot = context.store.read("snapshot", {})
             if snapshot.get("owner") == owner:
                 for cached in snapshot["data"]["messages"]:
@@ -110,6 +138,7 @@ def create_router(context):
 
     @router.post("/labels")
     def label(body: Label, request: Request):
+        owner = _source.owner()
         selected(body.message_id)
         agent = bool(request.headers.get("authorization"))
         if agent and not agent_valid(context, request):
@@ -119,23 +148,15 @@ def create_router(context):
             if (agent or body.by == "agent") and values.get(body.message_id, {}).get("by") == "manual":
                 raise HTTPException(409, "邮件已由用户分类，请保留手动选择。")
             values[body.message_id] = {"label": body.label, "reason": body.reason, "by": "agent" if agent else body.by}
-            save(context, "labels", values)
+            save(context, "labels", values, owner)
         return {"saved": True}
 
     @router.post("/classify")
     def classify():
+        owner = _source.owner()
         with lock:
-            values = scoped(context, "labels", {})
-            for item in messages():
-                if values.get(item["id"], {}).get("by") in {"manual", "agent"}:
-                    continue
-                values.pop(item["id"], None)
-                for rule in rules()["rules"]:
-                    words = [word.strip().casefold() for word in rule["contains"].split(",") if word.strip()]
-                    if rule["enabled"] and any(word in str(item.get(rule["field"]) or "").casefold() for word in words):
-                        values[item["id"]] = {"label": rule["label"], "reason": "匹配关键词：" + rule["contains"], "by": "rule"}
-                        break
-            save(context, "labels", values)
+            values = classify_values(messages(), rules()["rules"], scoped(context, "labels", {}))
+            save(context, "labels", values, owner)
         return {"classified": len(values)}
 
     @router.post("/ai-classify")
@@ -164,7 +185,7 @@ def create_router(context):
             for proposal in parsed:
                 if values.get(proposal.message_id, {}).get("by") != "manual":
                     values[proposal.message_id] = {"label": proposal.label, "reason": proposal.reason, "by": "agent"}
-            save(context, "labels", values)
+            save(context, "labels", values, owner)
         return {"classified": len(parsed), "usage": result.get("usage", {})}
 
     @router.post("/agent/token")
@@ -175,10 +196,14 @@ def create_router(context):
 
     @router.get("/agent/pending")
     def pending(request: Request):
+        owner = _source.owner()
         if not agent_valid(context, request):
             raise HTTPException(401, "请使用有效的邮件 Agent Bearer 令牌。")
         values = scoped(context, "labels", {})
-        return {"messages": [item for item in messages() if item["id"] not in values], "instruction": "只按内容分类；POST /api/v1/modules/mail/labels 写入 message_id、label 与 reason，使用相同 Bearer 令牌。"}
+        pending_messages = [item for item in messages() if item["id"] not in values]
+        if owner != _source.owner():
+            raise HTTPException(401, "邮箱账号已更新，请重新生成 Agent 令牌。")
+        return {"messages": pending_messages, "instruction": "只按内容分类；POST /api/v1/modules/mail/labels 写入 message_id、label 与 reason，使用相同 Bearer 令牌。"}
 
     return router
 

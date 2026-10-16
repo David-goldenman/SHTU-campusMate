@@ -31,6 +31,7 @@ with sandbox("mail", handler) as context:
         assert source.snapshot()["status"] == "partial"
         assert source.snapshot()["data"]["messages"][0]["received_at"].endswith('+08:00')
         with TestClient(app) as client:
+            assert client.get('/labels').json()["labels"]["mail:m1"]["by"] == 'rule'
             assert client.get('/message',params={"message_id":"mail:m1"}).status_code == 200
             assert '课程' in source.snapshot()["data"]["messages"][0]["body_text"]
             assert client.post('/labels',json={"message_id":"mail:m1","label":"我的分类"}).status_code == 200
@@ -46,7 +47,14 @@ with sandbox("mail", handler) as context:
             assert client.get('/labels').json()["labels"]["mail:m1"]["label"] == '我的分类'
             context.ai.result["content"] = {"labels":[{"message_id":"other","label":"非法"}]}
             assert client.post('/ai-classify',json={"message_ids":["mail:m1"]}).status_code == 502
+            owner = source.owner()
             context.auth.revision = 'second-account'
+            from fastapi import HTTPException
+            try:
+                package.save(context,'labels',{'mail:m1':{'label':'旧账号'}},owner)
+                raise AssertionError('Account changes must reject stale writes')
+            except HTTPException as error:
+                assert error.status_code == 409
             assert client.get('/labels').json()["labels"] == {}
             assert client.get('/agent/pending',headers=headers).status_code == 401
     finally:
