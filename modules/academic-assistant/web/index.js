@@ -7,21 +7,23 @@ export async function mount(container, context) {
   const card = container.closest('.module-card');
   const title = card.querySelector('.module-card-heading');
   let busy = false, profileDirty = false, currentRequest, frame, observer, follow = true;
-  const cleanup = () => {currentRequest?.abort();cancelAnimationFrame(frame);observer?.disconnect();removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
+  const cleanup = () => {currentRequest?.abort();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
-  let history, profile, ai, presets;
-  try { [history,profile,ai,presets] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets')]); }
+  let history, profile, ai, presets, conversations;
+  try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
   catch (error) {cleanup();throw error;}
   if (context.signal.aborted) return cleanup;
   const configured = ai.enabled && ai.key_saved;
+  let activeId = history.conversation_id, archived = false, showArchived = false;
+  const drafts = new Map();
   container.classList.add('academic-chat');
   card.classList.add('study-chat-card');
   title.hidden = true;
   container.innerHTML = `
     <header class="study-header"><div><h2>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)}<span> · AI 设置</span></a></div>
-      <div class="study-actions"><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><details class="study-menu"><summary aria-label="对话操作">更多</summary><div><button class="text-button danger-text" data-clear-chat type="button">清空对话</button></div></details></div>
+      <div class="study-actions"><button class="text-button" data-home type="button">首页概览</button><button class="text-button" data-new-chat type="button">新对话</button><button class="text-button" data-history-toggle type="button" aria-expanded="false">历史对话</button><details class="study-menu"><summary aria-label="对话操作">更多</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
-    <div class="study-layout"><section class="study-conversation" aria-label="与学习助手对话">
+    <div class="study-layout"><aside class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="text-button" data-history-close type="button">关闭</button></div><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><div class="study-composer-heading"><label for="study-message">发消息</label><details class="study-prompts"><summary>常用问题</summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details></div>
@@ -41,9 +43,47 @@ export async function mount(container, context) {
   const send = container.querySelector('[data-send]'), stop = container.querySelector('[data-stop]');
   const profileToggle = container.querySelector('[data-profile-toggle]');
   const latest = container.querySelector('[data-latest]');
+  const historyPanel = container.querySelector('.study-history');
+  const historyToggle = container.querySelector('[data-history-toggle]');
+  const newChat = container.querySelector('[data-new-chat]');
+  function focusChat(active) {context.focus(active);container.querySelector('[data-home]').setAttribute('aria-pressed',String(!active));}
+  container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
+  function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) showProfile(false);}
+  historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
+  container.querySelector('[data-history-close]').onclick = () => {showHistory(false);historyToggle.focus();};
+  container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
+  async function refreshConversations() {conversations=await context.api('/conversations');if (!context.signal.aborted) drawConversations();}
+  async function openConversation(identity) {
+    if (busy) return;
+    drafts.set(activeId || '',form.elements.message.value);
+    const value=await context.api('/conversations/'+identity+'/select',{method:'POST'});
+    activeId=identity;archived=value.conversation.archived;messages.replaceChildren();
+    if(value.messages.length)value.messages.forEach(append);else empty();
+    form.elements.message.value=drafts.get(identity)||'';send.disabled=!configured||archived;
+    errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
+    focusChat(!!value.messages.length);scrollToLatest();drawConversations();showHistory(false);
+  }
+  function drawConversations() {
+    container.querySelectorAll('[data-history-filter]').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.historyFilter==='archived')===showArchived)));
+    container.querySelector('[data-conversations]').innerHTML=conversations.items.filter(item=>item.archived===showArchived).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${busy?'disabled':''}>${e(item.title)}<span>${e(time(item.updated_at))}</span></button><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${busy?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${busy?'disabled':''}>删除</button></div></article>`).join('')||'<p class="field-hint">这里暂时没有对话。</p>';
+    container.querySelectorAll('[data-open-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,()=>openConversation(button.dataset.openChat)));
+    container.querySelectorAll('[data-archive-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,async()=>{
+      const item=conversations.items.find(item=>item.id===button.dataset.archiveChat);
+      await context.api('/conversations/'+item.id,{method:'PUT',body:{archived:!item.archived}});await refreshConversations();
+      if(item.id===activeId){archived=!item.archived;send.disabled=!configured||archived;errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';}
+    }));
+    container.querySelectorAll('[data-delete-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,()=>deleteConversation(button.dataset.deleteChat)));
+  }
+  async function deleteConversation(identity) {
+    if (!await context.ui.confirmDialog('删除对话','删除这段对话及其本地消息，学习档案继续保留。','删除对话')) return;
+    await context.api('/conversations/'+identity,{method:'DELETE'});drafts.delete(identity);await refreshConversations();
+    if(activeId===identity){form.elements.message.value='';const next=conversations.active_id;activeId=null;if(next)await openConversation(next);else{archived=false;empty();send.disabled=!configured;focusChat(false);}}
+  }
+  newChat.onclick=context.ui.safeAction(newChat,async()=>{if(busy)return;const item=await context.api('/conversations',{method:'POST'});await refreshConversations();await openConversation(item.id);form.elements.message.focus({preventScroll:true});});
   observer = new ResizeObserver(() => container.style.setProperty('--study-top',(card.getBoundingClientRect().top + window.scrollY) + 'px'));
   observer.observe(card.parentElement);
   function showProfile(open) {
+    if(open){showHistory(false);container.querySelector('.study-menu').open=false;}
     container.querySelector('.study-profile').hidden = !open;
     profileToggle.setAttribute('aria-expanded',String(open));
     if (open) profileForm.elements.major.focus();
@@ -95,6 +135,8 @@ export async function mount(container, context) {
     messages.innerHTML = '<div class="study-welcome"><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，先处理哪件学习任务？</h3><p>问问近期作业，梳理复习重点，或一起讨论后续选课。</p><p class="field-hint">描述具体问题，助手会按需查阅资料，并附上原文与页码。</p></div>';
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
+  archived=conversations.items.find(item=>item.id===activeId)?.archived || false;
+  send.disabled=!configured||archived;drawConversations();focusChat(!!history.messages.length);
   function fillProfile(value) {
     if (!profileDirty) for (const name of ['major','cohort_year','direction','weekly_hours','notes']) profileForm.elements[name].value = value.profile[name] ?? '';
     container.querySelector('[data-academic-records]').textContent = [value.academic.plan_title || '',value.academic.updated_at ? '记录更新于 ' + time(value.academic.updated_at) : '查询培养方案后会显示方案来源。'].filter(Boolean).join(' · ');
@@ -104,10 +146,10 @@ export async function mount(container, context) {
   stop.onclick = () => {stop.disabled = true;currentRequest?.abort();};
   form.onsubmit = async event => {
     event.preventDefault();
-    if (busy || !configured || !form.reportValidity()) return;
+    if (busy || archived || !configured || !form.reportValidity()) return;
     const message = form.elements.message.value.trim();
     if (!message) return;
-    busy = true;errorNode.textContent = '';send.hidden = true;stop.hidden = false;stop.disabled = false;
+    busy = true;newChat.disabled=true;showHistory(false);drawConversations();focusChat(true);errorNode.textContent = '';send.hidden = true;stop.hidden = false;stop.disabled = false;
     form.elements.message.disabled = true;profileForm.querySelector('fieldset').disabled = true;clearChat.disabled = true;profileToggle.disabled = true;showProfile(false);
     container.querySelector('.study-prompts').open = false;form.setAttribute('aria-busy','true');
     progress.hidden = false;progress.open = false;progressText.textContent = '正在准备学习工具…';container.querySelector('[data-steps]').replaceChildren();
@@ -121,7 +163,8 @@ export async function mount(container, context) {
       if (follow) scrollToLatest();else latest.hidden = false;
     }
     try {
-      await context.api('/chat/stream',{method:'POST',body:{message},signal:currentRequest.signal,onEvent(value) {
+      if(!activeId)activeId=(await context.api('/conversations',{method:'POST'})).id;
+      await context.api('/chat/stream',{method:'POST',body:{message,conversation_id:activeId},signal:currentRequest.signal,onEvent(value) {
         if (context.signal.aborted) return;
         if (value.type === 'error') throw new Error(value.detail);
         if (value.type === 'activity') {
@@ -139,6 +182,7 @@ export async function mount(container, context) {
       draft.remove();draft = append(answer);
       if (follow) scrollToLatest();else latest.hidden = false;
       form.elements.message.value = '';
+      refreshConversations().catch(error=>context.ui.toast(error.message));
       container.querySelector('[data-announcement]').textContent = '回答已完成，参考资料可在回答下方展开。';
       if (answer.navigation) context.navigate(answer.navigation);
       else context.api('/profile').then(current => {if (!context.signal.aborted) fillProfile(current);}).catch(error => {if (!context.signal.aborted) container.querySelector('[data-profile-error]').textContent=error.message;});
@@ -148,7 +192,7 @@ export async function mount(container, context) {
       if (!messages.children.length) empty();
       errorNode.textContent = error.name === 'AbortError' ? '已停止生成，问题保留在输入框中。' : error.message;
     } finally {
-      busy = false;currentRequest=null;progress.hidden=true;stop.hidden=true;send.hidden=false;
+      busy = false;newChat.disabled=false;drawConversations();currentRequest=null;progress.hidden=true;stop.hidden=true;send.hidden=false;
       form.elements.message.disabled=false;profileForm.querySelector('fieldset').disabled=false;clearChat.disabled=false;profileToggle.disabled=false;form.removeAttribute('aria-busy');
       if (!context.signal.aborted && [document.body,stop,form.elements.message].includes(document.activeElement)) form.elements.message.focus({preventScroll:true});
     }
@@ -156,8 +200,7 @@ export async function mount(container, context) {
   form.elements.message.addEventListener('keydown',event => {if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {event.preventDefault();form.requestSubmit();}},{signal:context.signal});
   container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
   clearChat.onclick = context.ui.safeAction(clearChat,async () => {
-    if (!await context.ui.confirmDialog('清空学习对话','清空当前账号的学习助手聊天记录。学习档案继续保留。','清空对话')) return;
-    await context.api('/chat',{method:'DELETE'});empty();latest.hidden=true;container.querySelector('.study-menu').open=false;
+    if(activeId)await deleteConversation(activeId);latest.hidden=true;container.querySelector('.study-menu').open=false;
   });
   profileForm.onsubmit = context.ui.safeAction(profileForm.querySelector('[type=submit]'),async () => {
     const value = Object.fromEntries(new FormData(profileForm));value.cohort_year=value.cohort_year ? Number(value.cohort_year) : null;value.weekly_hours=value.weekly_hours ? Number(value.weekly_hours) : null;

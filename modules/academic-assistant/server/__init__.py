@@ -13,21 +13,23 @@ from fastapi.responses import StreamingResponse
 from anyio import CancelScope
 
 from backend.services.campus.analysis import account_revision
-from .models import Answer, Chat, CourseSearch, Document, Navigate, Profile, Query, Remember, Search
+from .models import Answer, Attend, Chat, ConversationUpdate, CourseSearch, Document, Navigate, Profile, Query, Remember, Search
+from .conversations import Conversations
 from .tools import Task, profile_owner, read_profile
 
 INSTRUCTION = Path(__file__).with_name('instruction.md').read_text(encoding='utf-8')
 PRESETS = json.loads((Path(__file__).parents[1] / 'harness' / 'prompts.json').read_text(encoding='utf-8'))
-TOOL_NAMES = {'query': '查询学习资料', 'search': '检索课程原文', 'document': '读取作业或课件页码', 'course-search': '查询教务课程与大纲', 'remember': '更新学习档案', 'navigate': '打开工作台页面', 'finish': '核对原文引用'}
+TOOL_NAMES = {'query': '查询学习资料', 'search': '检索课程原文', 'document': '读取作业或课件页码', 'course-search': '查询教务课程与大纲', 'remember': '更新学习档案', 'navigate': '打开工作台页面', 'attend': '确认参加并加入时间表', 'finish': '核对原文引用'}
 _agent = None
 
 
 class Agent:
     def __init__(self, context):
         self.context, self.lock, self.tasks = context, asyncio.Lock(), {}
+        self.conversations = Conversations(context)
 
     def history(self):
-        return self.context.store.read('chat:' + account_revision(self.context), [])
+        return self.conversations.messages()
 
     def task(self, request):
         authorization = request.headers.get('authorization', '')
@@ -60,12 +62,39 @@ def create_router(context):
 
     @router.get('/chat')
     def history():
-        return {'messages': agent.history()}
+        return {'messages': agent.history(), 'conversation_id': agent.conversations.index()['active_id']}
+
+    @router.get('/conversations')
+    def conversations():
+        return agent.conversations.index()
+
+    @router.post('/conversations', status_code=201)
+    async def new_conversation():
+        async with agent.lock:
+            return agent.conversations.create()
+
+    @router.post('/conversations/{identity}/select')
+    async def select_conversation(identity: str):
+        async with agent.lock:
+            return agent.conversations.select(identity)
+
+    @router.put('/conversations/{identity}')
+    async def update_conversation(identity: str, body: ConversationUpdate):
+        async with agent.lock:
+            return agent.conversations.update(identity, body.model_dump(exclude_none=True))
+
+    @router.delete('/conversations/{identity}')
+    async def delete_conversation(identity: str):
+        async with agent.lock:
+            agent.conversations.delete(identity)
+        return {'deleted': True}
 
     @router.delete('/chat')
     async def clear_chat():
         async with agent.lock:
-            context.store.delete('chat:' + account_revision(context))
+            identity = agent.conversations.index()['active_id']
+            if identity:
+                agent.conversations.delete(identity)
         return {'cleared': True}
 
     @router.get('/profile')
@@ -99,13 +128,17 @@ def create_router(context):
         if not body.message.strip():
             raise HTTPException(422, '请输入想让学习助手处理的问题。')
         async with agent.lock:
+            identity = body.conversation_id or agent.conversations.index()['active_id'] or agent.conversations.create()['id']
+            _, conversation = agent.conversations.find(identity)
+            if conversation['archived']:
+                raise HTTPException(409, '请先恢复这段归档对话，再继续发送消息。')
             task, token = Task(context, body.message), secrets.token_urlsafe(32)
             if emit:
                 task.emit = emit
             agent.tasks[token] = task
             try:
                 task.emit({'type': 'activity', 'steps': []})
-                previous = agent.history()
+                previous = agent.conversations.messages(identity)
                 data = {'now': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'profile': read_profile(context)['profile'],
                         'history': [{'role': item['role'], 'text': item['text'][:2500]} for item in previous if item.get('context_version') == 2][-8:]}
                 origin = request.url.scheme + '://' + request.url.netloc
@@ -133,11 +166,11 @@ def create_router(context):
                 if not text.strip() or len(text) > 24000:
                     raise HTTPException(502, '回答内容不完整，请重试。')
                 created = datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()
-                answer = {'role': 'assistant', **task.answer, 'text': text,
+                answer = {'role': 'assistant', **task.answer, 'text': text, 'conversation_id': identity,
                          'navigation': task.navigation, 'tools': result['tools'], 'created_at': created, 'model': result['model'], 'context_version': 2}
                 pair = [{'role': 'user', 'text': body.message, 'created_at': created, 'context_version': 2}, answer]
                 task.check()
-                context.store.write('chat:' + task.owner, (previous + pair)[-60:])
+                agent.conversations.append(identity, pair, task.owner)
                 return answer
             finally:
                 agent.tasks.pop(token, None)
@@ -223,6 +256,10 @@ def create_router(context):
     @router.post('/tools/finish')
     async def finish(body: Answer, request: Request):
         return await perform('finish', body, request)
+
+    @router.post('/tools/attend')
+    async def attend(body: Attend, request: Request):
+        return await perform('attend', body, request)
 
     return router
 

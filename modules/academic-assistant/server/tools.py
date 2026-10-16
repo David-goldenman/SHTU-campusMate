@@ -56,7 +56,7 @@ class Task:
         result = []
         for item in items[body.offset:body.offset + body.limit]:
             text = '\n'.join(key + ': ' + (value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)) for key, value in item.items())
-            result.append(self.source(item['id'], item.get('title', item['id']), text, item.get('url', ''), record_id=item['id'], download_url=item.get('download_url')))
+            result.append(self.source(item['id'], item.get('title', item['id']), text, item.get('url', ''), record_id=item['id'], download_url=item.get('download_url'), proposal_id=item.get('proposal_id')))
         return {"items": result, "total": len(items), "offset": body.offset, "next_offset": body.offset + len(result)}
 
     def academic(self, **values):
@@ -101,6 +101,19 @@ class Task:
             value = await self.api('mail')
             items = value['data']['messages']
         return {**self.rows(items, body), 'issues': value.get('data', {}).get('issues', []), 'updated_at': value.get('updated_at'), 'status': value.get('status')}
+
+    async def attend(self, body):
+        self.check()
+        if body.quote not in self.message or not re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', body.quote) or re.search(r'不参加|不要|取消|再考虑|如果', body.quote):
+            raise HTTPException(422, '需要用户本次明确表达参加或加入日程的意愿。')
+        if not any(source.get('proposal_id') == body.proposal_id for source in self.references.values()):
+            raise HTTPException(422, '请先查询带有这条活动建议的通知。')
+        response = await self.context.api('campus-agent', '/proposals/' + body.proposal_id + '/accept', method='POST')
+        self.check()
+        if response.status_code != 200:
+            raise HTTPException(response.status_code, response.json().get('detail', '日程暂时无法更新。'))
+        value = response.json()
+        return {'items': [self.source('attendance:' + body.proposal_id, '已加入时间表', json.dumps(value, ensure_ascii=False))]}
 
     async def search(self, body):
         if body.collection == 'lessons' and body.q:

@@ -1,5 +1,6 @@
 """Official dsh subprocess adapter; module directories own all feature plugins."""
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -100,6 +101,8 @@ class Harness:
                 check_cancelled()
                 raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、配置和 DeepSeek 服务后重试。") from None
             if result.finish_reason != "completed":
+                logging.getLogger(__name__).warning('Harness task ended: reason=%s; tool_calls=%s', result.finish_reason,
+                    [event.get('data', {}).get('name') for event in result.events if event.get('type') == 'tool/call'])
                 raise HTTPException(502, "AI 插件任务未完整结束，请缩小任务范围后重试。")
             outcomes = {block["toolCallId"]: block["isError"] for event in result.events if event["type"] == "tool/result"
                         for block in event["data"]["message"]["content"] if block["type"] == "tool-result"}

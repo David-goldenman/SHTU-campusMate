@@ -14,6 +14,9 @@ export function apply(ctx) {
   }
   let sequence = 0;
   const workspace = process.cwd();
+  register('study_attend','attend','用户本次明确表示参加某项活动或要求加入日程时使用。先查询通知取得 proposal_id，quote 必须直接复制用户本次明确意愿。仅确认已存在的活动建议，不代替报名。',{
+    proposal_id:{type:'string',required:true},quote:{type:'string',required:true},
+  });
   function register(name, endpoint, description, parameters) {
     ctx.tools.register(defineTool({
       name, description, parameters,
