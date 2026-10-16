@@ -5,11 +5,13 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 import httpx
 from fastapi import FastAPI
+from backend.services.campus.analysis import account_revision
 from backend.services.campus import course
 from backend.services.campus.data import validate_bundle
 from checks.module_support import load, sandbox
 
 package = load('assistant')
+build_context = sys.modules[load('courses').__name__ + '.context'].build_context
 
 
 async def check():
@@ -17,7 +19,8 @@ async def check():
         raw = course('gradescope','1','合成课程','CS100','Fall 2026','https://www.gradescope.com/courses/1')
         data = validate_bundle({'courses':[{'id':'group:1','source':'catalog','title':'合成课程','term':'2026-fall','current':True,'course_ids':[raw['id']],'sources':[raw]}]})
         async def api(module,path='/snapshot',**kwargs):
-            return httpx.Response(200,json={'data':data})
+            assert module == 'courses' and path == '/context' and kwargs['method'] == 'POST'
+            return httpx.Response(200,json=build_context(data,account_revision(context),**kwargs['body']))
         context.api = api
         context.ai.result['content'] = {'text':'合成回答','insufficient_context':False,'citation_ids':['courses:gradescope:1']}
         app = FastAPI(); app.include_router(package.create_router(context))

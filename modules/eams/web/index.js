@@ -4,10 +4,7 @@ const BLANK = '当学期没有安排考试时间，请等待。';
 
 export async function mount(container, context) {
   const e = context.ui.escape;
-  const style = document.createElement('link');
-  style.rel = 'stylesheet';
-  style.href = new URL('./styles.css', import.meta.url);
-  document.head.append(style);
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const cache = new Map();
   const state = {drawn: null, semesters: [], semester_id: '', semester: '', batches: [], batch_id: '', batch: '', exams: [], question: '', answer: ''};
 
@@ -120,8 +117,8 @@ export async function mount(container, context) {
   try {
     cleanup = await sourcePanel(container, context, draw);
   } catch (error) {
-    style.remove();
+    removeStyle();
     throw error;
   }
-  return () => { style.remove(); cleanup(); };
+  return () => { removeStyle(); cleanup(); };
 }

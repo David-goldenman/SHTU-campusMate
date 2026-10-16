@@ -1,9 +1,7 @@
 export async function mount(container, context) {
-  const style = document.createElement('link');
-  style.rel = 'stylesheet'; style.href = new URL('./styles.css', import.meta.url);
-  document.head.append(style);
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const e = context.ui.escape, options = {signal: context.signal};
-  const cleanup = () => { style.remove(); container.replaceChildren(); };
+  const cleanup = () => { removeStyle(); container.replaceChildren(); };
   container.innerHTML = `<div class="education-workspace">
     <p>从已同步课程中选择原文，或粘贴自己的资料。生成时会把问题和所选资料发送到设置中配置的 DeepSeek。</p>
     <div class="education-row"><label>学习方式<select data-mode><option value="answer">答疑</option><option value="hint">分步提示</option><option value="quiz">知识自测</option><option value="plan">学习计划</option><option value="notice">通知核对</option></select></label><button type="button" class="button" data-settings>AI 设置</button></div>

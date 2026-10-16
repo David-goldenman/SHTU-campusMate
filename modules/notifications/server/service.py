@@ -9,8 +9,17 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.services.campus import SourceError, timestamp
-from backend.services.campus.analysis import account_revision, build_context, citations
+from backend.services.campus.analysis import account_revision, citations
 from backend.services.campus.data import digest
+
+
+async def build_context(context, course_id=None, context_ids=None):
+    response = await context.api("courses", "/context", method="POST", body={"course_id": course_id, "context_ids": context_ids})
+    if response.status_code == 404 and response.json().get("detail") in {"模块未启用或没有后端入口。", "Not Found"}:
+        raise HTTPException(409, "请启用课程中心并同步来源资料。")
+    if response.status_code != 200:
+        raise HTTPException(response.status_code, response.json().get("detail", "课程资料暂时不可用。"))
+    return response.json()
 
 
 class Notice(BaseModel):

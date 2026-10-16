@@ -2,11 +2,7 @@ import {sourcePanel, link, time} from '/assets/campus.js';
 
 export async function mount(container, context) {
   const e = context.ui.escape;
-  const stylesheet = document.createElement('link');
-  stylesheet.rel = 'stylesheet';
-  stylesheet.href = new URL('./styles.css',import.meta.url);
-  document.head.append(stylesheet);
-  context.signal.addEventListener('abort',() => stylesheet.remove(),{once:true});
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   let week = 'all', range = 'upcoming', kind = 'all';
   const schedule = {...context,api:(path,options) => context.api(path === '/snapshot' ? '/schedule' : '/schedule/sync',options)};
   const cleanup = await sourcePanel(container, schedule, (body, snapshot) => {
@@ -43,6 +39,6 @@ export async function mount(container, context) {
     body.querySelector('[data-undated]').textContent = data.undated ? '另有 ' + data.undated + ' 条事项未提供有效时间，可在作业管理或教务系统查看。' : '';
     draw();
     drawEvents();
-  }).catch(error => { stylesheet.remove(); throw error; });
-  return () => { cleanup(); stylesheet.remove(); };
+  }).catch(error => { removeStyle(); throw error; });
+  return () => { cleanup(); removeStyle(); };
 }

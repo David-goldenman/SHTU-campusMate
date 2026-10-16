@@ -1,1 +1,13 @@
-{"id":"eams","name":"教务系统","version":"0.2.0","category":"eams","api_version":1}
+{
+  "id": "eams",
+  "name": "教务系统",
+  "version": "0.2.0",
+  "category": "eams",
+  "api_version": 1,
+  "navigation": {
+    "label": "教务系统",
+    "icon": "✎",
+    "description": "查看考试安排、学期成绩与培养方案。",
+    "order": 60
+  }
+}

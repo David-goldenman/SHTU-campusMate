@@ -1,8 +1,6 @@
 export async function mount(container, context) {
-  const style = document.createElement('link');
-  style.rel = 'stylesheet'; style.href = new URL('./styles.css', import.meta.url);
-  document.head.append(style);
-  const cleanup = () => { style.remove(); container.replaceChildren(); };
+  const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
+  const cleanup = () => { removeStyle(); container.replaceChildren(); };
   const e = context.ui.escape, options = {signal: context.signal};
   const levels = {high: '优先核对', medium: '值得关注', normal: '普通消息'};
   container.innerHTML = `<div class="piazza-workspace">
