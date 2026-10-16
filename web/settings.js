@@ -1,7 +1,7 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
-const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',timetable:'教务课表'};
+const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',timetable:'教务系统'};
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
 
 function providerCard(provider) {
