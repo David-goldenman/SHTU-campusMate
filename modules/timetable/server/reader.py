@@ -83,6 +83,14 @@ def parse(html, term):
         courses[value] = course("timetable", value, anchor.get_text(" ", strip=True), code[0] if code else "", term, urljoin(BASE, link["href"]) if link else BASE + "/eams/courseTableForStd.action", status="active")
     activities = list(re.finditer(r"\bactivity\s*=\s*new\s+TaskActivity\s*\(", script))
     result = {"courses": list(courses.values()), "timetable": [], "metadata": {"semester": term, "week_count": end, "units": units}}
+    periods = []
+    for row in soup.select('tr'):
+        cell = row.find('td')
+        if cell and row.select_one('td[id^="TD"]'):
+            times = re.findall(r'\b(\d{1,2}:\d{2})\b', cell.get_text(' ', strip=True))
+            if len(times) == 2:
+                periods.append({'period': len(periods) + 1, 'start': times[0].zfill(5), 'end': times[1].zfill(5)})
+    result['metadata']['periods'] = periods
     for number, match in enumerate(activities):
         fields, position = js_arguments(script, match.end())
         if len(fields) < 7:

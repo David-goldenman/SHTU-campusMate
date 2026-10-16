@@ -21,13 +21,22 @@ from checks.check_auth import MemoryVault, cookie
 def check_identity(directory):
     vault, store = MemoryVault(), Store(directory / 'identity.sqlite3')
     auth = AuthService(vault, store, runtime_dir=directory / 'runtime')
-    auth.browser = SimpleNamespace(state=lambda provider: {'cookies': [cookie()]}, close=lambda provider: None)
+    auth.browser = SimpleNamespace(state=lambda provider: {'cookies': [cookie()]}, close=lambda provider: None, forget=lambda provider: None)
     vault.save('auth:session:gradescope', {'cookies': [cookie()]})
     context = SimpleNamespace(auth=auth, store=store, data_dir=directory)
     cache = AccountCache(context, 'gradescope')
     with patch.object(protocols, 'validate', return_value='user:a'), patch.object(protocols, 'login') as login:
         auth.refresh('gradescope')
         first = auth.get_status('gradescope')['account_revision']
+        with patch.object(protocols, 'validate', side_effect=httpx.ConnectError('Synthetic network interruption')):
+            try:
+                auth.refresh('gradescope')
+                raise AssertionError('Network failures must remain network failures')
+            except httpx.ConnectError:
+                pass
+        assert auth.get_status('gradescope')['status'] == 'ready'
+        assert auth.get_status('gradescope')['has_session']
+        assert login.call_count == 0
         old = cache.capture()
         old.store.write('courses', ['account-a'])
         auth.import_session('gradescope')

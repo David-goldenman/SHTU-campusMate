@@ -8,11 +8,10 @@ from fastapi import HTTPException
 
 from backend.services.auth import LoginRequired
 from backend.services.campus import KINDS, SourceError, identity
-from backend.services.campus.data import digest, plain, semester, timestamp
+from backend.services.campus.data import digest, plain, semester
 
 BASE = "https://eams.shanghaitech.edu.cn"
 INDEX_URL = BASE + "/eams/stdExamTable!innerIndex.action"
-GRADE_URL = BASE + "/eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR"
 PLAN_URL = BASE + "/eams/myPlan.action"
 SEASONS = {"1": "秋季", "2": "春季", "3": "夏季"}
 PAGE_PAUSE = 1.2
@@ -91,7 +90,7 @@ def moment(day, window):
     return value.replace(tzinfo=ZoneInfo("Asia/Shanghai")).isoformat(), start[0] if start else ""
 
 
-def grade_id(term, section):
+def course_id(term, section):
     return identity("eams", "grade:" + semester(term) + ":" + section)
 
 
@@ -111,7 +110,7 @@ def exams(page, term, url):
         items.append({"id": identity("eams", digest(["exam", term, code, day, window])), "source": "eams", "source_id": code,
                       "kind": "exam", "title": plain(title), "exam_kind": kind, "date": day, "start_time": start, "window": window,
                       "location": location, "status": status, "note": note, "due_at": due, "term": term, "semester": semester(term),
-                      "course_id": grade_id(term, code), "url": url})
+                      "course_id": course_id(term, code), "url": url})
     return sorted(items, key=lambda item: (item["date"], item["start_time"], item["title"]))
 
 
@@ -126,39 +125,6 @@ def number(value):
 def caption(value):
     """培养方案课程格带组内序号，去掉序号并统一空格。"""
     return re.sub(r"^\d{1,3}[\s\u00a0]+", "", plain(value)).replace("\u00a0", " ").strip()
-
-
-def grades(page):
-    """成绩页给出学期汇总网格与课程成绩明细网格。"""
-    value = soup_of(page)
-    tables = value.select("table.gridtable")
-    if len(tables) < 2:
-        raise SourceError("教务成绩页结构已变化，已保留上次数据。")
-    summary = []
-    for row in tables[0].select("tr"):
-        cells = [cell.get_text(" ", strip=True) for cell in row.select("td")]
-        if len(cells) == 5 and re.fullmatch(r"20\d{2}-20\d{2}", cells[0]):
-            summary.append({"year": cells[0], "term": cells[1], "label": cells[0] + "学年" + SEASONS.get(cells[1], cells[1]),
-                            "courses": int(cells[2]) if cells[2].isdigit() else None, "credits": number(cells[3]), "gpa": number(cells[4])})
-    courses, total, weight = [], 0.0, 0.0
-    for row in tables[1].select("tr"):
-        cells = [cell.get_text(" ", strip=True) for cell in row.select("td")]
-        if len(cells) < 10 or not re.fullmatch(r"[A-Z]{2,}\d{2,}[A-Z]?", cells[2]):
-            continue
-        year, season, code, section, title, category, credits, score, point, published = cells[:10]
-        grade, size = number(point), number(credits)
-        term = year + "-" + season
-        courses.append({"id": grade_id(term, section), "source": "eams", "source_id": section, "kind": "grade",
-                        "title": plain(title), "code": code, "term": term, "semester": semester(term),
-                        "url": GRADE_URL, "credits": size, "score": score, "point": grade, "category": category,
-                        "published_at": timestamp(published)})
-        if grade is not None and size:
-            total, weight = total + grade * size, weight + size
-    if not courses:
-        raise SourceError("教务成绩页没有课程记录，已保留上次数据。")
-    return {"overall": round(total / weight, 3) if weight else None, "weighted_credits": round(weight, 2),
-            "earned_credits": round(sum(item["credits"] for item in summary if item["credits"] is not None), 2) if summary else None,
-            "semesters": summary}, courses
 
 
 def plan(page):
@@ -197,6 +163,14 @@ def plan(page):
     return {"title": plain(head.get_text(" ", strip=True)) if head else "", "groups": [{"path": list(path), "courses": courses} for path, courses in groups.items()], "requirements": requirements, "notes": notes}
 
 
+def public_data(data):
+    course_fields = ('id', 'source', 'source_id', 'title', 'code', 'term', 'semester', 'url', 'credits', 'category')
+    metadata_fields = ('semester', 'semester_id', 'student_id', 'semesters', 'exams', 'study_plan')
+    return {**data,
+            'courses': [{**{key: item[key] for key in course_fields if key in item}, 'kind': 'course'} for item in data['courses']],
+            'metadata': {key: data['metadata'][key] for key in metadata_fields if key in data['metadata']}}
+
+
 def fetch(remote, previous):
     metadata = previous.get("metadata", {}) if isinstance(previous, dict) else {}
     issues = []
@@ -205,15 +179,13 @@ def fetch(remote, previous):
     term = next((item["name"] for item in catalogue if item["id"] == value["semester_id"]), metadata.get("semester", ""))
     batch = re.search(r"examBatch\.id=(\d+)", value["target"])
     exams_value = attempt(issues, "考试安排", lambda: exams(read(remote, "GET", urljoin(BASE, value["target"])), term, INDEX_URL))
-    gpa_value = attempt(issues, "学期成绩", lambda: grades(read(remote, "GET", GRADE_URL)))
     plan_value = attempt(issues, "培养方案", lambda: plan(read(remote, "GET", PLAN_URL)))
     result = {kind: [] for kind in KINDS}
-    result["courses"] = gpa_value[1] if gpa_value else previous.get("courses", [])
+    result["courses"] = previous.get("courses", [])
     result["assignments"] = exams_value if exams_value is not None else previous.get("assignments", [])
-    result["metadata"] = {"semester": term, "semester_id": value["semester_id"], "student_id": value["student"], "semesters": catalogue,
+    result["metadata"] = {**metadata, "semester": term, "semester_id": value["semester_id"], "student_id": value["student"], "semesters": catalogue,
                           "exams": {"batch": next((item["name"] for item in value["batches"] if item["id"] == batch[1]), "") if batch else "",
                                     "batch_id": batch[1] if batch else "", "batches": value["batches"]},
-                          "gpa": gpa_value[0] if gpa_value else metadata.get("gpa", {}),
                           "study_plan": plan_value if plan_value else metadata.get("study_plan", {})}
     result["issues"] = issues
     return result

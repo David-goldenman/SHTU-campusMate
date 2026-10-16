@@ -26,6 +26,21 @@ result = parse(html, "2026-2027学年秋季")
 assert len(result["timetable"]) == 2
 item = result["timetable"][0]
 assert (item["weekday"], item["period_start"], item["period_end"], item["weeks"], item["teacher"]) == (2, 5, 6, [1, 2], "合成教师")
+clock_html = html + '<table><tr><td>第一节<br>8:15 - 9:00</td><td id="TD0_0"></td></tr></table>'
+assert parse(clock_html, '合成学期')['metadata']['periods'] == [{'period': 1, 'start': '08:15', 'end': '09:00'}]
+calendar_parser = module.SchoolCalendar.refresh.__globals__['parse']
+official_terms = calendar_parser('秋 学 期 （2026．9．14—2027．1．17）10月28日校运动会，全校停课。春学期（2027.2.15-2027.6.20）暑学期（2027.6.21-2027.7.18）')
+assert official_terms['2026-fall']['week_one'] == '2026-09-14'
+assert official_terms['2026-fall']['closures'] == [{'date': '2026-10-28', 'title': '校运动会（全校停课）'}]
+assert official_terms['2026-spring']['week_one'] == '2027-02-15'
+from datetime import date
+dated = {'metadata': {'periods': [{'period': 5, 'start': '13:00', 'end': '13:45'}, {'period': 6, 'start': '13:50', 'end': '14:35'}]},
+         'timetable': [{**item, 'weekday': 3, 'weeks': [7]}], 'events': []}
+open_day = module.calendar(dated, date(2026, 10, 26), '2026-09-14')['days'][2]
+assert open_day['events'][0]['at'] == '2026-10-28T13:00:00+08:00'
+assert open_day['events'][0]['ends_at'] == '2026-10-28T14:35:00+08:00'
+dated['events'] = [{'id': 'calendar:closure', 'source': 'calendar', 'date': '2026-10-28', 'at': '2026-10-28T00:00:00+08:00'}]
+assert all(event.get('event_type') != 'class' for event in module.calendar(dated, date(2026, 10, 26), '2026-09-14')['days'][2]['events'])
 for invalid in [html.replace(mask, "010"), "<html>maintenance</html>"]:
     try:
         parse(invalid, "2026 Fall")
@@ -66,9 +81,32 @@ async def check_schedule():
                 assert [item["event_type"] for item in schedule["data"]["events"]] == ["deadline", "deadline", "exam"]
                 assert schedule["data"]["undated"] == 1
                 assert "events" not in (await client.get("/snapshot")).json()["data"]
+                assert (await client.put('/calendar-settings', json={'week_one': '2026-10-20'})).status_code == 422
+                assert (await client.put('/calendar-settings', json={'week_one': '2026-10-19'})).status_code == 200
+                context.store.write('school-calendar:2026', {'terms': official_terms})
+                anchor = (await client.get('/calendar-settings')).json()
+                assert anchor['source'] == 'manual' and anchor['week_one'] == '2026-10-19'
+                saved = context.store.read('snapshot')
+                context.store.write('snapshot', {**saved, 'data': {**saved['data'], 'metadata': {**saved['data']['metadata'], 'semester': '2026-2027学年春季', 'semester_id': '92'}}})
+                spring = (await client.get('/calendar-settings')).json()
+                assert spring['source'] == 'school' and spring['week_one'] == '2027-02-15'
+                context.store.write('snapshot', saved)
+                assert (await client.get('/calendar-settings')).json()['week_one'] == '2026-10-19'
+                selected = (await client.get('/schedule?week_start=2026-10-20')).json()['calendar']
+                assert selected['week_start'] == '2026-10-19' and selected['teaching_week'] == 1
+                assert len([item for item in selected['days'][1]['events'] if item['event_type'] == 'class']) == 2
+                event = {'title': '合成讲座', 'event_type': 'lecture', 'starts_at': '2026-10-20T16:00:00+08:00', 'ends_at': '2026-10-20T17:00:00+08:00'}
+                response = await client.post('/events', json=event)
+                assert response.status_code == 201
+                event_id = response.json()['id']
+                assert (await client.put('/events/' + event_id, json={**event, 'title': '更新讲座'})).status_code == 200
+                selected = (await client.get('/schedule?week_start=2026-10-20')).json()['calendar']
+                assert any(item['title'] == '更新讲座' for item in selected['days'][1]['events'])
+                assert (await client.delete('/events/' + event_id)).status_code == 200
+                assert (await client.delete('/calendar-settings')).json()['week_one'] == '2026-09-14'
                 disabled = True
                 schedule = (await client.get("/schedule")).json()
-                assert len(schedule["data"]["events"]) == 2 and "教务系统" in schedule["data"]["issues"][0]
+                assert len([item for item in schedule['data']['events'] if item['source'] != 'calendar']) == 2 and "教务系统" in schedule["data"]["issues"][0]
                 synced = await client.post("/schedule/sync")
                 assert synced.status_code == 202 and set(synced.json()["sources"]) == {"timetable", "blackboard", "gradescope", "eams"}
                 assert synced.json()["sources"]["eams"]["status"] == "unavailable"

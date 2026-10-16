@@ -78,7 +78,7 @@ async def check(root):
     data.mkdir()
     store, vault = Store(data / "settings.sqlite3"), MemoryVault()
     app = create_app(active_port=17666, store=store, vault=vault, modules_root=modules, data_dir=data)
-    app.state.auth.browser = SimpleNamespace(close=lambda provider: None, close_all=lambda: None)
+    app.state.auth.browser = SimpleNamespace(close=lambda provider: None, forget=lambda provider: None, close_all=lambda: None)
     messages = []
 
     async def send(message):

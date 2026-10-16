@@ -57,6 +57,7 @@ async def check(directory):
                          for index, value in enumerate((items, [{**items[0], "due_at": "tomorrow"}]))]
                 if study_task:
                     calls = [{'index': 0, 'id': 'study-call', 'type': 'function', 'function': {'name': 'study_query', 'arguments': json.dumps({'area': 'assignments', 'pending': True})}}]
+                    calls.append({'index': 1, 'id': 'skill-call', 'type': 'function', 'function': {'name': 'skill', 'arguments': json.dumps({'name': 'campus-planning'})}})
                 delta, finish = {"tool_calls": calls}, "tool_calls"
             else:
                 if study_task:
@@ -140,7 +141,8 @@ async def check(directory):
                     result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'],
                                                     plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
                     assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
-                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_finish'}
+                    assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
+                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_finish'}
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
     finally:

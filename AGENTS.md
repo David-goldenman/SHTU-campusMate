@@ -2,7 +2,7 @@
 
 工作前阅读 [README.md](README.md)、[团队开发约定](docs/DEVELOPMENT.md) 和 [模块接口](docs/MODULES.md)，明确当前任务的负责目录及接口。业务开发限定在分配的 `modules/<id>/`；主框架、公共 UI、共享登录、共享 AI 由各自负责人维护，跨范围改动需要先由协调者明确授权。
 
-- 开发临时文件、验证截图、合成夹具与开发环境写入本项目 `.codex/`，Python 开发使用 uv 和 `.codex/venv`。应用启动创建 `.private/runtime/` 管理运行环境、登录验证、缓存和 Harness 工作区；持久结果使用模块数据目录，正式运行目录由 Git 忽略。
+- 开发临时文件、验证截图、合成夹具与开发环境写入本项目 `.codex/`，Python 开发使用 uv，WSL 环境为 `.codex/venv`、Windows 环境为 `.codex/windows-venv`。应用启动创建 `.private/runtime/` 管理运行环境、登录验证、缓存和 Harness 工作区；持久结果使用模块数据目录，正式运行目录由 Git 忽略。
 - 用户秘密交给 `context.secrets` 或共享服务 Vault；普通状态交给模块自己的 `context.store`，持久文件交给 `context.data_dir`。私有数据及临时文件遵循现有 `.gitignore`。
 - 使用统一 Nord 变量、组件及注入上下文。前端用原生 ES Modules，服务端用 FastAPI；按实际需要增加依赖，由相应公共目录负责人维护依赖锁定文件。
 - AI 工具和工作流以官方 DeepSeek Harness 后端为统一入口：新增能力分配独立模块 ID，在 `modules/<id>/harness/` 编写原生 Cordis 插件，由 `context.ai.run(..., plugins=[模块ID])` 调用；基础文本对话与生成使用共享 `chat`、`generate`。框架负责凭据、运行时及生命周期，模块负责业务工具、资料选择和结果校验，接口以 [AI 文档](docs/AI.md) 为准。
@@ -13,5 +13,5 @@
 - 模块仅通过注入上下文和文档化公开 API 协作；禁止导入另一个模块的私有实现、读取其数据库/目录、绕过启停状态。依赖模块缺失或停用时返回可解释的不可用/部分结果，禁止偷偷启用依赖或导致框架无法启动。课程资料选择统一由课程中心 `POST /context` 提供。
 - 共享 `backend/services/campus/` 与 `web/campus.js` 是可选模块 SDK：允许通用记录格式、来源任务、文件安全、账号隔离与公共显示组件；不得选择特定模块、组织业务流程或执行业务规则。提升新公共能力须说明复用者与稳定接口；只有一个业务使用的实现留在其模块。
 - 热插拔模块实现完整清理：前端在首次 await 前注册 signal 中止清理，样式使用 `context.ui.useStyle(url, context.signal)`；卸载、加载失败均取消请求、计时器及监听器。后端 `stop(context)` 必须结束后台任务、释放资源，且可清理部分初始化状态。停用保留自己的数据，重新启用可恢复；禁止进程级裸后台任务。
-- 合并门槛：当前提交的 `check.sh` 通过，包括完整模块集成、各模块独立启用/停用/再启用、依赖缺失、移除模块后的空框架；验证失败不能合入 main。业务检查放进本模块 `checks/`，框架检查覆盖通用契约；不调用真实账号或付费模型来替代合成回归。边界细节见 [架构决策](docs/architecture/0001-module-boundaries.md)。
+- 合并门槛：当前提交的 Windows `check.ps1` 或 WSL `check.sh` 通过，包括完整模块集成、各模块独立启用/停用/再启用、依赖缺失、移除模块后的空框架；验证失败不能合入 main。业务检查放进本模块 `checks/`，框架检查覆盖通用契约；不调用真实账号或付费模型来替代合成回归。边界细节见 [架构决策](docs/architecture/0001-module-boundaries.md)。
 - 当前目标为本地网页验证。Electron 最后由桌面负责人统一接入，业务模块维持网页与 HTTP API 边界。

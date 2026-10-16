@@ -160,19 +160,16 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
         _check_page(response, "www.gradescope.com")
         if not BeautifulSoup(response.text, "html.parser").select_one("#account-show"):
             raise LoginRequired("Gradescope 未确认登录，请连接账号或使用浏览器验证。")
-        # The account settings form is a read-only identity probe; do not infer
-        # ownership from the previously saved username or a session cookie.
-        settings = client.get("https://www.gradescope.com/account/edit")
-        _check_page(settings, "www.gradescope.com")
-        for script in BeautifulSoup(settings.text, "html.parser").select("script"):
+        # The signed-in account page supplies identity without settings reauthentication.
+        for script in BeautifulSoup(response.text, "html.parser").select("script"):
             text = script.get_text()
-            match = re.search(r"(?:^|;)\s*gon\.primary_email\s*=\s*", text)
+            match = re.search(r"(?:^|;)\s*gon\.page_context\s*=\s*", text)
             if match:
                 try:
                     profile = json.JSONDecoder().raw_decode(text[match.end():])[0]
-                    user_id = profile["user"]["id"]
-                    if isinstance(user_id, (str, int)) and str(user_id).strip():
-                        return "user:" + str(user_id)
+                    identity = re.fullmatch(r"trn:user:[a-z-]+:gs::(\d+)", profile["user_trn"])
+                    if identity:
+                        return "user:" + identity[1]
                 except (ValueError, KeyError, TypeError):
                     pass
         raise LoginRequired("Gradescope 未返回可验证的账号标识，请重新连接。")

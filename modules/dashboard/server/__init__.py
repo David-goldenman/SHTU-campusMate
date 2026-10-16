@@ -1,6 +1,9 @@
 import asyncio
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
+from backend.services.campus.analysis import account_revision
 
 
 def summarize(data, pending, notices):
@@ -15,7 +18,8 @@ def create_router(context):
 
     @router.get("/snapshot")
     async def snapshot():
-        courses, assignments, notices = await asyncio.gather(context.api("courses"), context.api("assignments"), context.api("notifications"))
+        owner = account_revision(context)
+        courses, assignments, notices, schedule = await asyncio.gather(context.api("courses"), context.api("assignments"), context.api("notifications"), context.api('timetable', '/schedule'))
         if courses.status_code != 200:
             raise HTTPException(409, "请启用课程中心，连接来源后即可查看总览。")
         value = courses.json()
@@ -23,7 +27,12 @@ def create_router(context):
         notifications = notices.json().get("items", []) if notices.status_code == 200 else []
         if assignments.status_code != 200:
             value["data"]["issues"].append("作业管理模块未启用或暂时不可用。")
-        return {**value, **summarize(value["data"], pending, notifications)}
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已切换，请重新读取总览。')
+        today = datetime.now(ZoneInfo('Asia/Shanghai')).date().isoformat()
+        days = schedule.json().get('calendar', {}).get('days', []) if schedule.status_code == 200 else []
+        agenda = [day for day in days if day['date'] >= today][:2]
+        return {**value, **summarize(value["data"], pending, notifications), 'agenda': agenda}
 
     @router.post("/sync", status_code=202)
     async def sync():
