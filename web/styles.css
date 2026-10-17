@@ -216,6 +216,11 @@ dialog::backdrop { background:#2e344099; }
 [data-module-id] .campus-form textarea { min-height:120px; }
 .auth-device { border-top:1px solid var(--border); margin-top:20px; padding-top:16px; }
 .auth-device h4 { margin:0 0 8px; }
+.module-info .module-runtime { display:block; margin-top:10px; color:var(--muted); font-size:13px; }
+.module-runtime p { display:block; margin:3px 0; }
+.backup-section { grid-column:1 / -1; }
+.backup-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; padding:16px 0; border-bottom:1px solid var(--border); }
+.backup-row p { margin:4px 0; color:var(--muted); font-size:14px; }
 .auth-alternative { margin:18px 0; }
 .auth-alternative summary { cursor:pointer; color:var(--muted); }
 .auth-alternative .credential-form { margin:14px 0; }

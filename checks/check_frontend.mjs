@@ -114,3 +114,7 @@ const activity=[];
 await api('/test',{onEvent:event=>activity.push(event),timeoutMs:300,idleTimeoutMs:60});
 assert.equal(activity.length,4,'Stream progress renews only the inactivity deadline');
 console.log('frontend resilience: cleanup failures/hangs isolated, safe non-JSON errors, connection failures, deadlines, idle streams and manual abort passed');
+
+globalThis.fetch=async()=>Response.json({detail:[{loc:['body','port'],msg:'Must be a valid port',type:'value_error'}],code:'invalid_fields',request_id:'synthetic-id',action:'检查字段后重试。'},{status:422});
+await assert.rejects(()=>api('/test'),error=>error.status===422&&error.code==='invalid_fields'&&error.requestId==='synthetic-id'&&error.message.includes('port：Must be a valid port')&&error.message.includes('检查字段后重试。'));
+console.log('frontend errors: field locations, action and support ID retained');

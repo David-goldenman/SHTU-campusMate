@@ -7,6 +7,7 @@ import sys
 import threading
 import types
 import uuid
+import time
 from contextlib import contextmanager
 from urllib.parse import unquote
 from dataclasses import dataclass, field
@@ -15,13 +16,14 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
+from .errors import PublicError, catch_errors, error_response
+from .runtime import RuntimeStatus
 
 
 class Navigation(BaseModel):
@@ -54,6 +56,7 @@ class Entry:
     harness: dict | None = None
     stopping: Future | None = None
     calls: set = field(default_factory=set)
+    runtime: RuntimeStatus = field(default_factory=RuntimeStatus)
 
 
 class ModuleManager:
@@ -72,7 +75,8 @@ class ModuleManager:
 
     def list(self):
         with self.lock:
-            modules = [dict(entry.info) for entry in self.entries.values()]
+            modules = [{**entry.info, 'runtime': {**entry.runtime.snapshot(), 'active_requests': entry.requests,
+                        'pending_calls': len(entry.calls)}} for entry in self.entries.values()]
             categories = {}
             # Explicit declarations win over compatibility fallbacks. Module ID breaks ties.
             for info in sorted(modules, key=lambda item: (item.get("navigation") is None, item["id"])):
@@ -131,34 +135,34 @@ class ModuleManager:
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
-                raise ValueError("模块目录名称或位置不符合规范。")
+                raise PublicError("模块目录名称或位置不符合规范。")
             manifest = Manifest.model_validate(json.loads((folder / "module.json").read_text(encoding="utf-8")))
             if manifest.id != folder.name:
-                raise ValueError("module.json 的 id 必须与目录名称一致。")
+                raise PublicError("module.json 的 id 必须与目录名称一致。")
             if manifest.id == "reload":
-                raise ValueError("reload 是框架保留的模块标识。")
+                raise PublicError("reload 是框架保留的模块标识。")
             if manifest.category == "settings":
-                raise ValueError("settings 是框架保留的设置分类。")
+                raise PublicError("settings 是框架保留的设置分类。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
             background = folder / 'web' / 'background.js'
             plugin = folder / "harness" / "package.json"
             for path in (frontend, background, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
-                    raise ValueError("模块入口必须位于自己的目录内。")
+                    raise PublicError("模块入口必须位于自己的目录内。")
             info["has_frontend"] = frontend.is_file()
             if plugin.is_file():
                 package = json.loads(plugin.read_text(encoding="utf-8"))
                 if not isinstance(package.get("name"), str) or not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", package["name"]):
-                    raise ValueError("Harness package.json 需要合法的 npm 包名。")
+                    raise PublicError("Harness package.json 需要合法的 npm 包名。")
                 bundle = package.get("dsh", {}).get("bundle", {}).get("patch")
                 target = (plugin.parent / (bundle or package.get("main", "index.js"))).resolve()
                 if not target.is_relative_to(plugin.parent.resolve()) or not target.is_file():
-                    raise ValueError("Harness 插件入口必须位于自己的 harness 目录内。")
+                    raise PublicError("Harness 插件入口必须位于自己的 harness 目录内。")
                 entry.harness = {"name": package["name"], "folder": plugin.parent.resolve(), "bundle": bool(bundle)}
             info["harness"] = entry.harness is not None
             if not frontend.is_file() and not background.is_file() and not backend.is_file() and not entry.harness:
-                raise ValueError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
+                raise PublicError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
             info["enabled"] = self.store.read("modules", {}).get(manifest.id, True)
             if not info["enabled"]:
                 info["status"] = "disabled"
@@ -166,7 +170,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -176,9 +180,10 @@ class ModuleManager:
                 exec(compile(backend.read_text(encoding="utf-8"), str(backend), "exec"), entry.package.__dict__)
                 router = entry.package.create_router(entry.context)
                 if not isinstance(router, APIRouter):
-                    raise ValueError("create_router(context) 必须返回 APIRouter。")
+                    raise PublicError("create_router(context) 必须返回 APIRouter。")
                 entry.app = FastAPI(title=manifest.name, version=manifest.version, docs_url=None, redoc_url=None, exception_handlers=self.exception_handlers)
                 entry.app.include_router(router)
+                entry.app.middleware('http')(catch_errors)
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
             info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
@@ -189,7 +194,7 @@ class ModuleManager:
             except Exception as stop_error:
                 info.update(status="error", error=f"模块停止失败（{type(stop_error).__name__}），请检查 stop(context)。")
                 return entry
-            info.update(status="error", error=str(error) if type(error) is ValueError else f"模块加载失败（{type(error).__name__}）。")
+            info.update(status="error", error=str(error) if isinstance(error, PublicError) else f"模块加载失败（{type(error).__name__}），请检查模块后重新加载。")
         return entry
 
     def reload(self):
@@ -356,10 +361,19 @@ class ModuleManager:
         module_id = path.lstrip("/").split("/", 1)[0]
         entry = await run_in_threadpool(self._begin_request, module_id)
         if not entry:
-            await JSONResponse({"detail": "模块未启用或没有后端入口。"}, status_code=404)(scope, receive, send)
+            await error_response(Request(scope), 404, '模块未启用或没有后端入口。')(scope, receive, send)
             return
+        started, status = time.monotonic(), 500
+        nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id, 'state': {}}
+
+        async def recorded_send(message):
+            nonlocal status
+            if message['type'] == 'http.response.start':
+                status = message['status']
+            await send(message)
+
         try:
-            nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id}
-            await entry.app(nested, receive, send)
+            await entry.app(nested, receive, recorded_send)
         finally:
+            entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'))
             await run_in_threadpool(self._end_request, entry)
