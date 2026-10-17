@@ -155,6 +155,9 @@ def create_router(context):
     async def schedule(week_start: date | None = None):
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SCHEDULE_SOURCES)
+        appearance_response = await context.api("courses", "/appearance")
+        appearance = appearance_response.json() if appearance_response.status_code == 200 else {}
+        course_styles = {member: item for item in appearance.get("courses", []) for member in item["course_ids"]}
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
         events, issues, undated = local_events(), [], 0
@@ -186,6 +189,8 @@ def create_router(context):
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取时间表。")
         data = {**values['timetable']['data'], 'events': events, 'undated': undated, 'issues': issues}
+        data['timetable'] = [{**item, **{key: course_styles[item['course_id']][key] for key in ('department', 'appearance')}}
+                             if item.get('course_id') in course_styles else item for item in data['timetable']]
         adjustments = context.store.read(adjustments_key(source), [])
         missing = {item['lesson_id'] for item in adjustments} - {item['id'] for item in data['timetable']}
         if missing:
@@ -195,7 +200,7 @@ def create_router(context):
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
-                'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': reminders,
+                'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': reminders, 'palette': appearance.get('palette', []),
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 

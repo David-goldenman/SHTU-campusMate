@@ -128,6 +128,8 @@ async def check_schedule():
         disabled = False
 
         async def api(name, path="/snapshot", **options):
+            if name == "courses":
+                return httpx.Response(404)
             if changed:
                 context.auth.revision = "synthetic-account-two"
             if disabled and name == "eams":
