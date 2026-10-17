@@ -118,7 +118,9 @@ class Task:
         if area == 'timetable':
             visible = {row['record_id'] for row in result['items']}
             self.schedule_records.update({item['id']: dict(item) for item in items if item['id'] in visible})
-            result.update(week_start=value['calendar']['week_start'], periods=value['calendar'].get('periods', []), conflicts=value['calendar'].get('conflicts'))
+            result.update(week_start=value['calendar']['week_start'], week_one=value['calendar'].get('week_one'),
+                          week_one_source=value['calendar'].get('week_one_source'), teaching_week=value['calendar'].get('teaching_week'),
+                          periods=value['calendar'].get('periods', []), conflicts=value['calendar'].get('conflicts'))
         return {**result, 'issues': value.get('data', {}).get('issues', []), 'updated_at': value.get('updated_at'), 'status': value.get('status')}
 
     async def capabilities(self, body):

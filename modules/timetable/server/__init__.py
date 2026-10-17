@@ -10,9 +10,9 @@ from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
-from .calendar import Event, SemesterSettings, ZONE, calendar
+from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
-from .school_calendar import SchoolCalendar, inferred_week_one, term_key
+from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
 _source = None
@@ -61,16 +61,9 @@ def create_router(context):
         official = school.saved(metadata)
         automatic = official.get('terms', {}).get(term_key(metadata), {})
         manual = context.store.read(settings_key(), {})
-        inferred = inferred_week_one(metadata)
-        if manual:
-            origin = 'manual'
-        elif automatic.get('week_one'):
-            origin = 'school'
-        elif inferred:
-            origin = 'inferred'
-        else:
-            origin = None
-        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')) or inferred, 'source': origin,
+        week_one = manual.get('week_one') or automatic.get('week_one')
+        origin = 'manual' if manual.get('week_one') else 'school' if automatic.get('week_one') else None
+        return {**automatic, **manual, 'week_one': week_one, 'source': origin,
                 'url': official.get('url'), 'pdf_url': official.get('pdf_url'), 'checked_at': official.get('checked_at'), 'error': official.get('error')}
 
     @router.put('/calendar-settings')
@@ -164,6 +157,8 @@ def create_router(context):
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
         events, issues, undated = local_events(), [], 0
+        if not dates['week_one'] and values['timetable']['data']['timetable']:
+            issues.append(MISSING_WEEK_ONE)
         for item in dates.get('closures', []):
             events.append({'id': 'calendar:' + item['date'], 'title': item['title'], 'source': 'calendar', 'event_type': 'calendar',
                            'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})

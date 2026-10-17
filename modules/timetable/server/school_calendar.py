@@ -29,29 +29,6 @@ def term_key(metadata):
     return match[1] + '-' + SEASONS[match[3]] if match else None
 
 
-def monday(year, month, week):
-    first = date(year, month, 1)
-    return first + timedelta(days=(7 - first.weekday()) % 7 + 7 * (week - 1))
-
-
-def inferred_week_one(metadata):
-    """Infer week one from the semester name when the school calendar is unavailable.
-
-    The convention matches the published calendar: autumn starts on the second Monday of
-    September, spring on the second Monday of February and summer on the first Monday of
-    July. Callers must label the result as inferred, never as the official calendar.
-    """
-    key = term_key(metadata)
-    if key is None:
-        return None
-    year, season = int(key[:4]), key[5:]
-    if season == 'fall':
-        return monday(year, 9, 2).isoformat()
-    if season == 'summer':
-        return monday(year + 1, 7, 1).isoformat()
-    return monday(year + 1, 2, 2).isoformat()
-
-
 def parse(text):
     text = re.sub(r'\s+', '', unicodedata.normalize('NFKC', text))
     matches = list(re.finditer(r'([秋春暑夏])学期[（(](20\d{2})[.年/](\d{1,2})[.月/](\d{1,2})', text))

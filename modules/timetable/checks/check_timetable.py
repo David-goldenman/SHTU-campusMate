@@ -72,11 +72,6 @@ assert open_day['events'][0]['at'] == '2026-10-28T13:00:00+08:00'
 assert open_day['events'][0]['ends_at'] == '2026-10-28T14:35:00+08:00'
 dated['events'] = [{'id': 'calendar:closure', 'source': 'calendar', 'date': '2026-10-28', 'at': '2026-10-28T00:00:00+08:00'}]
 assert all(event.get('event_type') != 'class' for event in module.calendar(dated, date(2026, 10, 26), '2026-09-14')['days'][2]['events'])
-inferred = module.inferred_week_one
-assert inferred({'semester': '2026-2027学年秋季'}) == '2026-09-14'
-assert inferred({'semester': '2026-2027学年春季'}) == '2027-02-08'
-assert inferred({'semester': '2026-2027学年夏季'}) == '2027-07-05'
-assert inferred({'semester': '2026 Fall'}) is None
 # A room change across weeks must not duplicate the card inside one week.
 split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
     {**item, 'id': 'first-room', 'weekday': 2, 'weeks': [1, 2], 'location': 'A'},
@@ -120,10 +115,11 @@ async def check_schedule():
                 schedule = (await client.get("/schedule")).json()
                 assert len(schedule["data"]["timetable"]) == 2
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
-                assert fallback['week_start'] == '2026-09-14' and fallback['teaching_week'] == 1
-                assert fallback['week_one'] == '2026-09-14' and fallback['week_one_source'] == 'inferred'
-                assert len(fallback['days'][1]['events']) == 2 and all(event['event_type'] == 'class' for event in fallback['days'][1]['events'])
-                assert (await client.get('/calendar-settings')).json()['source'] == 'inferred'
+                assert fallback['week_start'] == '2026-09-14' and fallback['teaching_week'] is None
+                assert fallback['week_one'] is None and fallback['week_one_source'] is None
+                assert not any(row['event_type'] == 'class' for day in fallback['days'] for row in day['events'])
+                assert (await client.get('/calendar-settings')).json()['source'] is None
+                assert not fallback['conflicts']['complete'] and schedule['status'] == 'partial'
                 assert [item["id"] for item in schedule["data"]["events"]] == ["gradescope:hw", "blackboard:quiz", "eams:exam"]
                 assert [item["event_type"] for item in schedule["data"]["events"]] == ["deadline", "deadline", "exam"]
                 assert schedule["data"]["undated"] == 1
