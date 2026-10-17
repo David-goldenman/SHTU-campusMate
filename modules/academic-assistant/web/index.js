@@ -1,5 +1,6 @@
 import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
+import {openingLine} from '/assets/opening-lines.js';
 import {sendOnEnter, fitComposer} from './composer.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
@@ -38,6 +39,7 @@ export async function mount(container, context) {
     <header class="study-header"><div class="study-heading"><button class="study-icon-button" data-history-toggle type="button" aria-label="历史对话" title="历史对话" aria-expanded="false">${icon('history')}</button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
       <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu"><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
+    <p class="study-opening-line" role="note" aria-label="开场白">${e(openingLine())}</p>
     <div class="study-layout"><aside class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
