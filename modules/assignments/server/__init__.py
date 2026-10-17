@@ -23,6 +23,14 @@ def arrange(data, now=None):
     return sorted(values, key=order, reverse=True)
 
 
+def summary(assignments):
+    def count(items):
+        return {'total': len(items), 'unsubmitted': sum(item.get('submitted') is False for item in items),
+                'pending': sum(item['pending'] for item in items)}
+    return {**count(assignments), 'by_source': {source: count([item for item in assignments if item['source'] == source])
+                                               for source in sorted({item['source'] for item in assignments})}}
+
+
 def create_router(context):
     router = APIRouter()
 
@@ -35,7 +43,8 @@ def create_router(context):
         data = value["data"]
         assignments = arrange(data)
         pending = sorted((item for item in assignments if item["pending"]), key=lambda item: datetime.fromisoformat(timestamp(item.get("due_at"))).timestamp() if timestamp(item.get("due_at")) else float("inf"))
-        return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending, "updated_at": value.get("updated_at")}
+        return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending,
+                "summary": summary(assignments), "updated_at": value.get("updated_at")}
 
     @router.post("/sync", status_code=202)
     async def sync():

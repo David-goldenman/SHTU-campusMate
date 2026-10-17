@@ -41,18 +41,35 @@ def combine(snapshots, groups, current):
     def code_of(item):
         return re.sub(r'[\s_-]', '', str(item.get('code') or '')).upper()
 
-    def automatic(item):
+    known_terms, evidence = {}, {}
+    for item in raw_courses:
         code, term = code_of(item), semester(item.get('term'))
+        if re.fullmatch(r'[A-Z]{2,}\d{2,}[A-Z]?', code) and re.fullmatch(r'20\d{2}-(fall|spring|summer)', term):
+            known_terms.setdefault(code, set()).add(term)
+            if item['source'] in {'timetable', 'elrc'} and term == current:
+                evidence.setdefault(code, []).append(item['id'])
+    term_matches = {}
+    for item in raw_courses:
+        code = code_of(item)
+        if (item['source'] == 'blackboard' and item.get('status') == 'active' and not item.get('term')
+                and item['id'] not in manual and known_terms.get(code) == {current} and evidence.get(code)):
+            term_matches[item['id']] = {'course_id': item['id'], 'term': current, 'source_ids': evidence[code]}
+
+    def term_of(item):
+        return term_matches.get(item['id'], {}).get('term') or semester(item.get('term'))
+
+    def automatic(item):
+        code, term = code_of(item), term_of(item)
         return 'course:' + digest([code, term]) if re.fullmatch(r'[A-Z]{2,}\d{2,}[A-Z]?', code) and re.fullmatch(r'20\d{2}-(fall|spring|summer)', term) else None
 
     titles = {}
     for item in raw_courses:
         if item['id'] not in manual and automatic(item):
-            key = (re.sub(r'\s+', '', item['title']).casefold(), semester(item.get('term')))
+            key = (re.sub(r'\s+', '', item['title']).casefold(), term_of(item))
             titles.setdefault(key, set()).add(automatic(item))
     buckets = {}
     for item in raw_courses:
-        code, term = code_of(item), semester(item.get("term"))
+        code, term = code_of(item), term_of(item)
         group = manual.get(item["id"])
         matches = titles.get((re.sub(r'\s+', '', item['title']).casefold(), term), set()) if not code else set()
         group_id = 'manual:' + group['id'] if group else automatic(item) or (next(iter(matches)) if len(matches) == 1 else 'course:' + digest(item['id']))
@@ -60,6 +77,8 @@ def combine(snapshots, groups, current):
         merged["current"] = merged["current"] or term == current
         merged["course_ids"].append(item["id"])
         merged["sources"].append(item)
+        if item['id'] in term_matches:
+            merged.setdefault('term_matches', []).append(term_matches[item['id']])
         if not merged['code'] and code:
             merged['code'] = code
     result["courses"] = sorted(buckets.values(), key=lambda item: (not item["current"], item["term"], item["code"], item["title"]))
