@@ -10,13 +10,21 @@ import tempfile
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from backend.core.config import Settings
 PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 
 def free_port():
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        return listener.getsockname()[1]
+    for _ in range(32):
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+        try:
+            return Settings(port=port).port
+        except ValueError:
+            continue
+    raise RuntimeError("No browser-compatible test port is available.")
 
 
 def check(project):

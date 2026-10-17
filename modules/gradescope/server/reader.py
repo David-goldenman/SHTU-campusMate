@@ -49,9 +49,20 @@ def assignments(html, course_id, issues):
             issues.append("一条作业的标识格式无法识别。")
             continue
         status_tag, score_tag = row.select_one(".submissionStatus"), row.select_one(".submissionStatus--score")
-        status_text = status_tag.get_text(" ", strip=True) if status_tag else ""
+        status_text = ' '.join(str(node).strip() for node in status_tag.find_all(string=True)
+                               if not node.find_parent(class_='submissionStatus--score')).strip() if status_tag else ''
         score = re.search(r"(-?\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)", score_tag.get_text() if score_tag else "")
-        submitted = True if score_tag or status_text.casefold() in {"submitted", "已提交"} else False if status_text.casefold() in {"no submission", "not submitted", "未提交"} else None
+        normalized = status_text.casefold()
+        exempt = normalized in {'exempt', 'excused', '豁免', '免除'}
+        status = ('exempt' if exempt else 'not_submitted' if normalized in {'no submission', 'not submitted', '未提交'} else
+                  'graded' if score else
+                  'submitted' if normalized in {'submitted', '已提交'} else
+                  'draft' if normalized in {'draft', 'in progress', '草稿', '进行中'} else
+                  'unknown')
+        submitted = True if status in {'graded', 'submitted'} else False if status in {'draft', 'not_submitted'} else None
+        reasons = {'graded': '来源已显示数值成绩；0 分同样是评分记录。', 'submitted': '来源明确显示已提交。',
+                   'draft': '来源显示草稿或进行中，尚未正式提交。', 'not_submitted': '来源明确显示未提交。',
+                   'exempt': '来源已标记豁免，不列入需要提交的待办。', 'unknown': '来源未返回可确认的提交状态，请查看原站。'}
         dates = row.select("time.submissionTimeChart--dueDate[datetime]")
         release = row.select_one("time.submissionTimeChart--releaseDate[datetime]")
         released_at = timestamp(release["datetime"]) if release else None
@@ -62,7 +73,10 @@ def assignments(html, course_id, issues):
         raw_url = urljoin(BASE, anchor["href"]) if anchor else f"{BASE}/courses/{course_id}/assignments/{value}/submissions/new" if button else f"{BASE}/courses/{course_id}"
         if urlsplit(raw_url).netloc != "www.gradescope.com":
             raise SourceError("Gradescope 作业链接不属于当前平台。")
-        result.append({"id": identity("gradescope", f"{course_id}:{value or digest(title + str(released_at))}"), "source": "gradescope", "source_id": value, "source_course_id": str(course_id), "course_id": identity("gradescope", course_id), "title": title, "url": raw_url, "submitted": submitted, "status": "graded" if score_tag else "submitted" if submitted is True else "not_submitted" if submitted is False else "unknown", "due_at": timestamp(dates[-1]["datetime"]) if dates else None, "release_at": released_at, "score": float(score[1]) if score else None, "max_score": float(score[2]) if score else None, "availability": availability, "actionable": True if active else False if not reachable or scheduled or button is not None else None, "has_statement": None})
+        result.append({"id": identity("gradescope", f"{course_id}:{value or digest(title + str(released_at))}"), "source": "gradescope", "source_id": value, "source_course_id": str(course_id), "course_id": identity("gradescope", course_id), "title": title, "url": raw_url, "submitted": submitted, "status": status,
+            "submission_status": status, "submission_evidence": 'gradebook' if score else 'submission_list' if status != 'unknown' else 'unavailable',
+            "submission_reason": reasons[status], "exempt": exempt, "checked_at": datetime.now(timezone.utc).isoformat(),
+            "due_at": timestamp(dates[-1]["datetime"]) if dates else None, "release_at": released_at, "score": float(score[1]) if score else None, "max_score": float(score[2]) if score else None, "availability": availability, "actionable": True if active else False if not reachable or scheduled or button is not None else None, "has_statement": None})
     return result
 
 

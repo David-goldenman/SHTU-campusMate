@@ -1,4 +1,4 @@
-import {sourcePanel, records, link, time} from '/assets/campus.js';
+import {sourcePanel, records, link, time, submissionLabel} from '/assets/campus.js';
 
 const platforms={timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'录播'};
 const kinds={assignments:'作业',materials:'资料',announcements:'公告',posts:'讨论',lessons:'录播',timetable:'上课安排',grades:'成绩'};
@@ -29,7 +29,7 @@ export async function mount(container,context) {
         host.querySelectorAll('[data-kind]').forEach(button=>{button.setAttribute('aria-selected',String(button.dataset.kind===kind));button.tabIndex=button.dataset.kind===kind?0:-1;});
         const panel=host.querySelector('[data-content]');panel.setAttribute('aria-labelledby','course-tab-'+kind);
         if(kind==='timetable')panel.innerHTML=data.timetable.map(item=>`<article class="campus-item"><h4>周${'一二三四五六日'[item.weekday-1]} · 第 ${item.period_start}–${item.period_end} 节</h4><p>${e(item.location || '地点待定')}</p><p class="field-hint">第 ${e(item.weeks.join('、'))} 周</p></article>`).join('');
-        else if(kind==='assignments')panel.innerHTML=data.assignments.map(item=>`<article class="campus-item"><h4>${link(item.url,item.title,e)}</h4><p class="field-hint">${e(platforms[item.source]||item.source)} · ${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'} · ${item.submitted===true?'已提交':item.submitted===false?'未提交':'提交状态未提供'}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
+        else if(kind==='assignments')panel.innerHTML=data.assignments.map(item=>`<article class="campus-item"><h4>${link(item.url,item.title,e)}</h4><p class="field-hint" title="${e(item.submission_reason || '')}">${e(platforms[item.source]||item.source)} · ${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'} · ${e(submissionLabel(item))}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
         else if(kind==='grades')panel.innerHTML=data.grades.map(item=>`<article class="campus-item"><h4>${e(item.title)}</h4><p>${e(item.score??'成绩未公布')}${item.max_score!=null?' / '+e(item.max_score):''}</p><p class="field-hint">${e(platforms[item.source]||item.source)}</p></article>`).join('');
         else panel.innerHTML=records(data[kind],e);
       }

@@ -53,6 +53,7 @@ function services(signal) {
     auth:Object.freeze({
       providers:() => request('/auth/providers'),
       status:id => request('/auth/' + encodeURIComponent(id) + '/status'),
+      explainNetwork:failures => request('/auth/network/explain',{method:'POST',body:{failures},timeoutMs:20000}),
     }),
     ai:Object.freeze({
       settings:() => request('/ai/settings'),

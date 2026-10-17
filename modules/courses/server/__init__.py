@@ -36,7 +36,11 @@ def create_router(context):
         data = combine(values, context.store.read("groups", []), current_semester(values))
         if unavailable:
             data["issues"].append("以下来源模块未启用或暂时不可用：" + "、".join(unavailable))
-        return {"status": "syncing" if any(value.get("status") == "syncing" for value in values.values()) else "ready" if values else "not_connected", "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable}
+        status = ("syncing" if any(value.get("status") == "syncing" for value in values.values()) else
+                  "partial" if any(value.get("network_failure") for value in values.values()) else
+                  "ready" if values else "not_connected")
+        return {"status": status, "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable,
+                "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")]}
 
     @router.post("/context")
     async def selected_context(body: Selection):
