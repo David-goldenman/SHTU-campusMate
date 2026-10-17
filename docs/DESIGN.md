@@ -243,3 +243,6 @@ CSS 的 .button、.button-primary、.button-secondary、.button-danger、.text-b
 共享实现位于 `web/themes/appearance.js`、`appearance.css` 和各主题清单；艺术区域由主题的 `art.js`、`art-welcome.css` 与 `art-workspace.css` 管理。人物选择、主题与减少动效设置保存在当前浏览器，主题切换保存后重新打开当前页面。手动减少动态效果和系统 `prefers-reduced-motion` 都能停止装饰运动。
 
 完整实现、资产来源与验证记录见 ART_THEMES.md。
+
+
+蓝白主题的校园轮播与侧栏细节仅由 observatory／star-notes 的主题清单加载。页尾只显示图片，默认 20 秒，支持位置开关、手动切换和暂停；离屏、后台、悬停、焦点或减少动态效果时停表。偏好保存在 options[主题ID]，兼容迁移旧版根级字段，不影响 Default、PRTS 和自定义主题。详见 [艺术主题](ART_THEMES.md)。

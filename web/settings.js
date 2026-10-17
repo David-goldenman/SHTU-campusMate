@@ -1,6 +1,7 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
 import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
+import {generatePassword} from './password-generator.js';
 import {appearancePanel, bindAppearance} from './themes/appearance.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
@@ -19,7 +20,7 @@ function deviceCard(provider) {
 function providerCard(provider) {
   const id = escape(provider.id);
   const target = provider.targets?.length ? '<label>登录服务<select data-auth-target>' + provider.targets.map(id => '<option value="' + escape(id) + '" ' + (provider.target === id ? 'selected' : '') + '>' + escape(targetNames[id] || id) + '</option>').join('') + '</select></label>' : '';
-  const credentials = provider.id === 'coremail' ? '' : `<details class="auth-alternative"><summary>账号密码登录</summary><form class="credential-form" data-credentials="${id}"><p class="field-hint">提交后加密保存账号密码，并立即登录。需要验证码时，请使用官方窗口继续验证。</p><label for="auth-${id}-username">账号</label><input id="auth-${id}-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(provider.username)}" required><label for="auth-${id}-password">密码</label><div class="password-field"><input id="auth-${id}-password" name="password" type="password" autocomplete="current-password" maxlength="4096" aria-describedby="auth-${id}-password-hint"><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button></div><p class="field-hint" id="auth-${id}-password-hint" data-password-hint></p><button class="button button-primary" type="submit">登录</button></form></details>`;
+  const credentials = provider.id === 'coremail' ? '' : `<details class="auth-alternative"><summary>账号密码登录</summary><form class="credential-form" data-credentials="${id}"><p class="field-hint">提交后加密保存账号密码，并立即登录。需要验证码时，请使用官方窗口继续验证。</p><label for="auth-${id}-username">账号</label><input id="auth-${id}-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(provider.username)}" required><label for="auth-${id}-password">密码</label><div class="password-field"><input id="auth-${id}-password" name="password" type="password" autocomplete="current-password" maxlength="4096" aria-describedby="auth-${id}-password-hint"><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button><button class="text-button" data-generate-password type="button" aria-label="由种子生成密码" title="同一种子、平台和长度会生成同一密码">生成</button></div><p class="field-hint" id="auth-${id}-password-hint" data-password-hint></p><button class="button button-primary" type="submit">登录</button></form></details>`;
   const description = provider.id === 'ids' ? '课表、Blackboard、E 云课堂与教学社区' : provider.id === 'coremail' ? '校园邮件与智能分类' : provider.id === 'gradescope' ? '作业、题目与提交状态' : '课程讨论与公告';
   return `<article class="provider-card" data-provider="${id}"><details class="provider-connection"><summary><div><h3>${escape(provider.name)}</h3><p>${description}</p></div><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span><span class="provider-chevron" aria-hidden="true">⌄</span></summary><div class="provider-expanded"><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>使用官方窗口连接</summary><div class="provider-actions"><button class="button button-primary" data-auth-action="browser" type="button">打开登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">登录完成，连接账号</button></div><p class="field-hint">在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。</p></details><button class="text-button" data-auth-action="refresh" type="button">检查连接</button>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></div></details></article>`;
 }
@@ -244,6 +245,33 @@ export async function mount(container, context) {
         button.textContent = show ? '隐藏' : '显示';
         button.setAttribute('aria-label',show ? '隐藏密码' : '显示密码');
         button.setAttribute('aria-pressed',String(show));
+      } else if (button.hasAttribute('data-generate-password')) {
+        const lengthRaw = window.prompt('密码长度（12-64，默认 16）：','16');
+        if (lengthRaw === null) return;
+        const length = Number(lengthRaw.trim() || 16);
+        if (!Number.isInteger(length) || length < 12 || length > 64) {
+          feedback.textContent = '请输入 12 到 64 之间的整数。';
+          feedback.classList.add('danger-text');
+          return;
+        }
+        const seed = window.prompt('输入种子密码（仅在本机计算，不保存种子）：','');
+        if (seed === null) return;
+        if (!seed.trim()) {
+          feedback.textContent = '请输入非空的种子密码。';
+          feedback.classList.add('danger-text');
+          return;
+        }
+        await safeAction(controls,async () => {
+          const password = await generatePassword(provider.id,seed,length);
+          if (context.signal.aborted) return;
+          form.elements.password.value = password;
+          form.elements.password.type = 'text';
+          const show = card.querySelector('[data-show-password]');
+          show.textContent = '隐藏';show.setAttribute('aria-label','隐藏密码');show.setAttribute('aria-pressed','true');
+          passwordRequirement();
+          feedback.classList.remove('danger-text');
+          feedback.textContent = '密码已生成并填入，平台现有密码不会自动更改。';
+        })();
       } else if (button.dataset.authAction) {
         const action = button.dataset.authAction, body = targetBody();
         const messages = {browser:'正在打开官方登录窗口…','import-session':'正在验证并连接账号…',refresh:'正在检查连接与恢复…'};

@@ -1,4 +1,5 @@
 import {sourcePanel, link} from '/assets/campus.js';
+import {mountCampusMoment} from '/assets/themes/campus-moments.js';
 import {deadlineInfo, deadlineMarkup} from '/assets/deadlines.js';
 
 export async function mount(container,context) {
@@ -8,7 +9,8 @@ export async function mount(container,context) {
   const card = container.closest('.module-card');
   card.classList.add('overview-card');
   let expanded = false, latest, host, timer;
-  const dispose = () => {clearInterval(timer);removeStyle();card.classList.remove('overview-card');};
+  let removeMoment = () => {};
+  const dispose = () => {removeMoment();clearInterval(timer);removeStyle();card.classList.remove('overview-card');};
   context.signal.addEventListener('abort',dispose,{once:true});
   const sourceNames = {timetable:'课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'教学社区',mail:'邮箱'};
   const typeNames = {class:'课程',deadline:'截止',quiz:'Quiz',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
@@ -50,5 +52,6 @@ export async function mount(container,context) {
     container.append(container.querySelector('.source-toolbar'));
   });
   if (!context.signal.aborted) timer=setInterval(()=>{if(latest && !container.contains(document.activeElement))draw(host,latest);},60000);
+  if (!context.signal.aborted && ['observatory','star-notes'].includes(context.theme?.id)) removeMoment = mountCampusMoment(container,'dashboard',context.signal);
   return () => {cleanup();dispose();};
 }

@@ -208,7 +208,7 @@ main:has(.module-focus) .module-shortcuts { display:none; }
 .provider-controls { min-width:0; margin:0; padding:0; border:0; }
 .password-field { display:flex; align-items:center; gap:12px; }
 .password-field input { min-width:0; flex:1; }
-.password-field button { flex:none; }
+.password-field button { flex:none; min-width:44px; min-height:44px; }
 .credential-form { margin-bottom:22px; }
 .provider-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
 .provider-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--border); margin-top:22px; padding-top:16px; color:var(--muted); font-size:14px; }

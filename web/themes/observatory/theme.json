@@ -3,7 +3,13 @@
   "name": "观星台",
   "description": "雕塑、天球与深钴蓝。把好奇心，放在更远的地方。",
   "api_version": 1,
-  "styles": ["../art-workspace.css", "../observatory.css", "../art-welcome.css"],
+  "styles": [
+    "../art-workspace.css",
+    "../observatory.css",
+    "../art-welcome.css",
+    "../campus-rail.css",
+    "../campus-moments.css"
+  ],
   "preview": "../assets/observatory-hero.webp",
   "entry": "../art.js"
 }
