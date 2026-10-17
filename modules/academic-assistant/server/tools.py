@@ -104,7 +104,11 @@ class Task:
 
     async def attend(self, body):
         self.check()
-        if body.quote not in self.message or not re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', body.quote) or re.search(r'不参加|不要|取消|再考虑|如果', body.quote):
+        # A model-selected excerpt cannot remove the user's negation or condition.
+        message = self.message.strip()
+        affirmative = re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', message)
+        uncertain = re.search(r'(?:不|没|未|别|勿)[^，,。；;\n]{0,12}(?:参加|加入|添加|确认|决定)|不要|不用|不必|取消|考虑|如果|假如|假设|要是|的话|是否|能否|怎么|怎样|如何|什么|吗|[?？“”「」"\']', message)
+        if body.quote not in self.message or not affirmative or uncertain:
             raise HTTPException(422, '需要用户本次明确表达参加或加入日程的意愿。')
         if not any(source.get('proposal_id') == body.proposal_id for source in self.references.values()):
             raise HTTPException(422, '请先查询带有这条活动建议的通知。')

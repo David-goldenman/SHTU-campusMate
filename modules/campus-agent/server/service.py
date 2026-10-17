@@ -277,7 +277,9 @@ class CampusAgent:
             proposal = None
             if review.get('event') and review['bucket'] in {'focus', 'recommend'} and not review.get('needs_check'):
                 try:
-                    required = mail['preferences']['shape'] == 'required' and review['topic'] == 'shape' and review.get('protected') and review['by'] != 'manual'
+                    preliminary = prepared['preliminary']
+                    required = (mail['preferences']['shape'] == 'required' and review['topic'] == 'shape'
+                                and preliminary['topic'] == 'shape' and preliminary['protected'] and review['by'] != 'manual')
                     proposal = await self.propose(owner, 'mail', source, Event.model_validate(review['event']), bool(required))
                 except (HTTPException, ValueError):
                     review = {**review, 'needs_check': True}
@@ -291,8 +293,12 @@ class CampusAgent:
 
     async def check(self, force=False):
         owner = account_revision(self.context)
-        state = self.context.store.read(self.key('state'), {})
+        job = Job(self, owner, {}, [])
+        job.check()
+        state_key = 'state:' + owner
+        state = self.context.store.read(state_key, {})
         modules, snapshots, mail = await self.collect()
+        job.check()
         observed = {}
         for module, value in snapshots.items():
             if module in {'courses', 'assignments', 'dashboard', 'assistant', 'education'}:
@@ -316,21 +322,24 @@ class CampusAgent:
             # A preference edit rechecks recent notices; the mailbox keeps per-message review controls.
             pending = pending[:5]
         state.update(observed=observed, mail_seen=mail_seen, pending=pending, changes_pending=changed, last_checked=datetime.now(timezone.utc).isoformat())
-        if owner != account_revision(self.context) or self.cancelled.is_set():
-            return
-        self.context.store.write(self.key('state'), state)
+        job.check()
+        self.context.store.write(state_key, state)
         for module in changed:
             value = snapshots[module]
             if value.get('status') in {'error', 'login_required', 'verification_required'}:
                 await self.notice('service:' + module, modules[module]['name'] + '需要检查', value.get('message') or '请到设置检查连接，再重新同步。',
                                   digest([module, value.get('status'), value.get('message')]), owner=owner, importance='important')
+                job.check()
             elif value.get('status') in {'ready', 'partial'}:
                 notices = await self.api('notifications')
+                job.check()
                 if any(item['id'] == 'service:' + module for item in notices['items']):
                     await self.notice('service:' + module, modules[module]['name'] + '已恢复', '服务已重新同步，可继续查看资料。',
                                       digest([module, 'recovered']), owner=owner)
+                    job.check()
         ready = [item['id'] for item in mail['messages'] if item['classification'].get('fingerprint') and state.get('review_seen', {}).get(item['id']) != review_key(item['classification'])][:4]
         handled = await self.handle_reviews(owner, ready) if ready else {}
+        job.check()
         state['review_seen'] = {**state.get('review_seen', {}), **handled}
         cached = {item['id'] for item in mail['messages'] if item['classification'].get('fingerprint') and state['review_seen'].get(item['id']) == review_key(item['classification'])}
         cached_count = len(set(pending) & cached)
@@ -338,7 +347,7 @@ class CampusAgent:
         if not pending and snapshots.get('mail', {}).get('status') not in {'error', 'login_required', 'verification_required'}:
             changed = [module for module in changed if module != 'mail']
         state.update(pending=pending, changes_pending=changed)
-        self.context.store.write(self.key('state'), state)
+        self.context.store.write(state_key, state)
         ai = self.context.ai.settings()
         if not ai['enabled'] or not ai['key_saved']:
             state.update(summary='资料已检查；配置 AI 后可进行综合整理。', error=None)
@@ -348,25 +357,30 @@ class CampusAgent:
             state.update(summary=f'已整理 {len(handled)} 封邮件的分类结果。' if handled else '服务与资料状态已检查，暂无新事项。', error=None)
         else:
             selected = pending[:max(0, 4 - len(handled))]
-            job = Job(self, owner, modules, selected)
+            job.modules, job.pending = modules, set(selected)
             token = secrets.token_urlsafe(32)
             self.jobs[token] = job
             try:
                 payload = {'now': datetime.now(ZONE).isoformat(), 'services': list(modules.values()), 'changed': changed,
                            'states': {name: {'status': value.get('status'), 'issues': value.get('data', {}).get('issues', []), 'message': value.get('message')} for name, value in snapshots.items()},
                            'pending_mail': selected, 'preferences': mail['preferences']}
-                result = await asyncio.to_thread(self.context.ai.run, prompt=INSTRUCTION, context=json.dumps(payload, ensure_ascii=False), plugins=[self.context.id],
-                    cancel_event=self.cancelled, plugin_env={'CAMPUS_PLUGIN_AGENT_URL': self.origin, 'CAMPUS_PLUGIN_AGENT_TOKEN': token})
+                def run():
+                    # The account may change while this call waits for a worker thread.
+                    job.check()
+                    return self.context.ai.run(prompt=INSTRUCTION, context=json.dumps(payload, ensure_ascii=False), plugins=[self.context.id],
+                        cancel_event=self.cancelled, plugin_env={'CAMPUS_PLUGIN_AGENT_URL': self.origin, 'CAMPUS_PLUGIN_AGENT_TOKEN': token})
+                result = await asyncio.to_thread(run)
                 job.check()
                 handled.update(await self.handle_reviews(owner, job.reviewed) if job.reviewed else {})
+                job.check()
                 state['review_seen'].update(handled)
                 state['last_run'] = {'completed_at': datetime.now(timezone.utc).isoformat(), 'mail_count': len(selected) + cached_count,
                                      'reviewed': len(job.reviewed), 'cached': cached_count, 'tool_calls': len(result['tools'])}
                 state.update(pending=[identity for identity in pending if identity not in handled], changes_pending=[], summary=f'已复核 {len(handled)} 封邮件，并检查更新的服务资料。', error=None)
             finally:
                 self.jobs.pop(token, None)
-        if owner == account_revision(self.context) and not self.cancelled.is_set():
-            self.context.store.write(self.key('state'), state)
+        job.check()
+        self.context.store.write(state_key, state)
 
     def start(self):
         self.thread = threading.Thread(target=self.loop, name='campus-agent', daemon=True)
@@ -389,9 +403,10 @@ class CampusAgent:
             except Exception as error:
                 if not self.cancelled.is_set() and owner == account_revision(self.context):
                     message = str(error.detail) if isinstance(error, HTTPException) else '后台检查未完成（' + type(error).__name__ + '），稍后重试。'
-                    state = self.context.store.read(self.key('state'), {})
+                    state_key = 'state:' + owner
+                    state = self.context.store.read(state_key, {})
                     state.update(error=message, summary='已保留现有资料与安排。')
-                    self.context.store.write(self.key('state'), state)
+                    self.context.store.write(state_key, state)
                     self.retry_at = time.monotonic() + 120
             finally:
                 self.running = False

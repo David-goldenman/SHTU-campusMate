@@ -14,6 +14,13 @@ assert '<p>第一段<br/>下一行</p><p>第二段</p>' == reader.presentation('
 prefs = models.Preferences(shape='required', courses=['CS100']).model_dump()
 assert models.preliminary({'title':'政治思想讲座','body_text':'欢迎参加'},prefs)['topic'] != 'shape'
 assert models.preliminary({'title':'活动通知','body_text':'本次活动计入形策考勤。'},prefs)['protected']
+for body in ('本次活动不计入形策考勤。', '本次活动无法计入形策考勤。', '是否计入形策考勤尚待确认。',
+             '本次活动拟计入形策考勤。', '本次活动计入形策考勤的说法不实。', '本次活动计入形策考勤？',
+             '本次活动计入形策考勤。更正：本次活动不计入形策考勤。', '形策考勤活动介绍。'):
+    assert not models.preliminary({'title':'活动通知','body_text':body},prefs)['protected'], body
+assert not models.preliminary({'title':'本次活动计入形策考勤','body_text':'认定情况请等待后续通知。'},prefs)['protected'], 'The title alone is not recognition evidence'
+for body in ('本次活动可计入形策考勤。', '本次讲座纳入《形势与政策》课程学时。'):
+    assert models.preliminary({'title':'活动通知','body_text':body},prefs)['protected'], body
 assert not models.preliminary({'title':'活动通知','body_text':'本次活动计入形策考勤。'},{**prefs,'shape':'done'})['protected']
 assert models.preliminary({'title':'CS100 作业截止','body_text':''},prefs)['bucket'] == 'focus'
 with sandbox('mail') as context:
