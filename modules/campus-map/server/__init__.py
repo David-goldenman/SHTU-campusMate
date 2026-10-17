@@ -16,10 +16,15 @@ def create_router(context):
     router = APIRouter()
     places = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'places.json').read_text(encoding='utf-8'))
     places['basemap'] = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'osm-basemap.json').read_text(encoding='utf-8'))
+    walking = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'walking-network.json').read_text(encoding='utf-8'))
 
     @router.get('/places')
     def public_places():
         return places
+
+    @router.get('/walking-network')
+    def walking_network():
+        return walking
 
     @router.get('/day')
     async def day(date: date | None = None):

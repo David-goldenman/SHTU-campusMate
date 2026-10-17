@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {buildWalkingGraph,planWalk,walkable,inside} from '../web/routing.js';
+const point=(x,y)=>[121.6+x/95000,31.18+y/111320];
+const place=(id,x,y)=>({id,polygon:[point(x-1,y-1),point(x+1,y-1),point(x+1,y+1),point(x-1,y+1)]});
+const node=(x,y,tags={})=>({point:point(x,y),tags});
+const way=(id,refs,tags={})=>({id,refs,tags:{highway:'footway',...tags}});
+const source={nodes:{a:node(0,0),b:node(100,0),c:node(100,100),d:node(0,100)},ways:[way('ab',['a','b']),way('bc',['b','c']),way('cd',['c','d']),way('da',['d','a'])]};
+const graph=buildWalkingGraph(source),start=place('s',10,-5),end=place('e',90,105);
+const result=planWalk(graph,start,end);
+assert.equal(result.status,'ok');assert(result.length>190&&result.length<205);assert(result.steps.length>=2);
+assert.equal(planWalk(graph,start,start).status,'same');assert.equal(planWalk(graph,null,end).status,'missing');
+assert.equal(planWalk(graph,start,place('far',1000,1000)).status,'unmapped');
+const short=planWalk(graph,place('s',25,-5),place('e',75,-5));
+assert.equal(short.status,'ok');assert(short.length>45&&short.length<55);assert.equal(short.segments.length,1);
+const crossing=buildWalkingGraph({nodes:{a:node(-100,0),b:node(100,0),c:node(0,-100),d:node(0,100)},ways:[way('horizontal',['a','b']),way('vertical',['c','d'])]});
+assert.equal(planWalk(crossing,place('s',-90,5),place('e',5,90)).status,'disconnected','geometric crossings must not connect without a shared OSM node');
+const directed=buildWalkingGraph({nodes:{a:node(0,0),b:node(100,0)},ways:[way('ab',['a','b'],{'oneway:foot':'yes'})]});
+assert.equal(planWalk(directed,place('s',10,-5),place('e',90,-5)).status,'ok');
+assert.equal(planWalk(directed,place('s',90,-5),place('e',10,-5)).status,'disconnected');
+for(const tags of [{foot:'no'},{access:'private'},{indoor:'yes'},{tunnel:'yes'},{level:'-1'},{layer:'-1'},{layer:'1'},{highway:'trunk'},{highway:'primary'},{motorroad:'yes'}])assert(!walkable({highway:'footway',...tags}));
+assert(walkable({highway:'footway',access:'private',foot:'yes'}));
+assert(walkable({highway:'footway',layer:'1',bridge:'yes'}));
+const blocked=buildWalkingGraph({nodes:{a:node(0,0),b:node(100,0,{foot:'no'})},ways:[way('ab',['a','b'])]});assert.equal(blocked.edges.length,0);
+const outside=buildWalkingGraph({...source,boundary:[point(-10,-10),point(50,-10),point(50,110),point(-10,110)]});assert.equal(outside.edges.length,1);
+const data=JSON.parse(await readFile(new URL('../data/places.json',import.meta.url),'utf8'));
+const network=JSON.parse(await readFile(new URL('../data/walking-network.json',import.meta.url),'utf8'));
+assert.equal(network.license,'ODbL-1.0');assert.equal(network.coordinate_system,data.campus.coordinate_system);
+const campus=buildWalkingGraph(network);assert(campus.edges.length>500);
+const north=data.buildings.find(b=>b.short_name==='北门');
+for(const name of ['教学中心','图书馆','体育馆','信息学院1号楼','生命学院','数学科学研究所']) {
+  const destination=data.buildings.find(b=>b.name===name),route=planWalk(campus,north,destination);
+  assert.equal(route.status,'ok',name);assert(route.length>100&&route.length<2000,name);
+  assert(route.points.every(p=>inside(p,network.boundary)));
+  assert(route.segments.every(s=>walkable(s.tags)));
+  assert(Math.abs(route.length-route.segments.reduce((n,s)=>n+s.length,0))<.0001);
+}
+console.log('campus-map: shortest walks, same-edge routing, shared-node connectivity, access/indoor filters, campus boundary and real campus destinations passed');

@@ -21,6 +21,9 @@ async def check():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:
             places = (await client.get('/places')).json()
             assert len(places['buildings']) == 65 and len(places['elevators']) == 3
+            walking = (await client.get('/walking-network')).json()
+            assert walking['license'] == 'ODbL-1.0' and len(walking['ways']) > 200
+            assert walking['boundary'][0] == walking['boundary'][-1]
             unavailable = (await client.get('/day?date=2026-10-21')).json()
             assert unavailable['available'] is False and unavailable['events'] == []
             assert (await client.get('/day?date=invalid')).status_code == 422
