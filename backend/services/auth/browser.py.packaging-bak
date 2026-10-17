@@ -1,0 +1,113 @@
+"""打包时覆盖 backend/services/auth/browser.py。
+
+变化点：
+- _command() 不再用 windows_tool("node")，改用 _find_node()：
+  1) 先查捆绑的 portable Node:  PROJECT / "bin" / "node" / "node.exe"
+  2) 再 fallback 到系统 PATH:  shutil.which("node")
+- browser.mjs 路径走 SCRIPTS 常量（frozen 友好）
+
+其他逻辑保持原样。
+"""
+import json
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+from ...core.paths import PROJECT, RUNTIME, SCRIPTS
+from ...core.errors import PublicError
+from ...core.vault import windows_path
+from .protocols import PROVIDERS
+
+
+def _find_node() -> str:
+    """Resolve the Node.js runtime for browser.mjs.
+
+    In frozen installs, PROJECT/bin/node/node.exe is bundled.
+    In development, fall back to PATH.  This ordering also lets devs
+    override with their own Node if they want.
+    """
+    bundled = PROJECT / "bin" / "node" / "node.exe"
+    if bundled.is_file():
+        return str(bundled)
+    system = shutil.which("node")
+    if system:
+        return system
+    raise PublicError(
+        "需要 Node.js 运行登录脚本。打包版应包含 bin/node/node.exe；"
+        "开发环境请安装 Node.js 22+ 并确保在 PATH 中。"
+    )
+
+
+class VerificationBrowser:
+    def __init__(self, directory=RUNTIME / 'auth'):
+        self.launchers = {}
+        self.directory = directory
+
+    def _directory(self, provider):
+        if provider not in PROVIDERS:
+            raise ValueError("认证提供方不存在。")
+        return self.directory / provider
+
+    def _command(self):
+        return [_find_node(), windows_path(SCRIPTS / "browser.mjs")]
+
+    def _run(self, action, provider, **options):
+        payload = {"action": action, "profile": windows_path(self._directory(provider)), **options}
+        result = subprocess.run(self._command(), input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=40)
+        if result.returncode:
+            raise PublicError("验证窗口尚未启动或已经关闭，请重新打开。")
+        return json.loads(result.stdout)
+
+    def open(self, provider, url, *, device_setup=False):
+        process = self.launchers.get(provider)
+        if device_setup and process is not None:
+            # Enrollment keeps its CDP document guide attached through school redirects.
+            self.close(provider)
+            process = None
+        if process is not None and process.poll() is None:
+            return self._run("open", provider, url=url, device_setup=device_setup)
+        self.close(provider)
+        process = subprocess.Popen(self._command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   text=True, encoding="utf-8", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        self.launchers[provider] = process
+        process.stdin.write(json.dumps({"action": "open", "profile": windows_path(self._directory(provider)), "url": url, "keep_alive": True, "device_setup": device_setup}))
+        process.stdin.close()
+        line = process.stdout.readline()
+        if not line:
+            process.wait(timeout=5)
+            raise PublicError("验证窗口未能启动，请检查 Windows Node 与 Edge。")
+        return json.loads(line)
+
+    def state(self, provider):
+        return self._run("state", provider)
+
+    def close(self, provider):
+        directory = self._directory(provider)
+        if directory.exists():
+            try:
+                self._run("close", provider)
+            except RuntimeError:
+                pass  # A manually closed window has no debugging endpoint.
+        process = self.launchers.pop(provider, None)
+        if process is not None:
+            process.wait(timeout=8)
+            if process.stdout:
+                process.stdout.close()
+
+    def forget(self, provider):
+        self.close(provider)
+        directory = self._directory(provider)
+        if directory.exists():
+            for attempt in range(20):
+                try:
+                    shutil.rmtree(directory)
+                    break
+                except OSError:
+                    if attempt == 19:
+                        raise PublicError("登录窗口仍占用账号资料，请关闭窗口后重试。") from None
+                    time.sleep(0.1)
+
+    def close_all(self):
+        for provider in PROVIDERS:
+            self.close(provider)

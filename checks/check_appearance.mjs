@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+
+const source = await readFile(new URL('../web/themes/appearance.js',import.meta.url),'utf8');
+function environment(saved,blocked=false) {
+  const data = new Map(saved ? [['campus.appearance.v1',JSON.stringify(saved)]] : []);
+  globalThis.localStorage = {getItem:key=>{if(blocked)throw Error('blocked');return data.get(key)||null;},setItem:(key,value)=>{if(blocked)throw Error('blocked');data.set(key,value);}};
+  globalThis.window = new EventTarget();
+  const meta = {};
+  globalThis.document = {documentElement:{dataset:{}},querySelector:()=>({setAttribute:(key,value)=>{meta[key]=value;}}),querySelectorAll:()=>[]};
+  return data;
+}
+const data = environment({theme:'observatory',companions:{observatory:'female','star-notes':'male'}});
+const ui = await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+assert.equal(document.documentElement.dataset.artTheme,'observatory');
+let events=0;
+window.addEventListener('campus:appearance',()=>events++);
+ui.setAppearance({theme:'star-notes'});
+assert.equal(ui.getAppearance().companions['star-notes'],'male');
+ui.setAppearance({companions:{'star-notes':'hidden'},reduceMotion:true});
+ui.setAppearance({theme:'observatory'});
+assert.equal(ui.getAppearance().companions.observatory,'female');
+assert.equal(ui.getAppearance().companions['star-notes'],'hidden');
+assert.equal(document.documentElement.dataset.artMotion,'reduced');
+assert.equal(JSON.parse(data.get('campus.appearance.v1')).theme,'observatory');
+assert.equal(events,3);
+const copy=ui.getAppearance();copy.companions.observatory='hidden';
+assert.equal(ui.getAppearance().companions.observatory,'female');
+for (const theme of ['constructor','__proto__','unknown',null]) assert.equal(ui.normalizeAppearance({theme}).theme,'observatory');
+assert.equal(ui.normalizeAppearance({companions:{observatory:'invalid'},reduceMotion:'false'}).reduceMotion,false);
+const event=new Event('storage');
+Object.assign(event,{key:'campus.appearance.v1',newValue:JSON.stringify({theme:'star-notes',companions:{'star-notes':'male'}})});
+window.dispatchEvent(event);
+assert.equal(document.documentElement.dataset.artTheme,'star-notes');
+assert.equal(ui.getAppearance().companions['star-notes'],'male');
+environment(null,true);
+const fallback=await import('data:text/javascript;base64,'+Buffer.from(source+String.fromCharCode(10)+'// blocked storage case').toString('base64'));
+assert.equal(fallback.getAppearance().theme,'observatory');
+assert.equal(fallback.setAppearance({theme:'star-notes'}),false);
+assert.equal(document.documentElement.dataset.artTheme,'star-notes');
+console.log('appearance: validated preferences, theme-specific companions, storage persistence, cross-tab sync and blocked-storage fallback passed');

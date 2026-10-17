@@ -28,8 +28,58 @@
 .campus-overview .overview-stats a { flex-direction:row; align-items:baseline; gap:12px; }
 .campus-overview .overview-stats strong { font-size:25px; }
 .campus-overview .overview-details>summary { min-height:44px; padding:8px 0; cursor:pointer; font-size:13px; color:var(--link); }
+.campus-overview .overview-focus-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:8px 0 20px; }
+.campus-overview .overview-focus-heading p { font-size:12px; color:var(--muted); margin-bottom:4px; }
+.campus-overview .overview-focus-heading h2 { font-size:27px; font-weight:700; }
+.campus-overview .overview-attention { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:22px; }
+.campus-overview .overview-attention a { padding:12px 18px; border:1px solid var(--border); border-radius:10px; color:var(--text); background:var(--surface); }
+.campus-overview .overview-attention a:hover { border-color:var(--link); text-decoration:none; }
+.campus-overview .overview-attention span { display:block; font-size:13px; }
+.campus-overview .overview-attention strong { font-size:30px; font-variant-numeric:tabular-nums; line-height:1.5; }
+.campus-overview .overview-attention small { font-size:12px; font-weight:400; margin-left:8px; color:var(--muted); }
+.campus-overview .overview-attention [data-tone=urgent] { background:color-mix(in srgb,var(--nord13) 18%,var(--paper)); border-color:color-mix(in srgb,var(--nord13) 65%,var(--border)); }
+.campus-overview .overview-attention [data-tone=overdue] { background:color-mix(in srgb,var(--nord11) 7%,var(--paper)); }
+.campus-overview .overview-attention [data-tone=overdue] strong { color:color-mix(in srgb,var(--nord11) 65%,var(--text)); }
+.campus-overview .overview-priorities,html[data-ui-theme] .campus-overview .overview-priorities { grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr); gap:22px; padding:0; }
+.campus-overview .overview-priorities>section,html[data-ui-theme] .campus-overview .overview-priorities>section { padding:0; border:0; }
+.campus-overview .overview-priorities .overview-heading h3 { font-size:16px; }
+.campus-overview .overview-task { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 16px; border:1px solid var(--border); border-radius:9px; margin-bottom:8px; }
+.campus-overview .overview-task>div:first-child { min-width:0; }
+.campus-overview .overview-task[data-priority=urgent] { border-left:4px solid var(--nord12); background:color-mix(in srgb,var(--nord13) 8%,var(--paper)); }
+.campus-overview .overview-task h4 { margin:2px 0 0; font-size:16px; line-height:1.6; overflow-wrap:anywhere; }
+.campus-overview .overview-task h4 a { color:var(--text); }
+.campus-overview .overview-course { font-size:12px; color:var(--muted); }
+.campus-overview .deadline-stamp { min-width:145px; padding-left:16px; border-left:1px solid var(--border); }
+.campus-overview .overview-overdue { margin-top:20px; }
+.campus-overview .overview-overdue .overview-task { background:color-mix(in srgb,var(--nord11) 4%,var(--paper)); }
+.campus-overview .overview-overdue .deadline-stamp time { font-size:20px; }
+.campus-overview .overview-undated { display:block; padding:12px 0; font-size:13px; }
+.campus-overview .overview-empty { padding:16px; font-size:14px; color:var(--muted); background:var(--surface); border-radius:8px; }
+.campus-overview .overview-agenda-item { display:flex; gap:14px; align-items:flex-start; padding:11px 0; border-bottom:1px solid var(--border); color:var(--text); }
+.campus-overview .overview-agenda-item time { min-width:50px; font-size:15px; font-weight:700; color:var(--link); font-variant-numeric:tabular-nums; }
+.campus-overview .overview-agenda-item span { min-width:0; }
+.campus-overview .overview-agenda-item strong { font-size:14px; font-weight:600; overflow-wrap:anywhere; }
+.campus-overview .overview-agenda-item small { display:block; color:var(--muted); font-size:12px; }
+.campus-overview .overview-day+.overview-day { margin-top:16px; }
+.overview-card .source-toolbar { margin-bottom:4px; }
+.overview-card .source-toolbar [data-status] { font-size:12px; }
+@media (max-width:1050px) {
+  .campus-overview .overview-priorities,html[data-ui-theme] .campus-overview .overview-priorities { grid-template-columns:minmax(0,1fr); }
+}
 @media (max-width:600px) {
   .overview-card .module-mount { padding:10px 14px; }
   .campus-overview .overview-stats a { flex-direction:column; gap:0; padding-left:12px; }
   .campus-overview .overview-stats span { font-size:12px; }
+  .campus-overview .overview-focus-heading { align-items:flex-start; }
+  .campus-overview .overview-focus-heading h2 { font-size:23px; }
+  .campus-overview .overview-focus-heading .button { padding:8px 10px; font-size:12px; }
+  .campus-overview .overview-attention { gap:6px; }
+  .campus-overview .overview-attention a { padding:10px 8px; }
+  .campus-overview .overview-attention span { font-size:11px; }
+  .campus-overview .overview-attention strong { font-size:26px; }
+  .campus-overview .overview-attention small { margin-left:4px; }
+  .campus-overview .overview-task { flex-wrap:wrap; gap:10px; padding:12px; }
+  .campus-overview .overview-task>div:first-child { flex-basis:100%; }
+  .campus-overview .deadline-stamp { display:grid; grid-template-columns:auto 1fr; align-items:baseline; gap:2px 12px; padding-left:0; border-left:0; min-width:0; }
+  .campus-overview .deadline-stamp .deadline-date { grid-column:1/-1; }
 }

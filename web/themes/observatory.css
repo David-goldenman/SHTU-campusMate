@@ -1,0 +1,11 @@
+:root[data-art-theme="observatory"] {
+  --bg:#f4f5f8; --paper:#fffefa; --surface:#edf1f9; --text:#182a4c; --muted:#56627c;
+  --border:#d4dcec; --link:#2348ac; --accent:#5274ce;
+  --nord0:#182a4c; --nord1:#243e74; --nord2:#36528c; --nord3:#56627c;
+  --nord4:#d5deef; --nord5:#edf1f9; --nord6:#fffefa;
+  --nord7:#5871b3; --nord8:#b9cbfb; --nord9:#6885ce; --nord10:#3159b5;
+  --rail-bg:#192f68; --rail-text:#f5f6fc; --rail-muted:#c4d1f3;
+  --rail-active-bg:#f8f9ff; --rail-active-text:#1b3e9b; --rail-hover:#29437e;
+  --art-blue:#2348ac; --art-paper:#f8f7f2; --art-radius:6px;
+  --art-welcome-image:url('/assets/themes/assets/observatory-hero.webp');
+}
