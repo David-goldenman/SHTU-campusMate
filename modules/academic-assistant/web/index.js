@@ -1,5 +1,6 @@
 import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
+import {openingLine} from '/assets/opening-lines.js';
 import {sendOnEnter, fitComposer} from './composer.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
@@ -27,7 +28,7 @@ export async function mount(container, context) {
   try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
   catch (error) {cleanup();throw error;}
   if (context.signal.aborted) return cleanup;
-  const configured = ai.enabled && ai.key_saved;
+  const configured = ai.enabled;
   chatSession.bindOwner(history.owner);
   let activeId = history.conversation_id, archived = false, showArchived = false;
   const drafts = chatSession.drafts;
@@ -38,13 +39,14 @@ export async function mount(container, context) {
     <header class="study-header"><div class="study-heading"><button class="study-icon-button" data-history-toggle type="button" aria-label="历史对话" title="历史对话" aria-expanded="false">${icon('history')}</button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
       <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu"><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
+    <p class="study-opening-line" role="note" aria-label="开场白">${e(openingLine())}</p>
     <div class="study-layout"><aside class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><label class="visually-hidden" for="study-message">发消息</label>
           <textarea id="study-message" name="message" rows="2" maxlength="8000" placeholder="给学习助手发消息…" aria-describedby="study-send-hint" required></textarea>
           <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts"><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
-        </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 DeepSeek' : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p>
+        </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p>
       </div>
     </section>
     <aside class="study-profile" aria-label="我的学习档案" hidden><div class="study-profile-heading"><h3>学习档案</h3><button class="text-button" data-profile-close type="button">返回对话</button></div><p class="field-hint">保存在本机，供连续学习建议使用。</p><form data-profile-form><fieldset><label>专业<input name="major" maxlength="120"></label><label>入学年份<input name="cohort_year" type="number" min="2000" max="2100" placeholder="例如 2025"></label><label>未来方向<input name="direction" maxlength="1200" placeholder="例如机器人、芯片设计或继续深造"></label><label>每周可用学习时间（小时）<input name="weekly_hours" type="number" min="0" max="168" step="0.5"></label><label>补充偏好<textarea name="notes" rows="3" maxlength="4000" placeholder="学习节奏、关注领域或希望保留的背景"></textarea></label><div class="form-actions"><button class="button button-secondary" type="submit">保存档案</button><button class="text-button danger-text" data-clear-profile type="button">清除档案</button></div></fieldset></form><p class="field-hint" data-academic-records></p><p class="study-error danger-text" data-profile-error role="alert"></p></aside></div><span class="visually-hidden" data-announcement role="status"></span>`;

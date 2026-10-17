@@ -82,6 +82,7 @@ def main():
         return {**original_status(provider), 'username': 'synthetic-acceptance@example.invalid', 'account_revision': revision(provider),
                 'identity_verified': True, 'has_password': False, 'has_session': False, 'status': 'ready'}
     app.state.auth.get_status = status
+    app.state.auth.get_account_revision = revision
     def no_school_requests(*args, **kwargs):
         raise RuntimeError('Acceptance accounts cannot contact school services; use the seeded synthetic data.')
     app.state.auth.read_with_recovery = no_school_requests

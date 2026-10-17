@@ -17,6 +17,7 @@ TARGETS_TO_CHECK = (
     ("ids", "统一认证", IDS + "/login"),
     ("timetable", "教务系统", SERVICES["timetable"]),
     ("blackboard", "Blackboard", SERVICES["blackboard"]),
+    ("ecourse", "E 云课堂", SERVICES["ecourse"]),
     ("elrc", "虚拟教学社区 ELRC", "https://elrc.shanghaitech.edu.cn/learn/login/info"),
     ("coremail", "学校邮箱", PROVIDERS["coremail"]["url"]),
 )

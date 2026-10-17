@@ -17,6 +17,8 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat summary { cursor:pointer; list-style:none; }
 .academic-chat summary::-webkit-details-marker { display:none; }
 .academic-chat .study-header { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:76px; padding:12px 24px; flex:none; }
+.academic-chat .study-opening-line { display:none; flex:none; margin:0; padding:0 24px 8px 70px; color:var(--muted); font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.study-chat-card.module-focused .study-opening-line { display:block; }
 .academic-chat .study-heading { display:flex; align-items:center; gap:10px; min-width:0; }
 .academic-chat .study-heading>div { min-width:0; }
 .academic-chat .study-header h2 { max-width:480px; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; line-height:1.5; font-weight:600; }
@@ -139,6 +141,7 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
   .academic-chat .study-header h2 { max-width:240px; }
 }
 @media (max-width:850px) {
+  .study-chat-card.module-focused .study-opening-line { display:none; }
   .shell:has(.study-chat-card.module-focused)>.topbar { display:flex; min-height:56px; padding-block:6px; }
   .academic-chat .study-header { min-height:64px; padding:8px 16px; }
 }

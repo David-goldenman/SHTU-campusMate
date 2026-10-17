@@ -81,7 +81,7 @@ class Notifications:
             ai = self.context.ai.settings()
             imported = self.context.store.read('imports:' + owner, [])
             items = sorted([*imported, *saved.get('items', [])], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
-            return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"] and ai["key_saved"])}
+            return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"])}
 
     async def reconcile_assignments(self):
         owner = account_revision(self.context)
@@ -220,7 +220,7 @@ class Notifications:
             except HTTPException:
                 pass
             ai = self.context.ai.settings()
-            if self.settings()["auto_generate"] and ai["enabled"] and ai["key_saved"]:
+            if self.settings()["auto_generate"] and ai["enabled"]:
                 try:
                     self.generate()
                 except HTTPException:

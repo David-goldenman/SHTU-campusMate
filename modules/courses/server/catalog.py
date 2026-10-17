@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from backend.services.campus import KINDS, semester
 from backend.services.campus.data import digest
 
-SOURCES = {"timetable": "ids", "blackboard": "ids", "gradescope": "gradescope", "piazza": "piazza", "elrc": "ids", "mail": "coremail"}
+SOURCES = {"timetable": "ids", "blackboard": "ids", "gradescope": "gradescope", "piazza": "piazza", "elrc": "ids", "ecourse": "ids", "mail": "coremail"}
 
 
 def current_semester(snapshots):
@@ -93,7 +93,7 @@ def query(data, collection, *, course_id=None, current=False, pending=False, sou
     else:
         values = [item for item in data[collection] if (not course_id and not current or item.get("course_id") in members) and (not source or item["source"] == source)]
     if pending:
-        values = [item for item in values if item["source"] in {"gradescope", "blackboard"} and item.get("actionable") is True and item.get("submitted") is False and item.get('exempt') is not True and item.get('submission_status') in {None, 'not_submitted', 'draft'}]
+        values = [item for item in values if item["source"] in {"gradescope", "blackboard", "ecourse"} and item.get("actionable") is True and item.get("submitted") is False and item.get('exempt') is not True and item.get('submission_status') in {None, 'not_submitted', 'draft'}]
     if q:
         text = q.casefold()
         values = [item for item in values if text in " ".join(str(item.get(key) or "") for key in ("title", "code", "body_text", "sender")).casefold()]

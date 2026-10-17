@@ -83,13 +83,14 @@ def main():
         return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"content": content}}], "usage": {"total_tokens": 12}})
 
     service = AIService(vault, store, transport=httpx.MockTransport(remote))
-    assert service.settings() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
+    assert {key: service.settings()[key] for key in ('enabled', 'model', 'key_saved')} == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
     try:
         service.generate("总结资料")
         raise AssertionError("Unconfigured AI must stop")
     except HTTPException as error:
         assert error.status_code == 409
-    configured = service.save_settings(AISettings(enabled=True, api_key="synthetic-ai-check-key"))
+    configured = service.save_settings(AISettings(api_key="synthetic-ai-check-key"))
+    assert configured['enabled'], 'Saving a key enables AI by default'
     assert configured["key_saved"] and "synthetic" not in str(configured)
     assert "synthetic" not in str(store.values)
     answer = service.generate("总结资料", "调用方选择的正文")
