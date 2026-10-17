@@ -106,12 +106,23 @@ class Task:
         self.check()
         # A model-selected excerpt cannot remove the user's negation or condition.
         message = self.message.strip()
-        affirmative = re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', message)
+        affirmative = r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)'
+        consents = [part for part in re.split(r'[，,。；;\n]', body.quote) for _ in re.finditer(affirmative, part)]
         uncertain = re.search(r'(?:不|没|未|别|勿)[^，,。；;\n]{0,12}(?:参加|加入|添加|确认|决定)|不要|不用|不必|取消|考虑|如果|假如|假设|要是|的话|是否|能否|怎么|怎样|如何|什么|吗|[?？“”「」"\']', message)
-        if body.quote not in self.message or not affirmative or uncertain:
+        if body.quote not in self.message or len(consents) != 1 or uncertain:
             raise HTTPException(422, '需要用户本次明确表达参加或加入日程的意愿。')
-        if not any(source.get('proposal_id') == body.proposal_id for source in self.references.values()):
+        proposals = {source['proposal_id'] for source in self.references.values() if source.get('proposal_id')}
+        if body.proposal_id not in proposals:
             raise HTTPException(422, '请先查询带有这条活动建议的通知。')
+        quoted = re.sub(r'\s+', '', consents[0])
+        def matches_target(target):
+            # Bind the title to the consent verb, not another mention in the same clause.
+            return re.search(r'参加《?' + target + r'》?(?=$|[！!]|并|和|以及)|(?:把|将)《?' + target + r'》?(?:加入|添加)(?:到|至)?(?:我的)?(?:时间表|日程)', quoted)
+        named = {source['proposal_id'] for source in self.references.values()
+                 if source.get('proposal_id') and source.get('title', '').strip() and matches_target(re.escape(re.sub(r'\s+', '', source['title'])))}
+        deictic = matches_target(r'(?:这|该)(?:个|场|项|次)?(?:活动|讲座|报告|会议|安排)')
+        if named != {body.proposal_id} and (named or len(proposals) != 1 or not deictic):
+            raise HTTPException(422, '请明确说出要参加的活动标题，或在对应通知中点击参加。')
         response = await self.context.api('campus-agent', '/proposals/' + body.proposal_id + '/accept', method='POST')
         self.check()
         if response.status_code != 200:
