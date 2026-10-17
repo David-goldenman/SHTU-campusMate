@@ -11,6 +11,7 @@ from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 from backend.services.campus import SourceError, timestamp
 from backend.services.campus.analysis import account_revision, citations
 from backend.services.campus.data import digest
+from .resolution import reconcile
 
 
 async def build_context(context, course_id=None, context_ids=None):
@@ -82,6 +83,27 @@ class Notifications:
             items = sorted([*imported, *saved.get('items', [])], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
             return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"] and ai["key_saved"])}
 
+    async def reconcile_assignments(self):
+        owner = account_revision(self.context)
+        try:
+            response = await self.context.api('assignments', '/snapshot')
+        except HTTPException:
+            return
+        if response.status_code != 200 or self.stopping.is_set():
+            return
+        assignments = {item['id']: item for item in response.json().get('data', {}).get('assignments', [])}
+        now = datetime.now(timezone.utc).isoformat()
+        with self.state_lock:
+            if owner != account_revision(self.context) or self.stopping.is_set():
+                return
+            key = 'imports:' + owner
+            imported = self.context.store.read(key, [])
+            if reconcile(imported, assignments, now):
+                self.context.store.write(key, imported)
+            saved = self.context.store.read('notifications', {})
+            if saved.get('owner') == owner and reconcile(saved.get('items', []), assignments, now):
+                self.context.store.write('notifications', saved)
+
     def import_notice(self, body):
         with self.state_lock:
             owner = account_revision(self.context)
@@ -92,6 +114,8 @@ class Notifications:
             old = next((item for item in items if item['id'] == body.id), None)
             value = {**body.model_dump(mode='json', exclude={'account_revision'}), 'read': old.get('read', False) if old and old['source_revision'] == body.source_revision else False,
                      'created_at': old['created_at'] if old else datetime.now(timezone.utc).isoformat()}
+            if old and old['source_revision'] == body.source_revision:
+                value.update({key: old[key] for key in ('auto_read', 'read_source') if key in old})
             items = [value, *(item for item in items if item['id'] != body.id)]
             self.context.store.write(key, items[:300])
         return value
@@ -149,6 +173,8 @@ class Notifications:
                     raise SourceError("AI 返回了无法识别的事项时间，已保留上次结果。")
                 item = notice.model_dump(exclude={"citation_ids", "event_at"})
                 items.append({"id": key, **item, "event_at": event_at, "citations": references, "source_revision": revision, "read": old.get(key, {}).get("read", False) if old.get(key, {}).get("source_revision") == revision else False, "created_at": generated})
+                if old.get(key, {}).get('source_revision') == revision:
+                    items[-1].update({field: old[key][field] for field in ('auto_read', 'read_source') if field in old[key]})
             items.sort(key=lambda item: {"urgent": 0, "important": 1, "normal": 2}[item["importance"]])
             self.context.store.write("notifications", {"owner": selected["account_revision"], "fingerprint": fingerprint, "items": items, "generated_at": generated, "context": selected["context"]})
             self.context.store.delete("error")
@@ -161,6 +187,8 @@ class Notifications:
             imported = next((item for item in items if item['id'] == notice_id), None)
             if imported:
                 imported['read'] = read
+                imported['read_source'] = 'manual'
+                imported.pop('auto_read', None)
                 self.context.store.write(key, items)
                 return {'saved': True}
             saved = self.context.store.read("notifications", {})
@@ -170,6 +198,8 @@ class Notifications:
             if item is None:
                 raise HTTPException(404, "通知不存在。")
             item["read"] = read
+            item['read_source'] = 'manual'
+            item.pop('auto_read', None)
             self.context.store.write("notifications", saved)
         return {"saved": True}
 
@@ -185,6 +215,10 @@ class Notifications:
             self.wake.clear()
             if self.stopping.is_set():
                 break
+            try:
+                asyncio.run(self.reconcile_assignments())
+            except HTTPException:
+                pass
             ai = self.context.ai.settings()
             if self.settings()["auto_generate"] and ai["enabled"] and ai["key_saved"]:
                 try:

@@ -89,11 +89,13 @@ def check(root):
         def __exit__(self, *args): self.close()
         def close(self): closed.set()
         def run(self, *args, **kwargs):
-            assert closed.wait(2), 'The total deadline must stop the runtime without a user event'
+            assert closed.wait(5), 'The total deadline must stop the runtime without a user event'
             raise TimeoutError()
 
     harness = Harness(SimpleNamespace(data=root, use_plugins=use_plugins))
-    harness.run_timeout = .05
+    # Leave room for workspace setup and the platform's executable lookup, so
+    # this case reaches the runtime whose total-deadline cleanup it exercises.
+    harness.run_timeout = 1
     with patch('backend.services.ai.harness.prepare'), patch('backend.services.ai.harness.resolve_bundled_launch_args', return_value=[sys.executable]), patch('backend.services.ai.harness.DeepSeekHarness', Runtime):
         try:
             harness.run('synthetic', None, ['synthetic'], 'synthetic', 'synthetic')
