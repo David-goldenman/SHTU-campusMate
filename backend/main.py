@@ -3,49 +3,58 @@ import asyncio
 import json
 import os
 import secrets
+import sqlite3
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Literal
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Security
+from fastapi import FastAPI, Request, Security
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .core.config import VERSION, Settings
 from .core.modules import ModuleManager
 from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
 from .core.vault import Vault
+from .core.backups import Backups
+from .core.errors import PublicError, catch_errors, error_response, file_error, http_error, storage_error
 from .services.ai import AIService, create_router as ai_router
 from .services.ai.harness import Harness
 from .services.auth import AuthService, LoginRequired, VerificationRequired, create_router as auth_router
 
 
 async def login_error(request, error):
-    return JSONResponse({"detail": str(error)}, status_code=409 if isinstance(error, VerificationRequired) else 401)
+    verification = isinstance(error, VerificationRequired)
+    return error_response(request, 409 if verification else 401, str(error),
+                          code='verification_required' if verification else 'login_required',
+                          action='请到设置 → 账号连接，完成官方窗口验证。' if verification else None)
 
 
 async def network_error(request, error):
-    return JSONResponse({"detail": "无法连接服务，请检查网络后重试。"}, status_code=502)
+    timeout = isinstance(error, httpx.TimeoutException)
+    return error_response(request, 504 if timeout else 502, '来源服务响应超时。' if timeout else '无法连接来源服务。', error=error)
 
 
 async def runtime_error(request, error):
-    return JSONResponse({"detail": str(error)}, status_code=400)
+    return error_response(request, 400,
+                          str(error) if isinstance(error, PublicError) else '服务未能完成操作，请检查本地设置和来源连接。', error=error)
 
 
 async def argument_error(request, error):
-    return JSONResponse({"detail": "参数格式与服务要求不一致。"}, status_code=400)
+    return error_response(request, 400, '参数格式与服务要求不一致。', error=error)
 
 
 async def validation_error(request, error):
-    return JSONResponse({"detail": [{key: item[key] for key in ("loc", "msg", "type")} for item in error.errors()]}, status_code=422)
+    return error_response(request, 422, [{key: item[key] for key in ('loc', 'msg', 'type')} for item in error.errors()])
 
 
 class ModuleState(BaseModel):
@@ -57,14 +66,23 @@ class ClearData(BaseModel):
     confirmation: Literal["CLEAR"]
 
 
+class RestoreBackup(BaseModel):
+    confirmation: Literal['RESTORE']
+
+
+class DeleteBackup(BaseModel):
+    confirmation: Literal['DELETE_BACKUP']
+
+
 def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES, data_dir=DATA):
     store = store or Store()
     vault = vault or Vault()
     active_port = Settings(port=active_port or store.read("settings", {"port": 16666})["port"]).port
     csrf = secrets.token_urlsafe(32)
     auth, ai = AuthService(vault, store, runtime_dir=Path(data_dir) / 'runtime'), AIService(vault, store)
-    errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error}
+    errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error, StarletteHTTPException: http_error, sqlite3.Error: storage_error, OSError: file_error}
     modules = ModuleManager(store, vault, auth, ai, root=modules_root, data=data_dir, exception_handlers=errors)
+    backups = Backups(store, data_dir)
     ai.harness = Harness(modules)
 
     @asynccontextmanager
@@ -84,6 +102,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                   dependencies=[Security(APIKeyHeader(name="X-Framework-Token", auto_error=False, description="写操作填写 GET /api/v1/bootstrap 返回的 csrf_token。"))])
     app.state.modules, app.state.auth, app.state.ai = modules, auth, ai
     app.state.store, app.state.vault, app.state.port = store, vault, active_port
+    app.state.backups = backups
     app.state.launch_id = secrets.token_hex(16)
 
     @app.middleware("http")
@@ -91,12 +110,12 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
         hosts = {f"127.0.0.1:{active_port}", f"localhost:{active_port}"}
         origins = {"http://" + host for host in hosts}
         if request.headers.get("host") not in hosts:
-            return JSONResponse({"detail": "仅允许从本机地址访问。"}, status_code=403)
+            return error_response(request, 403, '仅允许从本机地址访问。')
         if request.headers.get("origin") and request.headers["origin"] not in origins or request.headers.get("sec-fetch-site") == "cross-site":
-            return JSONResponse({"detail": "请求来源不匹配。"}, status_code=403)
+            return error_response(request, 403, '请求来源不匹配。')
         if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf) and not modules.authorize_write(request):
-            return JSONResponse({"detail": "请刷新工作台后重试。"}, status_code=403)
-        response = await call_next(request)
+            return error_response(request, 403, '请刷新工作台后重试。')
+        response = await catch_errors(request, call_next)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -140,9 +159,12 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.post("/api/v1/data/clear", tags=["设置"], summary="清除项目本地凭据或模块数据")
     def clear_data(body: ClearData):
+        backup = None
         with modules.lifecycle_lock:
             try:
                 if body.scope in {"modules", "all"}:
+                    modules.close()
+                    backup = backups.create('before_clear')
                     modules.clear_data()
                 else:
                     modules.close()
@@ -154,7 +176,37 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                     store.clear()
             finally:
                 modules.reload()
-        return {"cleared": body.scope}
+        return {"cleared": body.scope, 'backup': backup}
+
+    @app.get('/api/v1/data/backups', tags=['设置'], summary='读取本机模块数据备份')
+    def list_backups():
+        with modules.lifecycle_lock:
+            return {'backups': backups.list()}
+
+    @app.post('/api/v1/data/backups', tags=['设置'], summary='创建模块数据备份')
+    def create_backup():
+        with modules.lifecycle_lock:
+            try:
+                modules.close()
+                return {'backup': backups.create()}
+            finally:
+                modules.reload()
+
+    @app.post('/api/v1/data/backups/{backup_id}/restore', tags=['设置'], summary='恢复模块数据并保留当前备份')
+    def restore_backup(backup_id: str, body: RestoreBackup):
+        with modules.lifecycle_lock:
+            backups.validate(backup_id)
+            try:
+                modules.close()
+                return backups.restore(backup_id)
+            finally:
+                modules.reload()
+
+    @app.delete('/api/v1/data/backups/{backup_id}', tags=['设置'], summary='删除指定备份')
+    def delete_backup(backup_id: str, body: DeleteBackup):
+        with modules.lifecycle_lock:
+            backups.delete(backup_id)
+        return {'deleted': backup_id}
 
     @app.get("/module-assets/{module_id}/{revision}/web/{path:path}", include_in_schema=False)
     def module_asset(module_id: str, revision: str, path: str):

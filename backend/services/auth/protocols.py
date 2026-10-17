@@ -213,7 +213,7 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
         if result.get("code") in {"FA_UNAUTHORIZED", "FA_INVALID_SESSION", "FA_INVALID_TEMP_SESSION", "FA_SECURITY"}:
             raise LoginRequired("学校邮箱会话已到期，请重新验证。")
         if result.get("code") != "S_OK":
-            raise RuntimeError("学校邮箱未确认登录状态，请重新验证。")
+            raise LoginRequired("学校邮箱未确认登录状态，请重新验证。")
         profile = result.get("var") or {}
         if isinstance(profile, dict):
             subject = profile.get("uid") or profile.get("email") or profile.get("account")

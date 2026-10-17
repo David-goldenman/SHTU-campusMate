@@ -4,6 +4,7 @@ import subprocess
 import time
 
 from ...core.paths import PROJECT, RUNTIME
+from ...core.errors import PublicError
 from ...core.vault import windows_path, windows_tool
 from .protocols import PROVIDERS
 
@@ -25,7 +26,7 @@ class VerificationBrowser:
         payload = {"action": action, "profile": windows_path(self._directory(provider)), **options}
         result = subprocess.run(self._command(), input=json.dumps(payload), text=True, encoding="utf-8", capture_output=True, timeout=40)
         if result.returncode:
-            raise RuntimeError("验证窗口尚未启动或已经关闭，请重新打开。")
+            raise PublicError("验证窗口尚未启动或已经关闭，请重新打开。")
         return json.loads(result.stdout)
 
     def open(self, provider, url, *, device_setup=False):
@@ -45,7 +46,7 @@ class VerificationBrowser:
         line = process.stdout.readline()
         if not line:
             process.wait(timeout=5)
-            raise RuntimeError("验证窗口未能启动，请检查 Windows Node 与 Edge。")
+            raise PublicError("验证窗口未能启动，请检查 Windows Node 与 Edge。")
         return json.loads(line)
 
     def state(self, provider):
@@ -74,7 +75,7 @@ class VerificationBrowser:
                     break
                 except OSError:
                     if attempt == 19:
-                        raise RuntimeError("登录窗口仍占用账号资料，请关闭窗口后重试。") from None
+                        raise PublicError("登录窗口仍占用账号资料，请关闭窗口后重试。") from None
                     time.sleep(0.1)
 
     def close_all(self):

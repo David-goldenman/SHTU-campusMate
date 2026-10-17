@@ -169,6 +169,8 @@ class Workspace:
                 self.wake.clear()
         self.thread = threading.Thread(target=run, name='study-reminders', daemon=True)
         self.thread.start()
+        if getattr(self.context, 'runtime', None):
+            self.context.runtime.watch('学习提醒', self.thread)
 
     def close(self):
         self.stopping.set()

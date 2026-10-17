@@ -211,7 +211,9 @@ def start(context):
                 _calendar.refresh(metadata)
             except HTTPException:
                 pass
-        _source.executor.submit(update)
+        pending = _source.executor.submit(update)
+        if getattr(context, 'runtime', None):
+            context.runtime.watch('校历更新', pending)
 
 
 def stop(context):
