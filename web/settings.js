@@ -1,4 +1,5 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
+import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
 import {appearancePanel, bindAppearance} from './themes/appearance.js';
 
@@ -28,11 +29,15 @@ function runtimeInfo(runtime) {
   if (!runtime) return '';
   const last = runtime.last_request, error = runtime.last_error;
   const workers = {running:'运行中',stopped:'已退出',idle:'已结束',cancelled:'已取消',error:'失败'};
-  return `<div class="module-runtime"><p>进行中请求 ${runtime.active_requests} · 等待调用 ${runtime.pending_calls}</p><p>最近接口成功：${escape(localTime(runtime.last_success_at))}${last ? ' · 最近请求 ' + last.status + ' / ' + last.duration_ms + ' ms' : ''}</p>${runtime.workers.map(worker => `<p class="${['stopped','error'].includes(worker.status) ? 'danger-text' : ''}">${worker.kind === 'thread' ? '后台线程' : '后台任务'} · ${escape(worker.name)}：${escape(workers[worker.status])}</p>`).join('')}${error ? `<p class="danger-text">最近失败：${escape(localTime(error.at))} · HTTP ${error.status}${error.request_id ? ' · 错误编号 ' + escape(error.request_id) : ''}</p>` : ''}</div>`;
+  return `<details class="module-runtime"><summary class="${error ? 'danger-text' : ''}">运行详情${error ? ' · 最近有失败' : ''}</summary><div><p>进行中请求 ${runtime.active_requests} · 等待调用 ${runtime.pending_calls}</p><p>最近接口成功：${escape(localTime(runtime.last_success_at))}${last ? ' · 最近请求 ' + last.status + ' / ' + last.duration_ms + ' ms' : ''}</p>${runtime.workers.map(worker => `<p class="${['stopped','error'].includes(worker.status) ? 'danger-text' : ''}">${worker.kind === 'thread' ? '后台线程' : '后台任务'} · ${escape(worker.name)}：${escape(workers[worker.status])}</p>`).join('')}${error ? `<p class="danger-text">最近失败：${escape(localTime(error.at))} · HTTP ${error.status}${error.request_id ? ' · 错误编号 ' + escape(error.request_id) : ''}</p>` : ''}</div></details>`;
 }
 
 function moduleManager(modules, labels) {
-  return '<section class="panel settings-section" id="module-manager"><div class="section-heading"><div><h2>模块管理</h2><p>状态读取于 ' + escape(localTime(new Date().toISOString())) + '。同步结果请在对应页面查看。</p></div><div class="form-actions"><button class="button button-secondary" id="settings-status" type="button">读取运行状态</button><button class="button button-secondary" id="settings-reload" type="button">重新加载模块</button></div></div>' + (modules.length ? '<div class="module-list">' + modules.map(module => '<article class="module-row"><div class="module-info"><div><h3>' + escape(module.name) + '</h3><span class="module-version">v' + escape(module.version) + '</span><span class="module-status status-' + escape(module.status) + '">' + moduleStatuses[module.status] + '</span></div><p><a href="#' + escape(module.category) + '">' + escape(labels.get(module.category) || '') + '</a><span>' + escape(module.id) + '</span>' + (module.harness ? '<span>AI 插件</span>' : !module.frontend_url && module.status === 'ready' ? '<span>后台模块</span>' : '') + '</p>' + (module.error ? '<p class="danger-text">' + escape(module.error) + '</p>' : '') + runtimeInfo(module.runtime) + '</div><label class="module-toggle"><input type="checkbox" data-module-toggle="' + escape(module.id) + '" aria-label="' + escape(module.name) + '启用状态" ' + (module.enabled ? 'checked' : '') + '><span>启用</span></label></article>').join('') + '</div>' : empty('模块目录已准备就绪','添加模块后，刷新列表即可在这里启用和管理。')) + '</section>';
+  return `<section class="panel settings-section settings-compact" id="module-manager">
+    <div class="section-heading"><div><h2>模块与插件</h2><p>管理工作台功能及 AI 插件。</p></div><div class="form-actions"><button class="button button-secondary" id="settings-status" type="button">刷新状态</button><button class="button button-secondary" id="settings-reload" type="button">重新加载</button></div></div>
+    ${modules.length ? '<div class="module-list">' + modules.map(module => `<article class="module-row"><div class="module-info"><div><h3>${escape(module.name)}</h3><span class="module-status status-${escape(module.status)}">${moduleStatuses[module.status]}</span></div><p><span>${escape(module.id)} · v${escape(module.version)}</span>${module.harness ? '<span>AI 插件</span>' : !module.frontend_url && module.status === 'ready' ? '<span>后台模块</span>' : ''}${module.frontend_url ? `<a href="#${escape(module.category)}">打开${escape(labels.get(module.category) || '页面')}</a>` : ''}</p>${module.error ? `<p class="danger-text">${escape(module.error)}</p>` : ''}${runtimeInfo(module.runtime)}</div><label class="settings-switch"><input type="checkbox" role="switch" data-module-toggle="${escape(module.id)}" aria-label="${escape(module.name)}启用状态" ${module.enabled ? 'checked' : ''}><span aria-hidden="true"></span></label></article>`).join('') + '</div>' : empty('模块目录已准备就绪','添加模块后，刷新列表即可在这里启用和管理。')}
+    <p class="settings-updated">状态更新于 ${escape(localTime(new Date().toISOString()))}</p>
+  </section>`;
 }
 
 export async function mount(container, context) {
@@ -55,7 +60,7 @@ export async function mount(container, context) {
     '<section class="panel settings-section"><h2>本地数据</h2><p class="field-hint">保存位置 <code>' + escape(settings.storage.directory) + '</code><br>加密方式 ' + escape(settings.storage.encryption) + '</p><form id="data-form"><label>清除范围<select name="scope"><option value="credentials">账号、登录状态和 API Key</option><option value="modules">模块本地数据</option><option value="all">当前数据（保留备份）</option></select></label><p class="field-hint" id="clear-description"></p><button class="button button-danger" type="submit">清除所选数据</button></form></section>' +
     '<section class="panel settings-section backup-section"><div class="section-heading"><h2>备份与恢复</h2><button class="button button-secondary" id="create-backup" type="button">创建备份</button></div><p class="field-hint">备份模块数据和文件，保存在本机 .private/backups。账号、登录状态和 API Key 不包含在内，恢复后仍使用当前账号。清除或恢复模块数据前会自动备份；备份会保留到你手动删除。</p><p class="field-hint">创建或恢复时会短暂重新加载模块。请先结束正在执行的任务。</p><div id="backup-list" role="status">正在读取备份…</div><button class="text-button" id="refresh-backups" type="button">重新读取列表</button></section></div>' +
     '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>已保存的连接会在读取时复用。首次连接请使用官方窗口，或展开账号密码登录。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
-    '<section class="panel settings-section"><h2>统一 AI 服务</h2><p class="field-hint">各模块共用这个服务。API Key 加密保存在本机。</p><form id="ai-form" class="ai-form"><label>DeepSeek API Key<input name="api_key" type="password" autocomplete="off" placeholder="' + (ai.key_saved ? '已保存，填写可更新' : '填写 API Key') + '"></label><label>模型<select name="model">' + ['deepseek-flash','deepseek-v4-pro'].map(model => '<option value="' + model + '" ' + (ai.model === model ? 'selected' : '') + '>' + model + '</option>').join('') + '</select></label><label class="checkbox-label"><input name="enabled" type="checkbox" ' + (ai.enabled ? 'checked' : '') + '>启用统一 AI 服务</label><div class="form-actions"><button class="button button-primary" type="submit">保存 AI 设置</button>' + (ai.key_saved ? '<button class="text-button danger-text" id="delete-ai-key" type="button">删除 API Key</button>' : '') + '</div></form></section>';
+    aiSettingsPanel(ai);
 
   bindAppearance(container.querySelector('.appearance-panel'),context.signal);
   const network = bindNetwork(container.querySelector('#network-panel'),context.signal);
@@ -259,23 +264,7 @@ export async function mount(container, context) {
     context.signal.addEventListener('abort',() => clearTimeout(deviceTimer),{once:true});
   });
 
-  const aiForm = container.querySelector('#ai-form');
-  aiForm.onsubmit = safeAction(aiForm.querySelector('[type=submit]'),async () => {
-    const fields = new FormData(aiForm);
-    const body = {enabled:fields.has('enabled'),model:fields.get('model')};
-    if (fields.get('api_key')) body.api_key = fields.get('api_key');
-    await request('/ai/settings',{method:'PUT',body});
-    aiForm.elements.api_key.value = '';
-    toast('AI 设置已保存。');
-    await context.refresh();
-  });
-  const deleteKey = container.querySelector('#delete-ai-key');
-  if (deleteKey) deleteKey.onclick = safeAction(deleteKey,async () => {
-    if (!await confirmDialog('删除 API Key','删除已保存的 API Key 并停用统一 AI 服务。','删除密钥')) return;
-    await request('/ai/settings',{method:'PUT',body:{enabled:false,model:aiForm.elements.model.value,delete_key:true}});
-    toast('API Key 已删除。');
-    await context.refresh();
-  });
+  mountAISettings(container.querySelector('.ai-settings'),ai,{request,refresh:context.refresh,signal:context.signal});
 
   const clearDescriptions = {
     credentials:'删除所有账号、登录状态和 API Key，并关闭登录窗口。',

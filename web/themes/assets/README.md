@@ -10,6 +10,6 @@ observatory-female.webp / observatory-male.webp：用户确认的 A 组男女插
 
 star-notes-female.webp / star-notes-male.webp：用户确认的 B 组男女插画，女版为圆领上衣版本。
 
-人物原图保存在 E:/AAAstudy/黑客松/UI设计探索/20261017-观星人物男女版本。网页图片只做等比例缩小与 WebP 编码，人物设计和构图保持原样。
+人物采用已确认的男女版本。网页图片只做等比例缩小与 WebP 编码，人物设计和构图保持原样。
 
 observatory-mark.svg 为本项目以几何线条绘制的天球标记。

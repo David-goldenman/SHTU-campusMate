@@ -349,7 +349,7 @@ class CampusAgent:
         state.update(pending=pending, changes_pending=changed)
         self.context.store.write(state_key, state)
         ai = self.context.ai.settings()
-        if not ai['enabled'] or not ai['key_saved']:
+        if not ai['enabled']:
             state.update(summary='资料已检查；配置 AI 后可进行综合整理。', error=None)
         elif not self.origin:
             state.update(summary='资料状态已检查，等待学习服务就绪。', error=None)

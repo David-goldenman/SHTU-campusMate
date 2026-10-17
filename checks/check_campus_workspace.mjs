@@ -12,8 +12,8 @@ function fixture(modules,categories){
  const original=window.fetch.bind(window),state=window.workspaceCheck={unexpected:[],notices:[],prefs:{degree:'bachelor',year:null,major:'',courses:[],shape:'unknown',mental:'unknown',interests:{},requirements:''},proposals:[{id:'p1',state:'pending',event:{title:'合成科研讲座',starts_at:'2030-10-18T14:00:00+08:00',location:'教学楼'},quote:'讲座时间：2030年10月18日 14:00。'}]};
  const sources=[{id:'bb:1',source:'blackboard',title:'合成课程',code:'CS100',term:'2026-fall',url:'https://example.edu/bb'},{id:'gs:1',source:'gradescope',title:'Synthetic Course',code:'CS100',term:'2026-fall',url:'https://example.edu/gs'}];
  sources[0].grades=[{title:'合成测试',score:88,max_score:100}];
- const course={id:'course:1',title:'合成课程',code:'CS100',term:'2026-fall',current:true,sources};
- const data={courses:[course],assignments:[{id:'a:1',title:'合成作业',source:'gradescope',submitted:false,due_at:'2030-10-18T23:59:00+08:00',url:'https://example.edu/assignment'}],materials:[{id:'m:1',title:'合成讲义.pdf',source:'blackboard',body_text:'复习向量与矩阵。',url:'https://example.edu/slides'}],announcements:[],posts:[],lessons:[],timetable:[],issues:[],metadata:{current_semester:'2026-fall'}};
+ const course={id:'course:1',title:'合成课程',code:'CS100',term:'2026-fall',current:true,course_ids:['bb:1','gs:1'],sources};
+ const data={courses:[course],assignments:[{id:'a:1',course_id:'gs:1',title:'合成作业',source:'gradescope',submitted:false,due_at:'2030-10-18T23:59:00+08:00',url:'https://example.edu/assignment'}],materials:[{id:'m:1',course_id:'bb:1',title:'合成讲义.pdf',source:'blackboard',body_text:'复习向量与矩阵。',url:'https://example.edu/slides'}],announcements:[],posts:[],lessons:[],timetable:[],issues:[],metadata:{current_semester:'2026-fall'}};
  const messages=[{id:'mail:1',source:'mail',title:'合成活动通知',sender:'教学服务',received_at:'2026-10-17T10:00:00+08:00',unread:true,url:'https://example.edu/mail',classification:{bucket:'recommend',category:'科研讲座',by:'agent',summary:'活动时间与研究主题摘要。',reason:'符合已保存的兴趣。',evidence:[{source:'body_text',quote:'合成正文第一段'}]}}];
  const agent=()=>({available:true,owner:'synthetic',enabled:true,running:false,last_checked:'2026-10-17T10:00:00Z',summary:'合成检查完成',notices:state.notices,proposals:state.proposals});
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
@@ -26,6 +26,7 @@ function fixture(modules,categories){
   if(path==='/modules/mail/snapshot')return json({status:'ready',data:{messages,issues:[]}});
   if(path==='/modules/mail/intelligence')return json({messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
   if(path==='/modules/mail/message')return json({body_html:'<p>合成正文第一段<br>补充说明。</p><p>第二段单独说明活动安排。</p><ul><li>准备材料</li><li>阅读讲义</li></ul><table><tr><th>时间</th><th>地点</th></tr><tr><td>14:00</td><td>教学楼</td></tr></table>'});
+  if(path==='/modules/mail/digests')return json({start:'2026-10-17',end:'2026-10-17',counts:{focus:0,recommend:1,digest:0,filter:0},coverage:{included_count:1,cached_count:1,inbox_total:1},entries:messages.map(item=>({...item,bucket:item.classification.bucket,category:item.classification.category,summary:item.classification.summary})),report:method==='POST'?{overview:'合成日总结：有一项科研活动。',generated_at:'2026-10-17T12:00:00Z',highlights:[{message_id:'mail:1',summary:'查看科研讲座安排。'}]}:null});
   if(path==='/modules/mail/preferences'){state.prefs=JSON.parse(options.body);return json({saved:true});}
   if(path==='/modules/mail/labels'){const value=JSON.parse(options.body);Object.assign(messages[0].classification,{category:value.label,bucket:value.bucket,by:'manual'});return json({saved:true});}
   if(path==='/modules/courses/snapshot')return json({status:'ready',data});
@@ -48,7 +49,7 @@ try{
  await command('Page.enable');await command('Runtime.enable');await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)});`});
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await command('Page.navigate',{url:base+'/#mail'});
- await evaluate(`window.waitFor=async condition=>{for(let i=0;i<180;i++){if(condition())return;await new Promise(r=>setTimeout(r,60));}throw new Error('Workspace UI timed out');};waitFor(()=>document.querySelector('[data-message]'))`);
+ await evaluate(`window.waitFor=async condition=>{for(let i=0;i<180;i++){if(condition())return;await new Promise(r=>setTimeout(r,60));}throw new Error('Workspace UI timed out');};waitFor(()=>document.querySelector('[data-bucket=focus]'))`);
  assert.equal(await evaluate(`document.querySelector('[data-bucket=focus]').getAttribute('aria-pressed')`),'true','Mail starts with priority messages');
  assert.equal(await evaluate(`document.querySelectorAll('[data-message]').length`),0,'Recommendations remain in their own level');
  await evaluate(`document.querySelector('[data-bucket=recommend]').click();document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
@@ -59,10 +60,17 @@ try{
  await evaluate(`document.querySelector('[data-preferences]').click();document.querySelector('[name=requirements]').value='关注集成电路相关讲座，保留完整的筛选要求。';document.querySelector('.mail-preferences').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
  assert.equal(await evaluate(`workspaceCheck.prefs.requirements`),'关注集成电路相关讲座，保留完整的筛选要求。');
  await evaluate(`document.querySelector('[data-label]').click();document.querySelector('dialog [name=bucket]').value='focus';document.querySelector('dialog form').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
+ await evaluate(`document.querySelector('[data-bucket=focus]').click();waitFor(()=>document.querySelector('.mail-tag')?.textContent.includes('手动'))`);
  assert(await evaluate(`document.querySelector('.mail-tag').textContent.includes('手动')`));
+ await evaluate(`document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
  await writeFile(resolve('.codex/tmp/workspace-mail-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+ await evaluate(`document.querySelector('[data-digest=day]').click();waitFor(()=>document.querySelector('[data-generate-digest]'))`);
+ await evaluate(`document.querySelector('[data-generate-digest]').click();waitFor(()=>document.querySelector('.mail-digest-overview'))`);
+ assert(await evaluate(`document.querySelector('.mail-digest-overview').textContent.includes('合成日总结')`));
+ assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile mail summary fits');
+ await evaluate(`document.querySelector('[data-digest-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await evaluate(`location.hash='courses';waitFor(()=>document.querySelector('.course-platforms'))`);
  assert.equal(await evaluate(`document.querySelectorAll('.module-tabs').length`),0,'Courses have one integrated page');
