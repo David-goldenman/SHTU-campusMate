@@ -1,0 +1,14 @@
+{
+  "id": "campus-map",
+  "name": "校园地图",
+  "version": "0.1.0",
+  "category": "campus-map",
+  "api_version": 1,
+  "navigation": {
+    "label": "校园地图",
+    "icon": "⌖",
+    "description": "在校内建筑图上查看当天安排与有出处的电梯位置。",
+    "order": 35,
+    "layout": "primary"
+  }
+}

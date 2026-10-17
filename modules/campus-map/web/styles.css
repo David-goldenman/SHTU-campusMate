@@ -1,0 +1,81 @@
+.campus-map { min-width:0; }
+.campus-map .map-heading { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:26px; }
+.campus-map .map-eyebrow { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:2px; }
+.campus-map .map-heading h2 { margin:5px 0; font-size:30px; letter-spacing:-1px; }
+.campus-map .map-heading p { color:var(--muted); font-size:14px; }
+.campus-map .map-layout { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(300px,1fr); align-items:start; gap:22px; }
+.campus-map .map-panel,.campus-map .map-agenda { min-width:0; background:var(--paper); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.campus-map .map-tools { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:16px; border-bottom:1px solid var(--border); }
+.campus-map .map-layers { display:flex; padding:3px; background:var(--surface); border-radius:7px; flex:none; }
+.campus-map .map-layers button { min-height:38px; padding:6px 12px; border:0; border-radius:5px; color:var(--muted); background:transparent; font-size:14px; }
+.campus-map .map-layers button[aria-pressed=true] { background:var(--nord0); color:var(--nord6); }
+.campus-map .map-search-label { flex:1; min-width:210px; }
+.campus-map .map-search-label input { font-size:13px; border-color:var(--border); }
+.campus-map .map-search-results { padding:10px 16px; max-height:260px; overflow:auto; border-bottom:1px solid var(--border); }
+.campus-map .map-search-results button { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:10px; background:transparent; border:0; text-align:left; color:var(--text); }
+.campus-map .map-search-results button:hover { background:var(--surface); }
+.campus-map .map-search-results small { color:var(--muted); font-size:12px; }
+.campus-map .map-canvas { height:505px; position:relative; overflow:hidden; background:color-mix(in srgb,var(--nord7) 12%,var(--paper)); }
+.campus-map [data-map] { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+.campus-map [data-map]:active { cursor:grabbing; }
+.campus-map .map-loading { position:absolute; inset:45% 10% auto; text-align:center; }
+.campus-map .map-boundary { fill:var(--paper); stroke:var(--nord7); stroke-width:2; stroke-dasharray:7 5; }
+.campus-map .map-building { cursor:pointer; }
+.campus-map .map-building polygon { fill:var(--nord4); stroke:var(--nord3); stroke-opacity:.5; stroke-width:.8; transition:fill .15s; }
+.campus-map .category-academic polygon { fill:var(--nord9); }
+.campus-map .category-sports polygon { fill:var(--nord14); }
+.campus-map .category-dining polygon,.campus-map .category-service polygon { fill:var(--nord13); }
+.campus-map .map-building:hover polygon,.campus-map .map-building:focus polygon { stroke:var(--text); stroke-width:2; }
+.campus-map .map-building.is-selected polygon { fill:var(--nord8); stroke:var(--nord10); stroke-width:3; }
+.campus-map .map-building-label { fill:var(--text); text-anchor:middle; font-size:12px; font-weight:600; paint-order:stroke; stroke:var(--paper); stroke-width:3px; stroke-linejoin:round; pointer-events:none; }
+.campus-map .map-pin { cursor:pointer; }
+.campus-map .map-pin rect { fill:var(--nord0); stroke:var(--paper); stroke-width:2; }
+.campus-map .map-pin-elevator rect { fill:var(--nord10); }
+.campus-map .map-pin text { fill:var(--nord6); text-anchor:middle; font-size:13px; font-weight:700; pointer-events:none; }
+.campus-map .map-north { position:absolute; left:20px; top:16px; display:grid; text-align:center; color:var(--muted); font-size:25px; line-height:1.2; pointer-events:none; }
+.campus-map .map-north small { font-size:10px; }
+.campus-map .map-zoom { position:absolute; right:14px; bottom:14px; display:grid; border:1px solid var(--border); border-radius:7px; overflow:hidden; box-shadow:0 2px 9px #2e344014; }
+.campus-map .map-zoom button { width:43px; min-height:39px; border:0; border-bottom:1px solid var(--border); background:var(--paper); color:var(--text); }
+.campus-map .map-zoom button:last-child { border-bottom:0; font-size:12px; }
+.campus-map .map-legend { display:flex; flex-wrap:wrap; gap:6px 16px; padding:12px 18px; color:var(--muted); font-size:11px; border-top:1px solid var(--border); }
+.campus-map .map-key::before { content:''; display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:2px; background:var(--nord9); }
+.campus-map .map-key-sport::before { background:var(--nord14); }
+.campus-map .map-key-service::before { background:var(--nord13); }
+.campus-map .map-detail { padding:20px; border-top:1px solid var(--border); }
+.campus-map .map-detail>p { font-size:14px; color:var(--muted); margin-top:8px; }
+.campus-map .map-detail-heading { display:flex; justify-content:space-between; align-items:center; gap:15px; }
+.campus-map .map-detail-heading a { flex:none; font-size:12px; }
+.campus-map .map-detail .map-room { color:var(--text); }
+.campus-map .map-detail-hint { font-size:12px!important; color:var(--muted); }
+.campus-map .map-elevators { margin-top:16px; padding-top:12px; border-top:1px solid var(--border); }
+.campus-map .map-elevators h4 { margin:0 0 12px; font-size:14px; }
+.campus-map .map-elevators article { margin-bottom:12px; padding:12px 15px; border-left:3px solid var(--nord9); background:var(--surface); }
+.campus-map .map-elevators article strong { font-size:14px; }
+.campus-map .map-elevators article p { font-size:13px; }
+.campus-map .map-elevators article a { font-size:12px; }
+.campus-map .map-agenda { padding:20px; }
+.campus-map .map-agenda-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:12px; }
+.campus-map .map-agenda-heading a { font-size:12px; }
+.campus-map .map-date { display:flex; gap:5px; }
+.campus-map .map-date input { padding:8px; flex:1; font-size:13px; }
+.campus-map .map-date .button { padding:7px 9px; min-width:30px; font-size:13px; }
+.campus-map .map-day-summary { margin:18px 0 12px; color:var(--muted); font-size:12px; }
+.campus-map .map-events { padding:0; margin:0; list-style:none; display:grid; gap:9px; }
+.campus-map .map-event { display:flex; gap:12px; width:100%; padding:14px 10px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
+.campus-map .map-event:hover { background:var(--surface); }
+.campus-map .map-event.is-active { border-color:var(--nord9); background:color-mix(in srgb,var(--nord8) 15%,var(--paper)); }
+.campus-map .map-event-number { display:grid; place-items:center; width:25px; height:25px; flex:none; margin-top:3px; border-radius:50%; background:var(--nord0); color:var(--nord6); font-size:12px; }
+.campus-map .map-event-number.is-unlocated { background:var(--surface); color:var(--muted); }
+.campus-map .map-event-body { display:grid; gap:3px; min-width:0; font-size:13px; overflow-wrap:anywhere; }
+.campus-map .map-event-time { color:var(--link); font-size:12px; font-weight:600; }
+.campus-map .map-event-body strong { font-size:15px; }
+.campus-map .map-event-body small { color:var(--muted); font-size:11px; }
+.campus-map .map-notice { padding:12px 0; font-size:13px; color:var(--muted); }
+.campus-map .map-empty { padding:35px 8px; text-align:center; }
+.campus-map .map-empty>span { font-size:32px; color:var(--nord10); }
+.campus-map .map-empty h3 { margin:12px 0 8px; font-size:16px; }
+.campus-map .map-empty p { color:var(--muted); font-size:13px; }
+.campus-map .map-source { margin:16px 0 0; color:var(--muted); font-size:11px; }
+.campus-map .map-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+@media(max-width:1100px) { .campus-map .map-layout { grid-template-columns:minmax(0,1fr); } .campus-map .map-canvas { height:450px; } }
+@media(max-width:600px) { .campus-map .map-heading { align-items:flex-start; gap:12px; } .campus-map .map-heading h2 { font-size:25px; } .campus-map .map-heading>.button { padding:7px 9px; font-size:11px; } .campus-map .map-heading p { font-size:12px; } .campus-map .map-canvas { height:380px; } .campus-map .map-tools { padding:12px; } .campus-map .map-search-label { min-width:100%; } .campus-map .map-detail,.campus-map .map-agenda { padding:16px; } .campus-map .map-detail-heading { align-items:flex-start; flex-wrap:wrap; } }
