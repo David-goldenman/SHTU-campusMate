@@ -11,7 +11,7 @@ from .submission import activity, decide, score_number, submission_history
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
-TERM = re.compile(r"20\d{2}(?:[-–]20\d{2})?(?:学年|年)?\s*[春夏暑秋]季?(?:学期)?")
+TERM = re.compile(r"20\d{2}(?:[-–]20\d{2}学年|\s*[-–]\s*20\d{2})?(?:\s*学年|\s*年)?\s*(?:[春夏暑秋]季?(?:学期)?|(?:fall|autumn|spring|summer))", re.I)
 
 
 def checked(value):
@@ -66,6 +66,14 @@ def portal(html):
     return result
 
 
+def term_labels(remote):
+    result = {}
+    for value in remote.pages(BASE + "/learn/api/public/v1/terms?limit=100"):
+        if isinstance(value.get("id"), str) and isinstance(value.get("name"), str) and value["name"].strip():
+            result[value["id"]] = value["name"].strip()
+    return result
+
+
 def contents(remote, course_id, issues):
     result, seen, stack = [], set(), [(BASE + f"/learn/api/public/v1/courses/{course_id}/contents", [], 0)]
     while stack:
@@ -87,6 +95,31 @@ def contents(remote, course_id, issues):
             result.append({**node, "kind": kind, "path": path, "body_text": plain(node.get("body")), "title": title})
             if node.get("hasChildren") is True or node.get("hasChildren") == "true":
                 stack.append((BASE + f"/learn/api/public/v1/courses/{course_id}/contents/{node['id']}/children", path, depth + 1))
+    return result
+
+
+def announcements(html, course):
+    """Parse one course's announcement page.
+
+    Return None when the page is unreadable or its container is gone, so the
+    caller can silently keep the previous announcements. Rows that miss the
+    title or id elements are skipped instead of being invented.
+    """
+    tree = BeautifulSoup(html, "html.parser")
+    if tree.select_one("#announcementList, #announcementForm") is None:
+        return None
+    result = []
+    for row in tree.select("#announcementList > li[id]"):
+        try:
+            title = row.select_one("h3.item")
+            text = title.get_text(" ", strip=True) if title else ""
+            if not text:
+                continue
+            body = row.select_one(".details .vtbegenerated")
+            result.append({"id": identity("blackboard", course["source_id"] + ":" + row["id"]), "source": "blackboard", "course_id": course["id"], "title": text, "body_text": body.get_text(" ", strip=True) if body else "", "url": course["url"]})
+        except Exception:
+            # 单条公告结构异常时默认忽略，不影响同一课程的其他公告。
+            continue
     return result
 
 
@@ -121,6 +154,11 @@ def fetch(remote, previous):
         states = {item["source_id"]: item for item in previous.get("courses", [])}
         result["issues"].append("课程门户暂时不可读，保留已知课程学期。")
     memberships = list(remote.pages(BASE + "/learn/api/public/v1/users/me/courses"))
+    try:
+        labels = term_labels(remote)
+    except HTTPException:
+        labels = {}
+        result["issues"].append("Blackboard 学期列表暂时不可读，学期按课程名称推断。")
     for membership in memberships:
         try:
             cid = checked(membership.get("courseId"))
@@ -134,7 +172,9 @@ def fetch(remote, previous):
             if not isinstance(detail, dict) or not detail.get("name"):
                 raise SourceError("Blackboard 课程缺少名称。")
             info = states.get(cid, {})
-            term = TERM.search(info.get('term') or detail['name'])
+            # termId comes from the course REST record; the term name is the only
+            # reliable semester source because the portal label often omits it.
+            term = TERM.search(labels.get(detail.get("termId"), "")) or TERM.search(detail["name"]) or TERM.search(info.get("term") or "")
             item = course("blackboard", cid, detail["name"], info.get("code") or detail.get("courseId"), term[0] if term else '', BASE + "/webapps/blackboard/execute/launcher?" + urlencode({"type": "Course", "id": cid}), status=info.get("status", "unknown"))
             result["courses"].append(item)
             nodes = contents(remote, cid, result["issues"])
@@ -187,17 +227,13 @@ def fetch(remote, previous):
                     "max_score": numbers['max_score'] if numbers['max_score'] is not None else judgement.get('max_score'),
                     "due_at": column_due or judgement.get('due_at'), 'due_at_evidence': 'gradebook' if column_due else judgement.get('due_at_evidence'),
                     "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
+            previous_announcements = [old for old in previous.get("announcements", []) if old.get("course_id") == item["id"]]
             try:
-                html = remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid}))
-                tree = BeautifulSoup(html, "html.parser")
-                if tree.select_one("#announcementList, #announcementForm") is None:
-                    raise SourceError("Blackboard 公告页面结构已变化。")
-                for row in tree.select("#announcementList > li[id]"):
-                    title, body = row.select_one("h3.item"), row.select_one(".details .vtbegenerated")
-                    result["announcements"].append({"id": identity("blackboard", cid + ":" + row["id"]), "source": "blackboard", "course_id": item["id"], "title": title.get_text(" ", strip=True) if title else "课程公告", "body_text": body.get_text(" ", strip=True) if body else "", "url": item["url"]})
-            except HTTPException:
-                result["issues"].append(item["title"] + " 的公告暂时不可读。")
-                result["announcements"].extend(old for old in previous.get("announcements", []) if old.get("course_id") == item["id"])
+                fresh = announcements(remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid})), item)
+            except Exception:
+                # 公告是附加信息：页面不可读、请求失败或结构变化时默认忽略，保留上次公告。
+                fresh = None
+            result["announcements"].extend(previous_announcements if fresh is None else fresh)
         except HTTPException:
             result["issues"].append("一门 Blackboard 课程暂时不可读，保留上次数据。")
             for kind in ("courses", "assignments", "materials", "announcements"):
