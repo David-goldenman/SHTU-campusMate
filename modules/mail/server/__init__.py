@@ -145,39 +145,51 @@ def create_router(context):
     digests = Digests(context, _source, intelligence)
 
     @router.get('/folders')
-    def folders():
+    async def folders():
+        await intelligence.refresh_context()
         return digests.folders()
 
     @router.get('/digests')
-    def digest_snapshot(period: Literal['day', 'week'] = 'day', anchor: date | None = None):
+    async def digest_snapshot(period: Literal['day', 'week'] = 'day', anchor: date | None = None):
+        await intelligence.refresh_context()
         return digests.public(period, anchor)
 
     @router.post('/digests')
-    def generate_digest(body: DigestRequest):
-        return digests.generate(body)
+    async def generate_digest(body: DigestRequest):
+        await intelligence.refresh_context()
+        return await run_in_threadpool(digests.generate, body)
 
     @router.get('/message')
     def message(message_id: str = Query(min_length=1, max_length=300)):
         return read_cached(message_id)
 
+    def preference_state():
+        return {'preferences': intelligence.preferences(), 'effective_preferences': intelligence.effective_preferences(), 'buckets': BUCKETS, 'interests': INTERESTS}
+
     @router.get('/preferences')
-    def preferences():
-        return {'preferences': intelligence.preferences(), 'buckets': BUCKETS, 'interests': INTERESTS}
+    async def preferences():
+        await intelligence.refresh_context()
+        return preference_state()
 
     @router.put('/preferences')
-    def set_preferences(body: Preferences):
+    async def set_preferences(body: Preferences):
         with intelligence.lock:
             context.store.write(intelligence.key('preferences'), body.model_dump())
-        return preferences()
+        await context.api('campus-agent', '/refresh', method='POST')
+        await intelligence.refresh_context()
+        return preference_state()
 
     @router.get('/intelligence')
-    def intelligence_records():
-        return {'messages': intelligence.records(), **preferences()}
+    async def intelligence_records():
+        await intelligence.refresh_context()
+        response = await context.api('campus-agent', '/queue')
+        return {'messages': intelligence.records(), **preference_state(), 'review_status': response.json() if response.status_code == 200 else {'available': False}}
 
     @router.get('/review-context')
-    def review_context(message_id: str = Query(min_length=1, max_length=300)):
+    async def review_context(message_id: str = Query(min_length=1, max_length=300)):
         owner = _source.owner()
-        read_cached(message_id)
+        await intelligence.refresh_context()
+        await run_in_threadpool(read_cached, message_id)
         if owner != _source.owner():
             raise HTTPException(409, '邮箱账号已更新，请重试。')
         return intelligence.prepared(message_id)
@@ -188,6 +200,7 @@ def create_router(context):
 
     @router.post('/review')
     async def review(body: Review, request: Request):
+        await intelligence.refresh_context()
         origin = request.url.scheme + '://' + request.url.netloc + '/api/v1/modules/mail'
         return await run_in_threadpool(intelligence.review, body.message_id, origin, body.force)
 

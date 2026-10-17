@@ -1,0 +1,9 @@
+{
+  "id": "star-notes",
+  "name": "星夜手记",
+  "description": "星图、纸页与轻盈线条。为日常，留一点遐想。",
+  "api_version": 1,
+  "styles": ["../art-workspace.css", "../star-notes.css", "../art-welcome.css"],
+  "preview": "../assets/star-notes-hero.webp",
+  "entry": "../art.js"
+}

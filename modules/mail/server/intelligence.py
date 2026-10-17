@@ -5,11 +5,13 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.services.campus.data import digest
+from backend.services.campus.analysis import account_revision
 
 BUCKETS = {'focus': '重点关注', 'recommend': '兴趣推荐', 'digest': '一般通知', 'filter': '已筛选'}
 INTERESTS = {'research': '科研讲座', 'clubs': '社团活动', 'culture': '文体活动', 'volunteer': '志愿服务',
@@ -95,17 +97,28 @@ def shape_credit(body):
     return any(re.search(r'(?:计入|纳入|认定为)[^，,。；;\n]{0,24}' + shape, part) for part in statements)
 
 
+def requirement_needed(preferences, key):
+    value = preferences[key]
+    years = (1, 2) if key == 'shape' else (1,)
+    return value == 'required' or (value == 'unknown' and preferences['degree'] == 'bachelor' and preferences['year'] in years)
+
+
 def preliminary(item, preferences):
     text = item['title'] + '\n' + item.get('body_text', '')
     required = shape_credit(item.get('body_text', ''))
     topic, bucket, protected, reason = 'campus', 'digest', False, '保留校园服务摘要。'
-    if required:
+    if any(contains(code, text) for code in preferences['courses']) and re.search(r'作业|考试|截止|更正|实验|材料|资料|课件|讲义|预习|测验|调课|停课|assignment|homework|quiz|lab|handout|slides', text, re.I):
+        topic, bucket, protected, reason = 'course', 'focus', True, '与你的在修课程、作业或学习材料有关。'
+    elif required or re.search(r'形策|形势(?:与|和)?政策', text):
         topic = 'shape'
-        protected = preferences['shape'] == 'required'
+        protected = required and requirement_needed(preferences, 'shape')
+        bucket = 'focus' if requirement_needed(preferences, 'shape') else 'digest'
+        reason = '本科一、二年级优先关注形策；已填写的完成状态优先。参加前核对考勤认定。'
+    elif re.search(r'心理(?:健康|活动|讲座|辅导|教育)|心育活动', text):
+        topic = 'mental'
+        protected = requirement_needed(preferences, 'mental')
         bucket = 'focus' if protected else 'digest'
-        reason = '邮件明确说明形策考勤，结合你的完成状态保留。'
-    elif any(contains(code, text) for code in preferences['courses']) and re.search(r'作业|考试|截止|更正|assignment|homework|quiz', text, re.I):
-        topic, bucket, protected, reason = 'course', 'focus', True, '与你填写的在修课程及学业事项有关。'
+        reason = '本科一年级优先关注心理健康活动；已填写的完成状态优先。'
     else:
         patterns = {'research': r'讲座|seminar|lecture|workshop', 'clubs': r'社团|招新|社联', 'culture': r'音乐|文化|电影|运动|艺术',
                     'volunteer': r'志愿', 'competition': r'竞赛|比赛|hackathon', 'career': r'招聘|实习|就业', 'abroad': r'留学|海外|境外', 'domestic': r'保研|考研|境内升学'}
@@ -115,14 +128,15 @@ def preliminary(item, preferences):
                 bucket = {'follow': 'recommend', 'digest': 'digest', 'hide': 'filter'}[preferences['interests'].get(key, 'digest')]
                 reason = '依据你的“' + INTERESTS[key] + '”偏好初筛，语义关联可由 AI 复核。'
                 break
-    return {'bucket': bucket, 'category': {'shape':'形策考勤', 'course':'课程与作业'}.get(topic, INTERESTS.get(topic, '校园服务')),
-            'topic': topic, 'reason': reason, 'summary': '', 'protected': protected, 'needs_check': topic == 'shape' and preferences['shape'] == 'unknown', 'by': 'rule'}
+    return {'bucket': bucket, 'category': {'shape':'形策考勤', 'mental':'心理健康', 'course':'课程与学习材料'}.get(topic, INTERESTS.get(topic, '校园服务')),
+            'topic': topic, 'reason': reason, 'summary': '', 'protected': protected, 'needs_check': topic == 'shape' and not required, 'by': 'rule'}
 
 
 class Intelligence:
     def __init__(self, context, source, selected, read):
         self.context, self.source, self.selected, self.read = context, source, selected, read
         self.lock, self.stopping, self.jobs = threading.RLock(), threading.Event(), {}
+        self.study_context = {}
 
     def key(self, name):
         return name + ':' + self.source.owner()
@@ -130,9 +144,35 @@ class Intelligence:
     def preferences(self):
         return self.context.store.read(self.key('preferences'), Preferences().model_dump())
 
+    async def refresh_context(self):
+        owner = account_revision(self.context)
+        profile_response = await self.context.api('academic-assistant', '/profile')
+        courses_response = await self.context.api('courses', '/catalog/courses?current=true&limit=100')
+        profile = profile_response.json().get('profile', {}) if profile_response.status_code == 200 else {}
+        courses = courses_response.json().get('items', []) if courses_response.status_code == 200 else []
+        if owner != account_revision(self.context) or self.stopping.is_set():
+            raise HTTPException(409, '学习账号或模块状态已更新，请重试。')
+        self.study_context = {'owner': owner, 'profile': profile, 'courses': courses}
+
+    def effective_preferences(self):
+        preferences = self.preferences()
+        study = self.study_context if self.study_context.get('owner') == account_revision(self.context) else {}
+        profile = study.get('profile', {})
+        now = datetime.now(ZoneInfo('Asia/Shanghai'))
+        cohort = profile.get('cohort_year')
+        if preferences['year'] is None and cohort:
+            year = now.year - (now.month < 9) - cohort + 1
+            if 1 <= year <= 8:
+                preferences['year'] = year
+        if not preferences['major']:
+            preferences['major'] = profile.get('major', '')
+        known = [value for course in study.get('courses', []) for row in (course, *course.get('sources', [])) for key in ('title', 'code') if (value := row.get(key))]
+        preferences['courses'] = list(dict.fromkeys([*preferences['courses'], *known]))
+        return preferences
+
     def prepared(self, message_id):
         item = self.selected(message_id)
-        preferences = self.preferences()
+        preferences = self.effective_preferences()
         text = {'title': item['title'], 'body_text': item.get('body_text', '')[:14000]}
         # Contact details do not help decide which campus notices matter.
         text = {key: re.sub(r'(?<!\d)1[3-9]\d{9}(?!\d)', '[联系电话]', re.sub(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', '[邮箱地址]', value)) for key, value in text.items()}
@@ -145,6 +185,7 @@ class Intelligence:
                 'instruction': PROMPT, 'schema': Decision.model_json_schema()}
 
     def records(self):
+        owner = account_revision(self.context)
         reviews = self.context.store.read(self.key('reviews'), {})
         labels = self.context.store.read('labels', {})
         labels = labels.get('value', {}) if labels.get('owner') == self.source.owner() else {}
@@ -158,7 +199,10 @@ class Intelligence:
             manual = labels.get(item['id'], {})
             if manual.get('by') == 'manual':
                 classification = {**classification, **manual, 'category': manual['label'], 'bucket': manual.get('bucket', classification['bucket'])}
+            classification = {**classification, 'input_revision': prepared['fingerprint'], 'review_pending': manual.get('by') != 'manual' and not (review and review['fingerprint'] == prepared['fingerprint'])}
             result.append({**item, 'classification': classification})
+        if owner != account_revision(self.context):
+            raise HTTPException(409, '学习账号已更新，请重新读取邮件分类。')
         return result
 
     def submit(self, body):
@@ -177,8 +221,10 @@ class Intelligence:
         protected = value['preliminary']['protected']
         if protected:
             decision['bucket'] = 'focus'
-        if decision['needs_check'] and decision['bucket'] == 'filter':
-            decision['bucket'] = 'digest'
+        elif value['preliminary']['bucket'] == 'filter':
+            decision['bucket'] = 'filter'
+        if decision['topic'] in INTERESTS and value['preferences']['interests'].get(decision['topic']) == 'hide' and not protected:
+            decision['bucket'] = 'filter'
         record = {**decision, 'protected': protected, 'by': 'agent', 'fingerprint': body.fingerprint, 'reviewed_at': datetime.now(timezone.utc).isoformat()}
         with self.lock:
             if self.stopping.is_set() or owner != self.source.owner():
