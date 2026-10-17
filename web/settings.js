@@ -1,6 +1,7 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
 import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
+import {appearancePanel, bindAppearance} from './themes/appearance.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
 const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',ecourse:'E 云课堂',timetable:'教务系统'};
@@ -53,6 +54,7 @@ export async function mount(container, context) {
   }
   if (context.signal.aborted) return;
   container.innerHTML =
+    appearancePanel() +
     networkPanel() +
     moduleManager(context.modules,context.labels) +
     '<div class="settings-columns"><section class="panel settings-section"><h2>本地服务</h2><p class="field-hint">端口修改会在下次启动工作台时生效。</p><form id="port-form"><label>服务端口<input name="port" type="number" min="1024" max="65535" value="' + settings.port + '" required></label><p class="field-hint">当前运行端口：' + settings.active_port + '</p><button class="button button-primary" type="submit">保存端口</button></form>' + (settings.restart_required ? '<p class="notice">端口已更新，下次启动使用 ' + settings.port + '。</p>' : '') + '</section>' +
@@ -61,8 +63,10 @@ export async function mount(container, context) {
     '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>已保存的连接会在读取时复用。首次连接请使用官方窗口，或展开账号密码登录。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
     aiSettingsPanel(ai);
 
+  bindAppearance(container.querySelector('.appearance-panel'),context.signal);
   const network = bindNetwork(container.querySelector('#network-panel'),context.signal);
   const groups = [
+    ['appearance','外观',container.querySelector('.appearance-panel')],
     ['accounts','账号连接',container.querySelector('.provider-grid').closest('section')],
     ['network','网络检测',container.querySelector('#network-panel')],
     ['ai','AI 服务',container.querySelector('#ai-form').closest('section')],

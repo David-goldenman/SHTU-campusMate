@@ -115,9 +115,9 @@ try {
   assert(await evaluate("!document.querySelector('link[href*=\"/assignments/\"]')"),'Assignment styles release on navigation');
   await capture('ui-priorities-return',1440,1060);
   assert(await evaluate("document.querySelectorAll('.overview-stats a').length===4 && !document.querySelector('.overview-sources').open"),'Secondary statistics stay available in a disclosure');
-  await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
+  await evaluate("document.documentElement.removeAttribute('data-ui-theme');document.documentElement.removeAttribute('data-art-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
-  await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
+  await evaluate("document.documentElement.dataset.uiTheme='nord-refined';document.documentElement.dataset.artTheme='observatory'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
   assert(await evaluate("document.querySelectorAll('h1').length===1 && !document.querySelector('.module-shortcuts')"),'The page has one title and its own contextual actions');
