@@ -11,6 +11,13 @@ export function time(value) {
   return value && !Number.isNaN(date.valueOf()) ? date.toLocaleString('zh-CN', {timeZone:'Asia/Shanghai', hour12:false}) : '时间未提供';
 }
 
+export function submissionLabel(item) {
+  const labels = {not_submitted:'未提交',draft:'草稿，尚未提交',submitted:'已提交',needs_grading:'已提交，待评分',graded:'已评分',exempt:'已豁免',unknown:'提交状态待核实'};
+  const state = item.exempt === true ? 'exempt' : item.submission_status;
+  const label = Object.hasOwn(labels,state) ? labels[state] : (item.submitted === true ? '已提交' : item.submitted === false ? '未提交' : labels.unknown);
+  return label + (item.stale || item.submission_stale || item.source_stale ? '（缓存，待核实）' : '');
+}
+
 export function records(items, escape) {
   return items.length ? '<div class="campus-list">' + items.map(item => `<article class="campus-item"><h4>${link(item.url, item.title, escape)}</h4><p class="field-hint">${escape([item.source, item.term, item.sender, item.teacher, item.location, item.path?.join(' / ')].filter(Boolean).join(' · '))}</p>${item.body_text ? '<p>' + escape(item.body_text.slice(0, 900)) + '</p>' : ''}${item.download_url ? link(item.download_url, '下载文件', escape) : ''}</article>`).join('') + '</div>' : '<p class="field-hint">当前范围没有内容。</p>';
 }

@@ -4,6 +4,13 @@ import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
 import {renderNetwork} from '../web/network.js';
+import {submissionLabel} from '../web/campus.js';
+
+assert.equal(submissionLabel({submitted:null}), '提交状态待核实');
+assert.equal(submissionLabel({submitted:false,exempt:true}), '已豁免');
+assert.equal(submissionLabel({submitted:true,submission_status:'needs_grading'}), '已提交，待评分');
+assert.match(submissionLabel({submitted:true,submission_stale:true}), /已提交.*缓存.*待核实/);
+assert.equal(submissionLabel({submitted:null,submission_status:'__proto__'}), '提交状态待核实');
 
 const networkMarkup=renderNetwork({summary:'0 / 1 个入口响应',scope:'仅检测入口',proxy_configured:true,services:[{
   name:'<script>untrusted</script>',host:'school.example',port:443,dns:{status:'ok',addresses:['10.15.1.1']},

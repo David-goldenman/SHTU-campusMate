@@ -14,7 +14,7 @@ class BlackboardSource(Source):
         value = super().snapshot()
         # Existing cached nulls follow the same meaning as newly synced records.
         for item in value['data']['assignments']:
-            if item.get('submitted') is None and item.get('submission_evidence') != 'unavailable':
+            if item.get('submitted') is None and item.get('submission_evidence') != 'unavailable' and item.get('submission_status') not in {'unknown', 'exempt'} and item.get('exempt') is not True:
                 item['submitted'] = False
         for item in value['data']['courses']:
             term = TERM.search(item.get('title', ''))
