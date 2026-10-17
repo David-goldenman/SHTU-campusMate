@@ -18,7 +18,7 @@ Enter 发送，Shift + Enter 换行；兼容 Ctrl／Command + Enter，中文输�
 
 前缀为 `/api/v1/modules/academic-assistant`。`GET/POST/DELETE /chat` 读取、发送和清除聊天；`GET/PUT/DELETE /profile` 管理本机学习档案；`GET /activity` 查看当前任务的工具进度，`GET /presets` 返回 `{items:[{label,prompt}]}` 常用问题。用户档案包含专业、入学年份、未来方向、每周可用学习时间与备注，培养方案作为带来源的学业记录单独保存。聊天按共享账号版本隔离，档案和学业记录按已验证的 IDS 账号隔离。
 
-原生工具由 `harness/` 注册，使用一次任务有效的本机令牌访问 `/tools/query`、`/tools/search`、`/tools/document`、`/tools/course-search`、`/tools/navigate`、`/tools/remember`、`/tools/attend` 和 `/tools/finish`。令牌通过服务端 `plugin_env` 注入运行时，不进入模型提示；接口仅在该任务存续、账号版本相同时接受调用。工具返回的引用保存在任务内，模型先通过 `study_finish` 提交引用和 `insufficient_context`，后端核对实际来源及字词顺序，允许排版空白差异，保留引用片段的连续原文。校验失败由模型在本次任务中修正，通过后再以普通 assistant 消息流式生成 Markdown 正文。完整任务成功且账号版本仍一致时才保存聊天；最终事件附上已核对的引用卡片。`study_finish.text` 为可选兼容字段，提供时作为最终正文。
+原生工具由 `harness/` 注册，使用一次任务有效的本机令牌访问 `/tools/query`、`/tools/search`、`/tools/document`、`/tools/course-search`、`/tools/navigate`、`/tools/remember`、`/tools/attend` 和 `/tools/finish`。令牌通过服务端 `plugin_env` 注入运行时，不进入模型提示；接口仅在该任务存续、账号版本相同时接受调用。工具返回的引用保存在任务内，模型先通过 `study_finish` 提交引用和 `insufficient_context`，后端核对实际来源及字词顺序，允许排版空白差异，保留引用片段的连续原文。校验失败由模型在本次任务中修正，通过后再以普通 assistant 消息流式生成 Markdown 正文。完整任务成功且账号版本仍一致时才保存聊天；最终事件附上已核对的引用卡片。原生 `study_finish` 不接收正文。HTTP 接口保留可选兼容字段 `text`，只在最终 assistant 正文为空时使用，不能覆盖已经流式显示的完整回答。
 
 学习规划根据明确的待办、截止时间、已公开的作业状态和用户可用时间提出建议，估计工时与学校要求分别说明；课件引用显示真实页码。选课建议结合历史修读记录、培养方案、课程目录／大纲和用户方向，区分学校要求与建议，学期实际开课需要另行核对。用户明确要求记录本次消息中的个人信息时，工具核对原文后保存；用户也可在档案表单中编辑或清除。
 
@@ -75,6 +75,8 @@ PDF、PPTX 和 UTF-8 文本按需通过 Blackboard／Gradescope 文件 API 下�
 启动 demo 后运行 `node modules/academic-assistant/checks/check_web.mjs http://127.0.0.1:16666`，在独立 Edge 窗口验证渐进 Markdown 渲染、引用分组、复制、阅读位置、桌面／手机尺寸的输入框、停止、失败重试、连接中断及 AI 设置跳转。测试窗口阻止真实 API 请求，使用合成流与资料；截图及浏览器资料保存在项目开发目录。
 
 ## 校园规则与技能
+
+真实模型的主页交互验收使用独立数据目录，入口与复测记录见 [主页对话验收](checks/LIVE_ACCEPTANCE.md)。该流程需主动启动，不属于自动检查；自动回归仍全部使用合成模型响应。
 
 `harness/AGENTS.md` 定义校园学习场景、简明沟通、证据与个人信息边界；`server/instruction.md` 约定工具和回答校验；`harness/prompts.json` 提供首页常用问题。`harness/skills/` 内的文件阅读、作业规划与培养方案技能通过官方注册表及 `skill` 工具按需加载。新增技能遵循相同结构，使用工作台现有工具，随插件启停。规则不包含开发环境要求。
 

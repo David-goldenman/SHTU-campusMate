@@ -96,7 +96,7 @@ async def check():
                 while len(package._agent.tasks[token].activity) < 24:
                     assert (await client.post(base + '/tools/query', json={'area': 'assignments'}, headers=headers)).status_code == 200
                 assert (await client.post(base + '/tools/query', json={'area': 'assignments'}, headers=headers)).status_code == 429
-                response = await client.post(base + '/tools/finish', json={**({} if mode == 'stream' else {'text': '请先复习向量叠加，再安排合成作业。'}), 'citations': citations}, headers=headers)
+                response = await client.post(base + '/tools/finish', json={'text': '工具中的简短完成摘要', 'citations': citations}, headers=headers)
                 assert response.status_code == 200 and response.json()['accepted']
 
             def run(prompt, context, plugins, plugin_env, on_event=None, cancel_event=None):
@@ -131,6 +131,7 @@ async def check():
             assert (await client.post(base + '/chat', json={'message': '记住我每周10小时，帮我准备作业。'})).status_code == 200
             value = (await client.get(base + '/chat')).json()['messages']
             assert len(value) == 4 and value[-1]['navigation'] == 'assignments'
+            assert value[-1]['text'] == '已完成', 'Non-streaming replies also prefer the final assistant body'
             assert value[-1]['citations'][1]['page'] == 1
             assert value[-1]['citations'][1]['quote'] == 'Vector superposition'
             assert 'due_at:' in value[-1]['citations'][0]['quote']
@@ -142,6 +143,9 @@ async def check():
             assert response.headers['content-type'].startswith('application/x-ndjson')
             assert len([event for event in events if event['type'] == 'delta']) == 2
             assert events[-1]['type'] == 'complete' and events[-1]['message']['text'].startswith('## 复习计划')
+            streamed_text = ''.join(event['text'] for event in events if event['type'] == 'delta')
+            assert events[-1]['message']['text'] == streamed_text, 'Completion must preserve the full streamed answer rather than finish.text'
+            assert (await client.get(base + '/chat')).json()['messages'][-1]['text'] == streamed_text
             assert events[-1]['message']['citations'][1]['page'] == 1
             assert 'synthetic-private-thought' not in response.text and 'synthetic-unverified-body' not in response.text and last_token not in response.text
             mode = 'cancelled'
