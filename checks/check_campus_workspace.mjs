@@ -60,7 +60,9 @@ try{
  await evaluate(`document.querySelector('[data-preferences]').click();document.querySelector('[name=requirements]').value='关注集成电路相关讲座，保留完整的筛选要求。';document.querySelector('.mail-preferences').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
  assert.equal(await evaluate(`workspaceCheck.prefs.requirements`),'关注集成电路相关讲座，保留完整的筛选要求。');
  await evaluate(`document.querySelector('[data-label]').click();document.querySelector('dialog [name=bucket]').value='focus';document.querySelector('dialog form').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
+ await evaluate(`document.querySelector('[data-bucket=focus]').click();waitFor(()=>document.querySelector('.mail-tag')?.textContent.includes('手动'))`);
  assert(await evaluate(`document.querySelector('.mail-tag').textContent.includes('手动')`));
+ await evaluate(`document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
  await writeFile(resolve('.codex/tmp/workspace-mail-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
