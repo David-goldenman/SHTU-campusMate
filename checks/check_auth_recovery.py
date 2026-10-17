@@ -142,15 +142,18 @@ def check_setup(directory):
     opened = []
     auth.browser = SimpleNamespace(open=lambda *args, **kwargs: opened.append((args,kwargs)),
         state=lambda provider: {'cookies': []}, close_all=lambda: None)
-    with patch.object(auth.device, 'ready_to_enroll', side_effect=[False,True]), patch.object(auth, 'bind_device') as bind, patch.object(auth.setup_cancelled, 'wait', return_value=False):
-        auth.start_device_setup()
-        auth.setup_future.result(timeout=5)
-        assert bind.call_count == 1
-        assert opened[0][1] == {'device_setup':True}
-        assert opened[0][0][1].endswith('#/accountsecurity')
-        assert auth.get_status('ids')['device']['setup']['status'] == 'ready'
-    auth.close()
-    store.close()
+    # This check exercises setup state, not OS certificates, proxies or school HTTP.
+    with patch.object(protocols, 'http_client'), patch.object(auth.device, 'ready_to_enroll', side_effect=[False,True]), patch.object(auth, 'bind_device') as bind, patch.object(auth.setup_cancelled, 'wait', return_value=False):
+        try:
+            auth.start_device_setup()
+            auth.setup_future.result(timeout=5)
+            assert bind.call_count == 1
+            assert opened[0][1] == {'device_setup':True}
+            assert opened[0][0][1].endswith('#/accountsecurity')
+            assert auth.get_status('ids')['device']['setup']['status'] == 'ready'
+        finally:
+            auth.close()
+            store.close()
 
 
 if __name__ == '__main__':
