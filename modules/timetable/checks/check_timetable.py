@@ -128,6 +128,8 @@ async def check_schedule():
         disabled = False
 
         async def api(name, path="/snapshot", **options):
+            if name == "courses":
+                return httpx.Response(404)
             if changed:
                 context.auth.revision = "synthetic-account-two"
             if disabled and name == "eams":
@@ -138,6 +140,7 @@ async def check_schedule():
                 "blackboard": [{"id": "blackboard:quiz", "source": "blackboard", "title": "Quiz 1", "due_at": "2026-10-20T09:00:00+08:00"}, {"id": "blackboard:untimed", "source": "blackboard", "title": "Untimed", "due_at": "invalid"}],
                 "gradescope": [{"id": "gradescope:hw", "source": "gradescope", "title": "HW 1", "due_at": "2026-10-19T16:00:00Z", "submitted": True}],
                 "eams": [{"id": "eams:exam", "source": "eams", "title": "Exam", "kind": "exam", "due_at": "2026-10-20T10:00:00+09:00"}],
+                "ecourse": [],
             }
             return httpx.Response(200, json={"status": "ready", "updated_at": "2026-10-16T00:00:00Z", "data": validate_bundle({"assignments": items[name]})})
 
@@ -195,7 +198,7 @@ async def check_schedule():
                 schedule = (await client.get("/schedule")).json()
                 assert len([item for item in schedule['data']['events'] if item['source'] != 'calendar']) == 2 and "教务系统" in schedule["data"]["issues"][0]
                 synced = await client.post("/schedule/sync")
-                assert synced.status_code == 202 and set(synced.json()["sources"]) == {"timetable", "blackboard", "gradescope", "eams"}
+                assert synced.status_code == 202 and set(synced.json()["sources"]) == {"timetable", "blackboard", "gradescope", "ecourse", "eams"}
                 assert synced.json()["sources"]["eams"]["status"] == "unavailable"
                 changed = True
                 response = await client.get("/schedule")

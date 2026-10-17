@@ -15,7 +15,44 @@ from backend.services.auth import AuthService, LoginRequired, VerificationRequir
 from backend.services.auth import protocols
 from backend.services.auth.device import DeviceCredential, BASE
 from backend.services.campus.accounts import AccountCache
+from backend.services.campus.analysis import account_revision
+from backend.services.campus.source import Source
 from checks.check_auth import MemoryVault, cookie
+
+
+def check_revision_reads(directory):
+    store = Store(directory / 'revision.sqlite3')
+    other = Store(directory / 'revision.sqlite3')
+    vault = MemoryVault()
+    auth = AuthService(vault, store, runtime_dir=directory / 'runtime')
+    context = SimpleNamespace(id='revision-check', auth=auth, store=store, data_dir=directory)
+    source = Source(context, 'ids', [], lambda *_: {})
+    cache = AccountCache(context, 'ids')
+    try:
+        assert auth.get_account_revision('ids') == auth.get_status('ids')['account_revision'] == 'initial'
+        with patch.object(vault, 'get', side_effect=AssertionError('Ownership checks must not read secrets')), \
+             patch.object(auth, 'get_status', side_effect=AssertionError('Ownership checks must not build login status')):
+            original = account_revision(context)
+            captured = cache.capture()
+            assert source.owner() == cache.owner()
+            # A second Store models a different writer; no stale in-memory epoch is allowed.
+            other.write('auth:revision:ids', 'synthetic-second-account')
+            assert auth.get_account_revision('ids') == 'synthetic-second-account'
+            assert account_revision(context) != original
+            assert source.owner() == cache.owner() != captured.account_owner
+            try:
+                cache.check(captured)
+                raise AssertionError('Old-account data must still be rejected')
+            except HTTPException as error:
+                assert error.status_code == 409
+            try:
+                auth.get_account_revision('unknown-provider')
+                raise AssertionError('Unknown providers must be rejected')
+            except ValueError:
+                pass
+        assert auth.get_status('ids')['account_revision'] == 'synthetic-second-account'
+    finally:
+        source.close();auth.close();other.close();store.close()
 
 
 def check_identity(directory):
@@ -142,21 +179,25 @@ def check_setup(directory):
     opened = []
     auth.browser = SimpleNamespace(open=lambda *args, **kwargs: opened.append((args,kwargs)),
         state=lambda provider: {'cookies': []}, close_all=lambda: None)
-    with patch.object(auth.device, 'ready_to_enroll', side_effect=[False,True]), patch.object(auth, 'bind_device') as bind, patch.object(auth.setup_cancelled, 'wait', return_value=False):
-        auth.start_device_setup()
-        auth.setup_future.result(timeout=5)
-        assert bind.call_count == 1
-        assert opened[0][1] == {'device_setup':True}
-        assert opened[0][0][1].endswith('#/accountsecurity')
-        assert auth.get_status('ids')['device']['setup']['status'] == 'ready'
-    auth.close()
-    store.close()
+    # This check exercises setup state, not OS certificates, proxies or school HTTP.
+    with patch.object(protocols, 'http_client'), patch.object(auth.device, 'ready_to_enroll', side_effect=[False,True]), patch.object(auth, 'bind_device') as bind, patch.object(auth.setup_cancelled, 'wait', return_value=False):
+        try:
+            auth.start_device_setup()
+            auth.setup_future.result(timeout=5)
+            assert bind.call_count == 1
+            assert opened[0][1] == {'device_setup':True}
+            assert opened[0][0][1].endswith('#/accountsecurity')
+            assert auth.get_status('ids')['device']['setup']['status'] == 'ready'
+        finally:
+            auth.close()
+            store.close()
 
 
 if __name__ == '__main__':
     root = Path(__file__).resolve().parents[1] / '.codex'
     with tempfile.TemporaryDirectory(prefix='recovery-check-', dir=root) as temporary:
         directory = Path(temporary)
+        check_revision_reads(directory)
         check_identity(directory)
         check_device(directory)
         check_setup(directory)

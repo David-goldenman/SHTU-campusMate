@@ -64,6 +64,11 @@ class AuthService:
         except (LoginRequired, RuntimeError, httpx.HTTPError, ValueError):
             pass  # An unverified old owner must never be assigned to a new login.
 
+    def get_account_revision(self, provider: str):
+        """Read the current ownership epoch without opening credentials or sessions."""
+        protocols.checked_target(provider)
+        return self.store.read("auth:revision:" + provider, "initial")
+
     def get_status(self, provider: str | None = None):
         if provider is None:
             return {"providers": self.providers()}
@@ -74,7 +79,7 @@ class AuthService:
         result = {
             "id": provider, "name": protocols.PROVIDERS[provider]["name"], "username": credentials.get("username", ""),
             "has_password": bool(credentials.get("password")), "has_session": bool(session),
-            "account_revision": self.store.read("auth:revision:" + provider, "initial"),
+            "account_revision": self.get_account_revision(provider),
             "identity_verified": bool(self.vault.get("auth:identity:" + provider).get("subject")),
             "session_revision": self.store.read("auth:session_revision:" + provider, "initial"),
             "status": saved.get("status", "login_required" if credentials or session else "not_connected"),

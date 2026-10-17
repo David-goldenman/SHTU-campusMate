@@ -100,9 +100,9 @@ async def caching():
          patch.object(network, "check_target", AsyncMock(return_value={"direct": OK})) as probe:
         first = await diagnostics.check()
         await diagnostics.check(after=now - timedelta(seconds=1))
-        assert probe.await_count == 5
+        assert probe.await_count == 6
         await diagnostics.check(after=datetime.fromisoformat(first["checked_at"]) + timedelta(microseconds=1))
-        assert probe.await_count == 10, "A new failure must not reuse a pre-failure probe"
+        assert probe.await_count == 12, "A new failure must not reuse a pre-failure probe"
 asyncio.run(caching())
 
 app = FastAPI()

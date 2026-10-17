@@ -9,7 +9,7 @@ from .network import NetworkDiagnostics, explain_failure
 
 class SyncNetworkFailure(BaseModel):
     id: str = Field(min_length=1, max_length=80)
-    target: Literal["timetable", "blackboard", "elrc"]
+    target: Literal["timetable", "blackboard", "elrc", "ecourse"]
     kind: Literal["dns_error", "tls_error", "timeout", "proxy_error", "protocol_error", "configuration_error", "connection_error"]
     at: datetime
     host: str | None = Field(default=None, max_length=253)

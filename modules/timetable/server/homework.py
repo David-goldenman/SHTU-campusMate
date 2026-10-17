@@ -5,7 +5,7 @@ from backend.services.campus import assignment_section, timestamp
 
 from .calendar import ZONE, calendar, event_order
 
-PLATFORMS = {"blackboard": "Blackboard", "gradescope": "Gradescope"}
+PLATFORMS = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂"}
 
 
 def homework_window(values, now=None):
@@ -17,7 +17,7 @@ def homework_window(values, now=None):
     start_at = datetime.combine(start, datetime.min.time(), ZONE)
     end_at = datetime.combine(end, datetime.min.time(), ZONE)
     items, seen = [], set()
-    for name in ("blackboard", "gradescope"):
+    for name in PLATFORMS:
         data = values.get(name, {}).get("data", {})
         courses = {item["id"]: item.get("title", "") for item in data.get("courses", [])}
         for item in data.get("assignments", []):

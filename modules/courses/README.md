@@ -1,5 +1,11 @@
 # 课程中心
 
+课程卡片和详情按开课院系显示颜色与文字标签：创管紫、创艺橙红、生命棕黄、物质绿、数学所深蓝、信息浅蓝，体育与书院红。院系优先取课程来源明确字段，缺失时按唯一课程代码匹配教务培养方案；冲突或未知保留中性色。`PE/CLPE` 课程代码标记体育课并显示 Font Awesome 跑步图标。
+
+`GET /appearance` 返回 `{courses:[{id,course_ids,code,term,department,department_source,appearance}],palette}`，`appearance` 包含 `key/label/accent/tint/ink` 和可选 `icon`。时间表通过该公开接口匹配课程；课程模块不调用时间表的 `/schedule`，不会形成聚合循环。缺少教务模块仍可使用来源院系。所有院系判断位于课程模块；共享 UI 仅提供校验六位十六进制颜色的 `applyAccent(element, appearance)`。
+
+E 云课堂（`ecourse`）通过公开快照接入课程、课件说明、公告和作业；统一同步会触发其只读刷新。原站提供的学期、课程代码及开课院系保留在课程来源记录中，附件通过原站课程栏目查看。来源停用按现有协议降级，首页助手通过 `/context` 使用同一份资料。
+
 作业分类与作业管理共用提交状态标签，区分草稿、待评分、已评分、豁免和待核实；pending 筛选排除豁免与未知状态。`POST /context` 同时保留 `submission_status/submission_evidence/submission_reason/checked_at/submitted_at/submission_stale/exempt/due_at_evidence`，供 AI 与通知使用来源证据，而不是只看一个布尔值。
 
 `GET /snapshot` 的 `network_failures` 转发已启用来源的网络故障标记。页面自动检测并在同步提示旁给出原因和处理建议，无需进入设置；仅来源明确的网络错误触发，成功重试后清除。
