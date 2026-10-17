@@ -106,6 +106,7 @@ try {
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await evaluate("document.querySelector('.ark-tile-assistant').click()");
   await wait("document.querySelector('.study-chat-card.module-focused') && document.activeElement.matches('[name=message]')");
+  assert.equal(await evaluate('location.hash'),'#dashboard','Reopening Home returns to the daily overview');
   assert(await evaluate("getComputedStyle(document.querySelector('.overview-card')).display==='none'"),'Focused conversation uses the full workspace');
   await capture('assistant-desktop',1440,1000);
   await capture('assistant-mobile',375,812);
