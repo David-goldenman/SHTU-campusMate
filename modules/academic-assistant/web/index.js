@@ -1,5 +1,6 @@
 import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
+import {sendOnEnter} from './composer.js';
 
 export async function mount(container, context) {
   const e = context.ui.escape;
@@ -28,7 +29,7 @@ export async function mount(container, context) {
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><div class="study-composer-heading"><label for="study-message">发消息</label><details class="study-prompts"><summary>常用问题</summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details></div>
           <textarea id="study-message" name="message" rows="2" maxlength="8000" placeholder="问作业、复习或选课，也可以接着追问…" aria-describedby="study-send-hint" required></textarea>
-          <p class="study-error danger-text" data-error role="alert"></p><div class="study-send"><span class="field-hint" id="study-send-hint">Ctrl + Enter 发送 · Enter 换行</span><button class="button button-secondary" data-stop type="button" hidden>停止生成</button><button class="button button-primary" data-send type="submit" ${configured ? '' : 'disabled'}>发送</button></div>
+          <p class="study-error danger-text" data-error role="alert"></p><div class="study-send"><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="button button-secondary" data-stop type="button" hidden>停止生成</button><button class="button button-primary" data-send type="submit" ${configured ? '' : 'disabled'}>发送</button></div>
         </form><p class="study-privacy">${configured ? '按问题读取所需学习资料，发送至 DeepSeek。' : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p>
       </div>
     </section>
@@ -48,7 +49,7 @@ export async function mount(container, context) {
   const newChat = container.querySelector('[data-new-chat]');
   function focusChat(active) {context.focus(active);container.querySelector('[data-home]').setAttribute('aria-pressed',String(!active));}
   container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
-  function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) showProfile(false);}
+  function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) {focusChat(true);showProfile(false);}}
   historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
   container.querySelector('[data-history-close]').onclick = () => {showHistory(false);historyToggle.focus();};
   container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
@@ -57,11 +58,12 @@ export async function mount(container, context) {
     if (busy) return;
     drafts.set(activeId || '',form.elements.message.value);
     const value=await context.api('/conversations/'+identity+'/select',{method:'POST'});
+    if (context.signal.aborted) return;
     activeId=identity;archived=value.conversation.archived;messages.replaceChildren();
     if(value.messages.length)value.messages.forEach(append);else empty();
     form.elements.message.value=drafts.get(identity)||'';send.disabled=!configured||archived;
     errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
-    focusChat(!!value.messages.length);scrollToLatest();drawConversations();showHistory(false);
+    focusChat(true);scrollToLatest();drawConversations();showHistory(false);
   }
   function drawConversations() {
     container.querySelectorAll('[data-history-filter]').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.historyFilter==='archived')===showArchived)));
@@ -197,7 +199,7 @@ export async function mount(container, context) {
       if (!context.signal.aborted && [document.body,stop,form.elements.message].includes(document.activeElement)) form.elements.message.focus({preventScroll:true});
     }
   };
-  form.elements.message.addEventListener('keydown',event => {if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !event.isComposing) {event.preventDefault();form.requestSubmit();}},{signal:context.signal});
+  form.elements.message.addEventListener('keydown',event => sendOnEnter(event,form),{signal:context.signal});
   container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
   clearChat.onclick = context.ui.safeAction(clearChat,async () => {
     if(activeId)await deleteConversation(activeId);latest.hidden=true;container.querySelector('.study-menu').open=false;

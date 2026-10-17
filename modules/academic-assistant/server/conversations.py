@@ -94,5 +94,4 @@ class Conversations:
             item['title'] = ' '.join(pair[0]['text'].split())[:36]
         self.context.store.write('conversation:' + owner + ':' + identity, messages + pair)
         item['updated_at'] = pair[-1]['created_at']
-        value['active_id'] = identity
         self.save(value, owner)

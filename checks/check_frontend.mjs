@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
+import {sendOnEnter} from '../modules/academic-assistant/web/composer.js';
+
+for (const keys of [{}, {ctrlKey:true}, {metaKey:true}, {shiftKey:true}, {isComposing:true}, {keyCode:229}, {repeat:true}, {key:'a'}]) {
+  let submitted = 0, prevented = 0;
+  const event = {key:'Enter', ...keys, preventDefault() {prevented++;}};
+  sendOnEnter(event, {requestSubmit() {submitted++;}});
+  const enter = event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229;
+  assert.equal(submitted, enter && !event.repeat ? 1 : 0, JSON.stringify(keys));
+  assert.equal(prevented, enter ? 1 : 0, JSON.stringify(keys));
+}
+console.log('chat composer: Enter/Ctrl/Meta sends once; Shift, IME and held keys do not submit');
 
 const mounted = new Set();
 globalThis.document = {

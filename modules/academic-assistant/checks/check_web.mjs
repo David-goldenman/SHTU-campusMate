@@ -82,7 +82,7 @@ try{
  assert(await evaluate(`document.querySelector('[data-messages]').clientHeight>=350`),'Focused conversation uses the viewport height');
  assert(await evaluate(`document.querySelector('.study-assistant .study-text').getBoundingClientRect().width>=800`),'Desktop reply uses the available reading width');
  await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
- assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Empty new chat shows the homepage overview');
+ assert(await evaluate(`document.querySelector('.module-zone').classList.contains('module-focus')`),'Explicit new chat opens the composer even when empty');
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelectorAll('[data-open-chat]')[1].click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden).then(()=>[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id).click()).then(()=>waitFor(()=>chatCheck.chats[0].archived))`);
  assert(await evaluate(`document.querySelector('[data-send]').disabled`),'Archived conversation is readable and cannot receive messages');
@@ -102,6 +102,17 @@ try{
  await evaluate(`chatCheck.mode='hold';document.querySelector('[data-chat-form]').requestSubmit();waitFor(()=>document.querySelector('.study-streaming h2')).then(()=>document.querySelector('.study-model').click()).then(()=>waitFor(()=>document.querySelector('[data-settings-tab="ai"][aria-selected="true"]')))`);
  assert(await evaluate(`chatCheck.aborts>=2`),'Leaving an active chat cancels the request');
  assert.equal(await evaluate(`!!document.querySelector('link[href*="/academic-assistant/"]')`),false);
+ await evaluate(`document.querySelector('[data-nav="dashboard"]').click();waitFor(()=>document.querySelector('[data-chat-form]'))`);
+ await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelector('[data-open-chat="'+chatCheck.chats[0].id+'"]').click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
+ await evaluate(`chatCheck.mode='answer';document.querySelector('#study-message').value='回车合成问题';document.querySelector('#study-message').focus();true`);
+ await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
+ await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
+ assert(await evaluate(`!document.querySelector('#study-message').disabled && document.querySelector('#study-message').value.includes(String.fromCharCode(10))`),'Shift+Enter inserts a line break');
+ await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+ await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+ await evaluate(`waitFor(()=>document.querySelector('#study-message').disabled).then(()=>waitFor(()=>!document.querySelector('#study-message').disabled))`);
+ assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),4,'Enter sends once after returning to the homepage');
  assert.deepEqual(await evaluate(`chatCheck.unexpected`),[]);assert.deepEqual(errors,[]);
  console.log('PASS chat UI: real progressive rendering, Markdown security, grouped pages, copy, reading position, desktop/mobile input visibility, stop, retry, truncated stream, AI settings and cleanup');
 }finally{socket?.close();browser('close');}
