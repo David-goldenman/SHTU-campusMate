@@ -1,0 +1,11 @@
+:root[data-art-theme="star-notes"] {
+  --bg:#f5f6f9; --paper:#fffefa; --surface:#eef2fb; --text:#22345a; --muted:#566580;
+  --border:#d7deec; --link:#2852b8; --accent:#688bda;
+  --nord0:#22345a; --nord1:#344c7b; --nord2:#49628d; --nord3:#566580;
+  --nord4:#d5deef; --nord5:#eef2fb; --nord6:#fffefa;
+  --nord7:#6582bd; --nord8:#a5bdf0; --nord9:#7895d1; --nord10:#3561be;
+  --rail-bg:#fffefa; --rail-text:#29477c; --rail-muted:#5c6e8f;
+  --rail-active-bg:#eaf0fc; --rail-active-text:#214ba9; --rail-hover:#f0f3fb;
+  --art-blue:#2852b8; --art-paper:#f8f7f2; --art-radius:3px;
+  --art-welcome-image:url('/assets/themes/assets/star-notes-hero.webp');
+}

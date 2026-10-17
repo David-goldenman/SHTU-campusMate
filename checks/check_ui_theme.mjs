@@ -74,7 +74,7 @@ try {
   await command('Page.enable');
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong') && document.querySelector('.study-messages')");
-  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'248px');
+  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'228px');
   for(const [name,width,height] of [['ui-overview-desktop',1440,1060],['ui-overview-tablet',768,1024],['ui-overview-mobile',375,812],['ui-overview-landscape',812,375]]) {
     await evaluate('window.scrollTo(0,0)');await capture(name,width,height);
   }
@@ -116,9 +116,9 @@ try {
   assert(await evaluate("!document.querySelector('link[href*=\"/assignments/\"]')"),'Assignment styles release on navigation');
   await capture('ui-priorities-return',1440,1060);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['12px','12px','12px','12px'],'Compact overview uses consistent themed spacing');
-  await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
+  await evaluate("document.documentElement.removeAttribute('data-ui-theme');document.documentElement.removeAttribute('data-art-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
-  await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
+  await evaluate("document.documentElement.dataset.uiTheme='nord-refined';document.documentElement.dataset.artTheme='observatory'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
   await evaluate("document.querySelector('[data-module-section=dashboard]').click()");
