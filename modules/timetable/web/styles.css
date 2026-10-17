@@ -35,6 +35,14 @@
 .week-planner .kind-deadline { border-left-color:var(--nord11); background:color-mix(in srgb,var(--nord11) 10%,var(--paper)); }
 .week-planner .kind-quiz,.week-planner .kind-exam { border-left-color:var(--nord12); background:color-mix(in srgb,var(--nord12) 12%,var(--paper)); }
 .week-planner .kind-presentation { border-left-color:var(--nord15); background:color-mix(in srgb,var(--nord15) 12%,var(--paper)); }
+.week-planner .kind-tutorial,.week-planner .kind-study { border-left-color:var(--nord15); background:color-mix(in srgb,var(--nord15) 10%,var(--paper)); }
+.week-planner .is-inactive { opacity:.65; }
+.week-planner .is-inactive strong { text-decoration:line-through; }
+.week-planner .calendar-event .calendar-status { font-weight:600; color:var(--text); }
+.week-planner .planner-conflicts { margin:12px 0; padding:12px; border:1px solid var(--nord12); border-radius:8px; }
+.planner-event-form fieldset { border:0; margin:0; padding:0; min-width:0; }
+.planner-event-form [data-move-fields] { display:grid; gap:14px; }
+.planner-event-form [hidden] { display:none!important; }
 .week-planner .kind-activity,.week-planner .kind-lecture { border-left-color:var(--nord14); background:color-mix(in srgb,var(--nord14) 14%,var(--paper)); }
 .week-planner .is-complete { opacity:.65; }
 .week-planner .planner-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; padding-top:16px; }
