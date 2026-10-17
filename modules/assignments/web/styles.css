@@ -6,9 +6,21 @@
 .assignment-center .assignment-section[data-section="pending"] .assignment-count { border-color:var(--nord10); color:var(--nord10); }
 .assignment-center .assignment-section[data-section="late"] .assignment-count { border-color:var(--nord11); color:var(--nord11); }
 .assignment-center .assignment-section[data-section="graded"] .assignment-count { border-color:var(--nord14); color:var(--nord14); }
+.assignment-center .assignment-order-hint { margin-left:auto; color:var(--muted); font-size:12px; }
+.assignment-center .assignment-card { cursor:grab; }
+.assignment-center .assignment-card:active { cursor:grabbing; }
+.assignment-center .assignment-card.is-dragging { opacity:.45; }
+.assignment-center .assignment-card.drop-before { box-shadow:0 -3px var(--nord10); }
+.assignment-center .assignment-card.drop-after { box-shadow:0 3px var(--nord10); }
 .assignment-center .assignment-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .assignment-center .assignment-card-head h4 { min-width:0; }
+.assignment-center .assignment-card-actions { display:flex; align-items:center; gap:4px; flex:none; }
 .assignment-center .assignment-badge { flex:none; padding:3px 10px; border-radius:999px; background:color-mix(in srgb,var(--nord14) 16%,var(--paper)); color:var(--nord14); font-size:12px; font-weight:600; }
+.assignment-center .assignment-move { width:24px; height:24px; padding:0; border:1px solid var(--border); border-radius:5px; background:var(--paper); color:var(--muted); font-size:13px; line-height:1; opacity:0; cursor:pointer; }
+.assignment-center .assignment-card:hover .assignment-move,.assignment-center .assignment-card:focus-within .assignment-move { opacity:1; }
+.assignment-center .assignment-move:hover { border-color:var(--nord10); color:var(--nord10); }
+.assignment-center .assignment-drag { padding:0 2px; color:var(--muted); font-size:15px; cursor:grab; }
+@media (hover:none) { .assignment-center .assignment-move { opacity:1; } }
 .assignment-center .assignment-grade { display:flex; align-items:baseline; gap:4px; margin:10px 0; color:var(--muted); }
 .assignment-center .assignment-grade strong { color:var(--nord14); font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
 .assignment-center .assignment-grade span { font-size:14px; }

@@ -30,4 +30,9 @@ assert items['gradescope:completed']['category'] == 'completed'
 assert items['blackboard:old']['category'] == 'pending' and items['blackboard:old']['pending'] is False
 assert {item['id'] for item in values if item['pending']} == {'gradescope:late','gradescope:future','gradescope:unknown','gradescope:legacy-open'}
 assert package.counts(values) == {'pending':4,'late':1,'graded':1,'completed':1,'ended':2}
-print('assignments: five states, zero scores, unconfirmed open work and current-course scope passed')
+ordered = package.arrange(data,datetime(2026,10,16,tzinfo=timezone.utc),{'pending':['gradescope:unknown','gradescope:future'],'late':['gradescope:late']})
+pending = [item['id'] for item in ordered if item['category'] == 'pending']
+assert pending[:2] == ['gradescope:unknown','gradescope:future'] and pending[-2:] == ['gradescope:legacy-open','blackboard:old']
+assert [item['id'] for item in ordered if item['category'] == 'late'] == ['gradescope:late']
+assert package.apply_order(values,{'pending':['missing']}) == values, 'Unknown saved IDs must not hide newly synced work'
+print('assignments: five states, zero scores, unconfirmed open work, current-course scope and saved drag order passed')

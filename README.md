@@ -35,7 +35,7 @@
 
 启动器默认使用 Windows 原生环境；指定 `--distro` 或 `CAMPUS_WSL_DISTRO` 时使用对应 WSL 发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
 
-默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
+默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；若 PATH 中没有 uv，启动器会用本机 Python/pip 将其安装到 `.private/runtime/tools/uv` 并复用，也可用 `CAMPUS_UV` 指定已有程序。uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
 
 在已配置环境的 WSL 中也可运行 `bash ./run.sh`，手动打开 [本地工作台](http://127.0.0.1:16666)。应用运行环境、缓存、启动状态和本机生成的 Windows 互操作脚本放在 `.private/runtime/`；开发环境与验证资料放在 `.codex/`，均不会提交。迁移源码时不复制虚拟环境；目标电脑重新准备依赖，详情见 [四人协作、打包与迁移](docs/DELIVERY.md)。
 

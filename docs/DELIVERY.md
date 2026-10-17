@@ -20,7 +20,7 @@
 ## 开发版迁移到另一台 Windows 电脑
 
 1. 复制 Git 跟踪的代码或克隆指定提交，保留 `uv.lock`、模块清单、前端资源与检查。不要把 `.private/`、`.codex/`、`.venv/`、`node_modules/`、`.env*`、浏览器配置和个人日志装进分享包。
-2. 目标机安装 Windows uv、Git、Node.js 22+ 与 Edge，AI 插件安装另需 pnpm。先运行 `run.cmd --check`，再双击 `run.cmd`；uv 按锁文件创建 `.private/runtime/windows/venv`，官方 SDK 安装对应 Windows x64 运行时。选择 WSL 时使用 `--distro`，安装对应 Linux 工具。首次联网安装失败时显示错误，不静默替换版本。
+2. 目标机安装 Git、Node.js 22+ 与 Edge；Python 3.12+（含 pip）或 Windows uv 至少准备一个，AI 插件安装另需 pnpm。先运行 `run.cmd --check`，再双击 `run.cmd`；缺少 uv 时启动器会用 Python/pip 把它安装到 `.private/runtime/tools/uv`，随后按锁文件创建 `.private/runtime/windows/venv`，官方 SDK 安装对应 Windows x64 运行时。选择 WSL 时使用 `--distro`，安装对应 Linux 工具。首次联网安装失败时显示错误，不静默替换版本。
 3. 在设置中重新连接学校账号、配置个人 AI Key。DPAPI 保险库及 IDS 本机设备私钥绑定原 Windows 用户环境，不能把复制 `vault.dpapi` 当作跨电脑登录迁移。学校端设备登记按需要重新绑定。
 4. 如需迁移用户资料，单独定义显式的导出/导入流程，只迁移用户选择的普通配置与数据，校验格式版本和账号归属。课程缓存、邮件和转写属于用户私有资料；默认在新机重新同步。数据库备份应在服务停止后进行。
 5. 即使只是同机移动目录，也不承诺 Python 虚拟环境可直接移动：虚拟环境可能引用原解释器的绝对路径。生成的互操作脚本在下一次启动时重建；失效的开发环境由 uv 重新创建，不修改业务代码来适配旧路径。
@@ -48,7 +48,7 @@
 
 ## 启动器维护与资料
 
-`run.cmd` 调用兼容 Windows PowerShell 5.1 的 `run.ps1`。默认使用 Windows；显式选择 WSL 时探测发行版并创建互操作脚本。生成文件位于 `.private/runtime/launcher`，Windows 环境位于 `.private/runtime/windows`。`/api/v1/health` 和公开 `launch_id` 用于确认本目录实例就绪，与凭据、CSRF 和数据归属校验分开。
+`run.cmd` 调用兼容 Windows PowerShell 5.1 的 `run.ps1`。默认使用 Windows；显式选择 WSL 时探测发行版并创建互操作脚本。生成文件位于 `.private/runtime/launcher`，Windows 环境位于 `.private/runtime/windows`。PATH 中没有 uv 时，原生启动器会先用 Python/pip 安装到 `.private/runtime/tools/uv` 并复用；`CAMPUS_UV` 可指定已有程序。`/api/v1/health` 和公开 `launch_id` 用于确认本目录实例就绪，与凭据、CSRF 和数据归属校验分开。
 
 最小检查：`powershell -NoProfile -ExecutionPolicy Bypass -File checks/check_launcher.ps1`、`run.cmd --check`；全量检查使用 Windows `check.ps1` 或 WSL `check.sh`。手工验收保留启动窗口，重复启动应打开已有实例，按 Ctrl+C 应停止后端。实际启动故障和迁移故障应回到对应平台适配修复。
 

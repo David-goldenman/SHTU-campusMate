@@ -27,6 +27,10 @@
 
 `POST /commands` 请求为 `{action,account_revision,request_id,record_id?,expected_revision?,event?,adjustment?}`。`action` 为 `create/update/delete/adjust_class`，`request_id` 为 UUID，账号版本来自 `/schedule`。修改或删除使用读取记录的 `revision`；缺失、过时或切换账号返回 409。相同请求 ID 的相同请求返回原回执，不重复执行，复用 ID 改参数返回 409。`event` 是新增的完整字段或修改的部分字段；换用钟点或节次时清除另一模式。旧 `/events` 接口保留兼容，页面和主页 AI 使用版本检查的命令接口。
 
+## 近四周网格
+页面顶部固定显示近四周作业日程表，位于上一周、本周、下一周按钮上方；它是 5 行 × 8 列的网格（1 行表头 + 4 个教学周，1 列周次 + 7 个星期），覆盖上周、本周、下周和下下周。每个单元格列出该日的作业截止和待完成／迟交作业，显示 Blackboard 或 Gradescope 提交平台，迟交项目带醒目标记。表格独立于课程周表，切换周按钮或筛选不会改变它，但“今天”高亮会随日期推移自动更新。点击卡片可查看详情；课程周表、冲突检查和移动端逐日安排保留在下方折叠的“本周详情”中。
+
+
 课程 `adjustment` 为 `{lesson_id,on_date,action,scope?,until_date?,to_date?,starts_at?,ends_at?,period_start?,period_end?,location?,notes?}`。动作 `leave/cancel/move/restore`，范围 `once`（默认）或 `following`（从这一次起、截至可选日期的同一排课系列，不自动扩展到课程的其他排课系列）。只调地点也用 `move`。调整按学校账号与学期保存，同一原始上课日期以最新适用规则为准；`restore` 恢复原教务安排。跨周调课在原位置标注“已调课”，目标周显示新安排；只改地点不生成重复卡片。缺失来源课程 ID 时保留覆盖并提示。
 
 回执含 `{applied,before,after,affected_count,week_start,checked_weeks,conflicts,local_only}`。冲突检查比较节次或已知钟点区间，排除已请假、已取消及调课前位置；连续调整检查各目标周，并纳入当前可用的来源考试、校历及个人安排。来源缺失、仅有节次或缺少结束时间时 `conflicts.complete=false`，不能据此声称无冲突。日历也返回 `conflicts`，页面展示时间重叠；课程覆盖仅影响本地时间表，不办理学校端请假审批或正式调课。

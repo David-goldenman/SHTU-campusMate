@@ -99,6 +99,16 @@ assert [item['id'] for item in homework['items']] == ['blackboard:late', 'blackb
 assert [item['offset'] for item in homework['items']] == [-1, 0, 1, 2]
 assert [item['late'] for item in homework['items']] == [True, True, False, False]
 assert homework['items'][0]['course_title'] == '合成课程' and (homework['pending'], homework['late']) == (2, 2)
+grid = module.overview_weeks({'metadata': {'periods': []}, 'timetable': [], 'events': [
+    {'id': 'blackboard:current', 'title': '本周迟交', 'source': 'blackboard', 'event_type': 'deadline', 'at': '2026-10-15T23:59:00+08:00'}]},
+    {'week_start': '2026-10-12', 'start': '2026-10-05', 'end': '2026-11-01', 'pending': 1, 'late': 1, 'items': [
+        {'id': 'blackboard:current', 'title': '本周迟交', 'source': 'blackboard', 'course_title': '合成课程',
+         'due_at': '2026-10-15T23:59:00+08:00', 'category': 'late', 'late': True}]}, '2026-09-14')
+assert [week['offset'] for week in grid['weeks']] == [-1, 0, 1, 2]
+assert [week['teaching_week'] for week in grid['weeks']] == [4, 5, 6, 7]
+assert len(grid['weeks'][1]['days']) == 7 and grid['weeks'][1]['days'][3]['date'] == '2026-10-15'
+merged = [event for day in grid['weeks'][1]['days'] for event in day['events'] if event['id'] == 'blackboard:current'][0]
+assert (merged['homework'], merged['platform'], merged['late'], merged['course_title']) == (True, 'Blackboard', True, '合成课程')
 for invalid in [html.replace(mask, "010"), "<html>maintenance</html>"]:
     try:
         parse(invalid, "2026 Fall")
