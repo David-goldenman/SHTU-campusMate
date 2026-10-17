@@ -44,6 +44,8 @@ class Source:
                 return {"queued": False, "status": "syncing"}
             self.context.store.write(self.sync_key, {"status": "syncing", "owner": self.owner()})
             self.future = self.executor.submit(self.run)
+            if getattr(self.context, 'runtime', None):
+                self.context.runtime.watch(self.sync_key, self.future)
             return {"queued": True, "status": "syncing"}
 
     def run(self):
