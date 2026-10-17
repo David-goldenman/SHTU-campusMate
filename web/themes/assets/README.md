@@ -15,8 +15,12 @@ star-notes-female.webp / star-notes-male.webp：用户确认的 B 组男女插�
 observatory-mark.svg 为本项目以几何线条绘制的天球标记。
 
 
-campus-water.webp：用户提供的 Image_100897839309894.jpg 经内置 image_gen 处理的湖畔蓝白网点插画。
+校园轮播图采用用户提供的照片，经内置 image_gen 做生成式蓝白网点处理；页面不添加场景说明。准确提示词和来源文件名见 campus-prompts.json。
 
-campus-windows.webp：用户提供的 Image_1776654661091_886.jpg 经内置 image_gen 处理的夜窗蓝白网点插画。
+- campus-water.webp：Image_100897839309894.jpg。
+- campus-windows.webp：Image_1776654661091_886.jpg。
+- campus-courtyard.webp：Image_100896321304530.jpg。
+- campus-tower.webp：Image_101270076719544.jpg。
+- campus-canopy.webp：IMG_20251125_174214.jpg。
 
-准确提示词与来源文件名见 campus-prompts.json。以上是基于真实校园照片的生成式视觉转译；不添加人物或幻想物件，原始照片保留在仓库外。网页资产为 720px WebP；页面使用懒加载并预留尺寸。
+网页版本均为 WebP，最长边约 720px，生成原稿保存在仓库外，原始照片保持不变。文件名只供资产索引，不作为地点标签。

@@ -10,13 +10,14 @@ export function normalizeAppearance(value) {
     theme:Object.hasOwn(themes,value.theme) ? value.theme : 'observatory',
     companions:{observatory:companion(value.companions?.observatory), 'star-notes':companion(value.companions?.['star-notes'])},
     moments:{dashboard:value.moments?.dashboard !== false,timetable:value.moments?.timetable !== false},
+    rotation:{autoplay:value.rotation?.autoplay !== false,seconds:[10,20,30,60].includes(value.rotation?.seconds) ? value.rotation.seconds : 20},
     reduceMotion:value.reduceMotion === true
   };
 }
 let state;
 try { state = normalizeAppearance(JSON.parse(localStorage.getItem(key))); }
 catch { state = normalizeAppearance(); }
-export function getAppearance() { return {...state,companions:{...state.companions},moments:{...state.moments}}; }
+export function getAppearance() { return {...state,companions:{...state.companions},moments:{...state.moments},rotation:{...state.rotation}}; }
 function apply() {
   document.documentElement.dataset.artTheme = state.theme;
   document.documentElement.dataset.artMotion = state.reduceMotion ? 'reduced' : 'system';
@@ -24,7 +25,7 @@ function apply() {
   document.querySelectorAll('[data-theme-name]').forEach(node => {node.textContent = themes[state.theme].name;});
 }
 export function setAppearance(patch) {
-  state = normalizeAppearance({...state,...patch,companions:{...state.companions,...patch.companions},moments:{...state.moments,...patch.moments}});
+  state = normalizeAppearance({...state,...patch,companions:{...state.companions,...patch.companions},moments:{...state.moments,...patch.moments},rotation:{...state.rotation,...patch.rotation}});
   let saved = true;
   try { localStorage.setItem(key,JSON.stringify(state)); } catch { saved = false; }
   apply();
@@ -55,9 +56,9 @@ export function appearancePanel() {
     '<p>只在外观设置里相遇，把工作区留给你的思考。</p><fieldset class="art-companion-field"><legend class="visually-hidden">人物形象</legend>' +
     ['female','male','hidden'].map((id,index) => '<label><input type="radio" name="art-companion" value="' + id + '"><span>' + ['女版','男版','隐藏'][index] + '</span></label>').join('') +
     '</fieldset><p class="field-hint">两套主题会分别记住你的人物选择。</p></div></section>' +
-    '<div class="art-motion-row"><div><h3>安静一点</h3><p>保留静态插画，停止星盘动效和图片淡入。也会尊重系统设置。</p></div>' +
+    '<div class="art-motion-row"><div><h3>安静一点</h3><p>保留静态插画，停止星盘动效和自动轮播。也会尊重系统设置。</p></div>' +
     '<label class="art-motion-toggle"><input data-art-motion type="checkbox"><span>减少动态效果</span></label></div>' +
-    '<section class="art-moments-section" aria-labelledby="art-moments-title"><div><h3 id="art-moments-title">在日常里，偶遇一幅画。</h3><p>来自校园照片的蓝白切片。只在页面下方停留，滚动到时轻轻出现。</p><fieldset class="art-moment-options"><legend class="visually-hidden">校园图片出现的位置</legend><label><input type="checkbox" data-art-moment="dashboard">首页页尾</label><label><input type="checkbox" data-art-moment="timetable">时间表页尾</label></fieldset></div><img class="art-moment-preview" src="/assets/themes/assets/campus-water.webp" alt="校园湖畔的蓝白网点插画预览" width="720" height="540" loading="lazy" decoding="async"></section>' +
+    '<section class="art-moments-section" aria-labelledby="art-moments-title"><div><h3 id="art-moments-title">在日常里，偶遇一幅画。</h3><p>只在页面下方显示图片，不添加场景说明。可自动轮播，也可手动切换。</p><fieldset class="art-moment-options"><legend class="visually-hidden">校园图片出现的位置</legend><label><input type="checkbox" data-art-moment="dashboard">首页页尾</label><label><input type="checkbox" data-art-moment="timetable">时间表页尾</label></fieldset><div class="art-moment-rotation"><label><input type="checkbox" data-art-autoplay>自动轮播</label><label>切换间隔<select data-art-interval><option value="10">10 秒</option><option value="20">20 秒</option><option value="30">30 秒</option><option value="60">60 秒</option></select></label></div></div><img class="art-moment-preview" src="/assets/themes/assets/campus-water.webp" alt="校园照片蓝白处理预览" width="720" height="540" loading="lazy" decoding="async"></section>' +
     '<footer class="art-settings-footer"><p>外观偏好保存在当前浏览器。</p><p data-appearance-status role="status" aria-live="polite"></p></footer></section>';
 }
 export function bindAppearance(host,signal) {
@@ -67,6 +68,8 @@ export function bindAppearance(host,signal) {
     host.querySelectorAll('[data-choice-state]').forEach(node => {node.textContent = node.dataset.choiceState === value.theme ? '已启用' : '选择主题';});
     host.querySelectorAll('[name="art-companion"]').forEach(input => {input.checked = input.value === selection;});
     host.querySelector('[data-art-motion]').checked = value.reduceMotion;
+    host.querySelector('[data-art-autoplay]').checked = value.rotation.autoplay;
+    host.querySelector('[data-art-interval]').value = String(value.rotation.seconds);
     host.querySelectorAll('[data-art-moment]').forEach(input => {input.checked = value.moments[input.dataset.artMoment];});
     host.querySelector('[data-companion-theme]').textContent = themes[value.theme].name;
     const image = host.querySelector('[data-companion-portrait]');
@@ -85,6 +88,8 @@ export function bindAppearance(host,signal) {
     if (target.name === 'art-companion') patch = {companions:{[state.theme]:target.value}};
     if (target.matches('[data-art-motion]')) patch = {reduceMotion:target.checked};
     if (target.matches('[data-art-moment]')) patch = {moments:{[target.dataset.artMoment]:target.checked}};
+    if (target.matches('[data-art-autoplay]')) patch = {rotation:{autoplay:target.checked}};
+    if (target.matches('[data-art-interval]')) patch = {rotation:{seconds:Number(target.value)}};
     if (!patch) return;
     const saved = setAppearance(patch);
     host.querySelector('[data-appearance-status]').textContent = saved ? '外观已保存。' : '已应用。浏览器限制了保存，下次打开可能需要重新选择。';
