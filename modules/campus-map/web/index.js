@@ -1,6 +1,8 @@
 import {today, shiftDay, validDay, matchLocation, eventTime, projectCampus, buildingLabel, layoutLabels} from './locations.js';
 
 import {buildWalkingGraph, planWalk} from './routing.js';
+import {compileConditions,routeConditionWarnings} from './conditions.js';
+import {createMaintenance} from './maintenance.js';
 
 const kinds = {class:'课程', deadline:'作业截止', exam:'考试', quiz:'Quiz', tutorial:'习题课', study:'学习', presentation:'展示', activity:'活动', lecture:'讲座', calendar:'校历'};
 const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在图上标记', ambiguous:'包含多个建筑，请选择具体地点'};
@@ -14,12 +16,12 @@ export async function mount(container, context) {
   container.classList.add('campus-map');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   let day = validDay(params.get('date')) ? params.get('date') : today();
-  let view, graph, route, startId='', endId='', routeEvent, networkRequest;
+  let view, graph, route, startId='', endId='', routeEvent, networkRequest, maintenance, conditionState;
   context.signal.addEventListener('abort',()=>networkRequest?.abort(),{once:true});
   container.innerHTML = `<header class="map-heading"><div><span class="map-eyebrow">SHANGHAITECH · CAMPUS</span><h2>今天，去哪儿</h2><p>把每天的安排，放回校园里。</p></div><a class="button" href="https://map.shanghaitech.edu.cn/" target="_blank" rel="noopener noreferrer">学校官方地图 ↗</a></header>
-    <div class="map-layout"><section class="map-panel" aria-label="校园建筑地图"><div class="map-tools"><div class="map-layers" aria-label="地图图层"><button type="button" data-layer="day" aria-pressed="true">当天地点</button><button type="button" data-layer="elevators" aria-pressed="false">电梯位置</button><button type="button" data-layer="gates" aria-pressed="false">出入口</button></div><label class="map-search-label"><span class="map-sr-only">搜索建筑或教室</span><input data-search type="search" placeholder="搜索建筑 / 教室，如信息学院1D-102" autocomplete="off"></label></div><div data-results class="map-search-results" hidden></div>
-    <section class="map-routing" aria-label="室外步行路线"><div class="map-route-heading"><h3>室外步行</h3><span>选地点 · 连成路</span></div><form data-route-form><div class="map-route-fields"><label>起点<select data-route-start aria-label="步行起点" disabled><option value="">正在读取路网…</option></select></label><button type="button" data-route-swap aria-label="交换起点和终点" title="交换起点和终点">⇄</button><label>终点<select data-route-end aria-label="步行终点" disabled><option value="">正在读取路网…</option></select></label></div><div class="map-route-actions"><button class="button" type="submit" data-route-submit disabled>规划步行路线</button><button type="button" data-route-clear>清除</button><span>也可选择下方课程作为终点</span></div></form><div data-route-result aria-live="polite"><p>正在读取室外路网…</p></div></section><div class="map-canvas"><div data-loading class="map-loading" role="status">正在读取校园建筑图…</div><svg data-map aria-label="上海科技大学建筑地图，可用方向键平移、加减号缩放" tabindex="0" role="group"></svg><span class="map-north" aria-hidden="true">↑<small>北 N</small></span><button class="map-expand" type="button" data-expand aria-expanded="false">⤢ 展开地图</button><span class="map-gesture-hint">拖动浏览 · 放大查看更多楼名</span><div class="map-zoom" aria-label="地图缩放"><button type="button" data-zoom="in" aria-label="放大地图">＋</button><button type="button" data-zoom="out" aria-label="缩小地图">−</button><button type="button" data-zoom="reset">全图</button></div><a class="map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">道路与绿地 © OpenStreetMap contributors</a></div>
-    <div class="map-legend"><span class="map-key map-key-teaching">教学科研</span><span class="map-key map-key-sport">运动场馆</span><span class="map-key map-key-service">生活服务</span><span class="map-key map-key-road">道路</span><span class="map-key map-key-path">步行道</span></div><div class="map-gates" data-gates aria-label="校园出入口"></div><div data-detail class="map-detail" aria-live="polite"><h3>校园里的下一站</h3><p>选择一项安排，或搜索建筑名称。地图标记对应整栋建筑，教室与电梯的楼内位置见详情。</p></div></section>
+    <div class="map-layout"><section class="map-panel" aria-label="校园建筑地图"><div class="map-tools"><div class="map-layers" aria-label="地图图层"><button type="button" data-layer="day" aria-pressed="true">当天地点</button><button type="button" data-layer="elevators" aria-pressed="false">电梯位置</button><button type="button" data-layer="gates" aria-pressed="false">出入口</button><button type="button" data-layer="conditions" aria-pressed="false">施工 / 通行</button></div><label class="map-search-label"><span class="map-sr-only">搜索建筑或教室</span><input data-search type="search" placeholder="搜索建筑 / 教室，如信息学院1D-102" autocomplete="off"></label></div><div data-results class="map-search-results" hidden></div>
+    <section class="map-routing" aria-label="室外步行路线"><div class="map-route-heading"><h3>室外步行</h3><span>选地点 · 连成路</span></div><form data-route-form><div class="map-route-fields"><label>起点<select data-route-start aria-label="步行起点" disabled><option value="">正在读取路网…</option></select></label><button type="button" data-route-swap aria-label="交换起点和终点" title="交换起点和终点">⇄</button><label>终点<select data-route-end aria-label="步行终点" disabled><option value="">正在读取路网…</option></select></label></div><div class="map-route-actions"><button class="button" type="submit" data-route-submit disabled>规划步行路线</button><button type="button" data-route-clear>清除</button><span>也可在当天安排中选择终点</span></div><label class="map-avoid-pending"><input type="checkbox" data-avoid-pending>避开待核实范围</label></form><div class="map-condition-status" data-condition-status aria-live="polite"></div><div data-route-result aria-live="polite"><p>正在读取室外路网…</p></div></section><div class="map-canvas"><div data-loading class="map-loading" role="status">正在读取校园建筑图…</div><svg data-map aria-label="上海科技大学建筑地图，可用方向键平移、加减号缩放" tabindex="0" role="group"></svg><span class="map-north" aria-hidden="true">↑<small>北 N</small></span><button class="map-expand" type="button" data-expand aria-expanded="false">⤢ 展开地图</button><button type="button" class="map-condition-done" data-condition-done hidden>完成选取</button><span class="map-gesture-hint">拖动浏览 · 放大查看更多楼名</span><div class="map-zoom" aria-label="地图缩放"><button type="button" data-zoom="in" aria-label="放大地图">＋</button><button type="button" data-zoom="out" aria-label="缩小地图">−</button><button type="button" data-zoom="reset">全图</button></div><a class="map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">道路与绿地 © OpenStreetMap contributors</a></div>
+    <div class="map-legend"><span class="map-key map-key-teaching">教学科研</span><span class="map-key map-key-sport">运动场馆</span><span class="map-key map-key-service">生活服务</span><span class="map-key map-key-road">道路</span><span class="map-key map-key-path">步行道</span></div><div class="map-gates" data-gates aria-label="校园出入口"></div><div data-detail class="map-detail" aria-live="polite"><h3>校园里的下一站</h3><p>选择一项安排，或搜索建筑名称。地图标记对应整栋建筑，教室与电梯的楼内位置见详情。</p></div><details class="map-maintenance"><summary>施工与通行维护</summary><div data-maintenance></div></details></section>
     <aside class="map-agenda"><div class="map-agenda-heading"><div><span class="map-eyebrow">YOUR DAY</span><h3>当天安排</h3></div><a href="#timetable">时间表 ↗</a></div><div class="map-date"><button class="button" type="button" data-day="prev" aria-label="前一天">‹</button><input data-date type="date" aria-label="查看日期" value="${e(day)}"><button class="button" type="button" data-day="next" aria-label="后一天">›</button><button class="button" type="button" data-day="today">今天</button></div><div data-agenda aria-live="polite"></div></aside></div>
     <footer class="map-source">建筑与 5 处校门来自学校官方地图；道路、水系与绿地来自 OpenStreetMap · 资料收录 2026-10-17。室外步行路线依据已收录道路计算，开放情况以现场为准；不含室内、地下路线。电梯资料覆盖 2 栋建筑、3 条位置说明。</footer>`;
   const svg = container.querySelector('[data-map]'), agenda = container.querySelector('[data-agenda]'), detail = container.querySelector('[data-detail]');
@@ -64,7 +66,10 @@ export async function mount(container, context) {
     if (!data) return;
     const marks=mapMarks(),basemap=data.basemap||{roads:[],landscape:[]};
     const roadMarkup=basemap.roads.map(road=>`<polyline class="map-road ${road.type==='footway'?'is-footway':''}" points="${projection.polygon(road.points)}"/>`).join('');
-    svg.innerHTML=`<polygon class="map-boundary" points="${projection.polygon(data.campus.polygon)}"/><g class="map-landscape">${basemap.landscape.map(item=>item.polygon?`<polygon class="map-land-${e(item.kind)}" points="${projection.polygon(item.polygon)}"/>`:`<polyline class="map-land-waterway" points="${projection.polygon(item.points)}"/>`).join('')}</g><g class="map-road-casings">${roadMarkup}</g><g class="map-road-surfaces">${roadMarkup}</g><g class="map-buildings">`+data.buildings.filter(b=>b.kind!=='gate').map(building=>`<g data-building="${e(building.id)}" role="button" tabindex="0" aria-label="${e(building.name)}" aria-pressed="${selected===building.id}" class="map-building category-${e(building.category)}${selected===building.id?' is-selected':''}${marks.has(building.id)?' is-marked':''}"><title>${e(building.name)}</title><polygon points="${projection.polygon(building.polygon)}"/></g>`).join('')+`</g>${route?.status==='ok'?`<polyline class="map-route-outline" points="${projection.polygon(route.points)}"/><polyline class="map-route-line" points="${projection.polygon(route.points)}"><title>室外步行路线</title></polyline>`:''}<g data-annotations></g>`;
+    svg.innerHTML=`<polygon class="map-boundary" points="${projection.polygon(data.campus.polygon)}"/><g class="map-landscape">${basemap.landscape.map(item=>item.polygon?`<polygon class="map-land-${e(item.kind)}" points="${projection.polygon(item.polygon)}"/>`:`<polyline class="map-land-waterway" points="${projection.polygon(item.points)}"/>`).join('')}</g><g class="map-road-casings">${roadMarkup}</g><g class="map-road-surfaces">${roadMarkup}</g><g class="map-buildings">`+data.buildings.filter(b=>b.kind!=='gate').map(building=>`<g data-building="${e(building.id)}" role="button" tabindex="0" aria-label="${e(building.name)}" aria-pressed="${selected===building.id}" class="map-building category-${e(building.category)}${selected===building.id?' is-selected':''}${marks.has(building.id)?' is-marked':''}"><title>${e(building.name)}</title><polygon points="${projection.polygon(building.polygon)}"/></g>`).join('')+`</g>${maintenance?.overlay(projection,layer==='conditions')||''}${route?.status==='ok'?`<polyline class="map-route-outline" points="${projection.polygon(route.points)}"/><polyline class="map-route-line" points="${projection.polygon(route.points)}"><title>室外步行路线</title></polyline>`:''}<g data-annotations></g>`;
+    container.querySelector('.map-canvas').classList.toggle('is-editing-conditions',!!maintenance?.mode);
+    container.querySelector('[data-condition-done]').hidden=!maintenance?.mode;
+    container.querySelector('.map-gesture-hint').textContent=maintenance?.mode==='edges'?'点选道路 · 再点可取消':maintenance?.mode==='area'?'点击施工范围的两个对角点':'拖动浏览 · 放大查看更多楼名';
     drawAnnotations();
   }
   function renderAgenda() {
@@ -93,11 +98,13 @@ export async function mount(container, context) {
   function renderRoute() {
     routeStart.value=startId;routeEnd.value=endId;
     const source=routeEvent?`<p class="map-route-course">课程终点 · ${e(routeEvent.title||routeEvent.course_title||'当天安排')}<br>${e(day)} ${e(eventTime(routeEvent))} · ${e(routeEvent.location)}</p>`:'';
-    const messages={missing:'选择起点和终点，或在当天安排中点“步行到这里”。',same:'起点和终点是同一地点，无需规划室外路线。',unmapped:'该地点附近尚未收录可用的室外步行道路，请选择其他地点。',disconnected:'这两个地点之间的已收录室外路网尚未连通，暂时无法规划路线。'};
+    const messages={conditions_unavailable:'通行维护记录尚未就绪，暂不生成路线。',conditions_invalid:'部分已确认限制在当前底图中失去定位，请在维护页面复核后再规划。',restricted:'起点或终点受到当前通行限制，请选择其他地点。',missing:'选择起点和终点，或在当天安排中点“步行到这里”。',same:'起点和终点是同一地点，无需规划室外路线。',unmapped:'该地点附近尚未收录可用的室外步行道路，请选择其他地点。',disconnected:'这两个地点之间的已收录室外路网尚未连通，暂时无法规划路线。'};
     if(!graph){routeResult.innerHTML='<p>室外路网暂不可用，请重新打开校园地图重试。</p>';return;}
-    if(route?.status!=='ok'){routeResult.innerHTML=source+`<p>${e(messages[route?.status||'missing'])}</p>`;return;}
+    if(route?.status!=='ok'){routeResult.innerHTML=source+`<p>${e(route?.message||messages[route?.status||'missing'])}</p>`;return;}
+    const warnings=conditionState?routeConditionWarnings(route,conditionState):[];
+    const conditionNotes=warnings.map(item=>`<p class="map-condition-warning"><strong>${e(item.state==='pending'?'途经待核实范围':'通行提醒')} · ${e(item.title)}</strong><br>${e(item.note)}</p>`).join('');
     const approachNotes=[buildingById(startId),buildingById(endId)].filter(b=>b.walking_approach).map(b=>`<p class="map-route-course"><strong>${e(b.name)}入口提示 · ${e(b.walking_approach.source_label)}</strong><br>${e(b.walking_approach.note)}</p>`).join('');
-    routeResult.innerHTML=source+`<div class="map-route-summary"><strong>约 ${Math.max(0,Math.round(route.length/10)*10)} 米 <span>· ${route.minutes} 分钟</span></strong><button type="button" data-route-fit>查看全程 ↗</button></div><p class="map-route-endpoints">${e(routePlaceLabel(buildingById(startId)))} → ${e(routePlaceLabel(buildingById(endId)))}</p>${approachNotes}<p>起终点均在建筑 / 校门附近的室外道路。步行按 80 米/分钟估算，进楼与等候时间另计。${route.stairs?'本路线经过室外台阶。':''}</p><details class="map-route-steps"><summary>怎么走 · ${route.steps.length} 段道路</summary><ol>${route.steps.map(step=>`<li>${e(step.text)}<strong>约 ${Math.max(1,Math.round(step.length))} 米</strong></li>`).join('')}<li>到达${e(routePlaceLabel(buildingById(endId)))}的室外道路，请按现场指引进入。</li></ol></details><p class="map-route-limit">室外试用路线 · 通行以现场为准，未核实无障碍条件。</p>`;
+    routeResult.innerHTML=source+`<div class="map-route-summary"><strong>约 ${Math.max(0,Math.round(route.length/10)*10)} 米 <span>· ${route.minutes} 分钟</span></strong><button type="button" data-route-fit>查看全程 ↗</button></div><p class="map-route-endpoints">${e(routePlaceLabel(buildingById(startId)))} → ${e(routePlaceLabel(buildingById(endId)))}</p>${conditionNotes}${approachNotes}<p>起终点均在建筑 / 校门附近的室外道路。步行按 80 米/分钟估算，进楼与等候时间另计。${route.stairs?'本路线经过室外台阶。':''}</p><details class="map-route-steps"><summary>怎么走 · ${route.steps.length} 段道路</summary><ol>${route.steps.map(step=>`<li>${e(step.text)}<strong>约 ${Math.max(1,Math.round(step.length))} 米</strong></li>`).join('')}<li>到达${e(routePlaceLabel(buildingById(endId)))}的室外道路，请按现场指引进入。</li></ol></details><p class="map-route-limit">室外试用路线 · 通行以现场为准，未核实无障碍条件。</p>`;
   }
   function fitRoute() {
     if(route?.status!=='ok')return;
@@ -107,7 +114,15 @@ export async function mount(container, context) {
     const h=w*projection.height/projection.width;view={x:cx-w/2,y:cy-h/2,w,h};setView();
   }
   function calculateRoute(focus=false) {
-    route=graph?planWalk(graph,buildingById(startId),buildingById(endId)):undefined;
+    conditionState=graph&&maintenance?.ready?compileConditions(graph,maintenance.snapshot.items,day,data.buildings,container.querySelector('[data-avoid-pending]').checked):undefined;
+    const blocked=conditionState?.blockedPlaces.get(startId)||conditionState?.blockedPlaces.get(endId);
+    if(!graph)route=undefined;
+    else if(!maintenance?.ready)route={status:'conditions_unavailable'};
+    else if(conditionState.invalid.length)route={status:'conditions_invalid'};
+    else if(blocked)route={status:'restricted',message:(blocked.state==='pending'?'已选择避开待核实范围：':'该地点有已确认通行限制：')+blocked.title+'。请改选地点或在维护页面核实。'};
+    else route=planWalk(conditionState.graph,buildingById(startId),buildingById(endId));
+    container.querySelector('[data-route-submit]').disabled=!maintenance?.ready;
+    maintenance?.status();
     renderRoute();drawMap();if(focus)fitRoute();
   }
   function setEndpoint(kind,id,item) {
@@ -115,6 +130,7 @@ export async function mount(container, context) {
     calculateRoute(true);
   }
   on(container.querySelector('[data-route-form]'),'submit',event=>{event.preventDefault();calculateRoute(true);});
+  on(container.querySelector('[data-avoid-pending]'),'change',()=>calculateRoute(true));
   on(routeStart,'change',event=>setEndpoint('start',event.target.value));
   on(routeEnd,'change',event=>setEndpoint('end',event.target.value));
   async function loadNetwork() {
@@ -122,15 +138,17 @@ export async function mount(container, context) {
     try {
       const network=await context.api('/walking-network',{signal:networkRequest.signal});if(context.signal.aborted)return;
       graph=buildWalkingGraph(network);
+      maintenance=createMaintenance({context,host:container.querySelector('[data-maintenance]'),statusHost:container.querySelector('[data-condition-status]'),data,graph,getDay:()=>day,onUpdate:()=>calculateRoute(),focusMap:()=>container.querySelector('.map-canvas').scrollIntoView({block:'center'}),redraw:drawMap});
       const options='<option value="">请选择地点</option>'+['gate','building'].map(kind=>`<optgroup label="${kind==='gate'?'校门':'校园建筑'}">${data.buildings.filter(b=>(b.kind||'building')===kind).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')).map(b=>`<option value="${e(b.id)}">${e(buildingLabel(b))}</option>`).join('')}</optgroup>`).join('');
       for(const select of [routeStart,routeEnd]){select.innerHTML=options;select.disabled=false;}
-      container.querySelector('[data-route-submit]').disabled=false;calculateRoute();
+      await maintenance.load();if(context.signal.aborted)return;calculateRoute();
     }catch(error){if(!context.signal.aborted){routeStart.innerHTML=routeEnd.innerHTML='<option value="">路网不可用</option>';renderRoute();}}
   }
   async function loadDay() {
     request?.abort();request=new AbortController();const ticket=++serial;
     schedule=undefined;selectedEvent=undefined;selected=undefined;
     if(routeEvent){routeEvent=undefined;endId='';route=undefined;renderRoute();}
+    if(graph){calculateRoute();maintenance?.render();}
     drawMap();renderDetail();agenda.innerHTML='<p class="map-notice" role="status">正在读取当天安排…</p>';
     try {
       const value=await context.api('/day?date='+encodeURIComponent(day),{signal:request.signal});
@@ -141,7 +159,9 @@ export async function mount(container, context) {
   }
   on(container,'click',event=>{
     if(!data)return;
+    if(maintenance?.mode&&svg.contains(event.target))return;
     const button=event.target.closest('button,a,[data-building]');if(!button)return;
+    if(button.hasAttribute('data-condition-done'))maintenance?.finish();
     if(button.hasAttribute('data-route-swap')){[startId,endId]=[endId,startId];routeEvent=undefined;calculateRoute(true);}
     if(button.hasAttribute('data-route-clear')){startId='';endId='';routeEvent=undefined;route=undefined;renderRoute();drawMap();}
     if(button.hasAttribute('data-route-fit'))fitRoute();
@@ -170,13 +190,20 @@ export async function mount(container, context) {
   });
   on(svg,'keydown',event=>{
     if(!view)return;
+    if(maintenance?.mode&&['Enter',' '].includes(event.key)){const road=event.target.closest('[data-maint-road]');if(road){event.preventDefault();maintenance.mapClick(null,road.dataset.maintRoad);}return;}
     const building=event.target.closest('[data-building]');
     if(building&&['Enter',' '].includes(event.key)){event.preventDefault();selectedEvent=undefined;selectBuilding(building.dataset.building,'',false);return;}
     if(['+','=','-','0','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();if(['+','='].includes(event.key))zoom(.75);else if(event.key==='-')zoom(1.333);else if(event.key==='0')resetView();else {view.x+=({'ArrowLeft':-1,'ArrowRight':1}[event.key]||0)*view.w*.08;view.y+=({'ArrowUp':-1,'ArrowDown':1}[event.key]||0)*view.h*.08;setView();}}
   });
-  on(svg,'pointerdown',event=>{if(!view||event.button!==0)return;moved=false;drag={id:event.pointerId,x:event.clientX,y:event.clientY,view:{...view},building:event.target.closest('[data-building]')?.dataset.building};svg.setPointerCapture(event.pointerId);});
+  on(svg,'pointerdown',event=>{if(!view||event.button!==0)return;moved=false;drag={id:event.pointerId,x:event.clientX,y:event.clientY,view:{...view},building:event.target.closest('[data-building]')?.dataset.building,road:event.target.closest('[data-maint-road]')?.dataset.maintRoad};svg.setPointerCapture(event.pointerId);});
   on(svg,'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.hypot(dx,dy)>4)moved=true;const rect=svg.getBoundingClientRect(),scale=Math.max(drag.view.w/rect.width,drag.view.h/rect.height);view={...drag.view,x:drag.view.x-dx*scale,y:drag.view.y-dy*scale};setView();});
-  const release=event=>{if(drag?.id===event.pointerId){const id=drag.building;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);drag=undefined;if(id&&!moved&&event.type==='pointerup'){selectedEvent=undefined;selectBuilding(id,'',false);}}};
+  const release=event=>{
+    if(drag?.id!==event.pointerId)return;
+    const {building:id,road}=drag;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);drag=undefined;
+    if(moved||event.type!=='pointerup')return;
+    if(maintenance?.mode){const point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;const local=point.matrixTransform(svg.getScreenCTM().inverse());maintenance.mapClick(projection.unproject([local.x,local.y]),road);return;}
+    if(id){selectedEvent=undefined;selectBuilding(id,'',false);}
+  };
   on(svg,'pointerup',release);on(svg,'pointercancel',release);
   observer=new ResizeObserver(()=>drawAnnotations());observer.observe(svg);
   try {

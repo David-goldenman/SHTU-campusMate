@@ -26,11 +26,14 @@ OSM 衍生数据按 [ODbL 1.0](https://www.openstreetmap.org/copyright) 提供�
 
 - `GET /places` 返回上述公开建筑、电梯说明及来源元数据，以及 `basemap` 内的 OSM 道路与景观数据。
 - `GET /walking-network` 返回 ODbL 许可的公开 OSM 道路、节点、步行权限标签、校园边界和来源。与日程解耦，时间表不可用时仍可选择公开地点规划。
+- `GET /conditions` 返回当前 IDS 账号版本的通行记录、记录集 `version`、`account_revision` 与最近 200 次修改摘要。未保存时提供一条明确标为待核实的西门线索。
+- `POST /conditions`、`PUT /conditions/{id}` 接收 `{version, account_revision, item}`。`item` 包含标题、`state`（pending/confirmed/resolved/withdrawn）、`effect`（blocked/caution）、`scope`（place/edges/area）及对应的地点 ID、OSM 稳定道路引用或矩形边界；另含 `starts_on/expected_end/review_on`、`source_kind/source_title/source_date/source_url/note`。数据错误返回 422，账号或版本冲突返回 409。日期采用北京时间自然日。
+- `POST /conditions/undo` 接收 `{version, account_revision}`，撤销最后一次本地修改并追加审计记录；新增记录撤销为已撤回，不直接删除历史。
 - `GET /day?date=YYYY-MM-DD` 默认北京时间今天，仅经公开 `context.api('timetable','/schedule?week_start=...')` 读取所选日期的日历。返回日期、精简日程、来源状态、更新时间和问题提示；不触发学校同步、AI 或任何写入。读取前后检查账号版本，切换账号返回 409。
 
 课程取消、请假和调课原位置不作为去向；保留调课后的实际安排。事项的截止时间仍标为截止，不转成上课开始时间；没有钟点时保留节次，没有地点或匹配有歧义时明确提示。地名匹配仅使用明确建筑名／别名，含多个建筑的描述不会自动选一个位置。时间表模块关闭或不可用时，地图与电梯资料仍可用，日程区明确提示。
 
-页面链接可带 `#campus-map?date=YYYY-MM-DD&event=事项ID` 或 `&location=教室原文`，只在本机定位。资料不缓存用户日程，离开页面中止请求、事件和样式。无持久用户数据、秘密、后台线程或付费服务。验证由 `checks/check_map.py` 与 `checks/check_locations.mjs` 覆盖。
+页面链接可带 `#campus-map?date=YYYY-MM-DD&event=事项ID` 或 `&location=教室原文`，只在本机定位。资料不缓存用户日程，离开页面中止请求、事件、观察器和样式。通行维护记录使用 `AccountCache(context, 'ids')` 与本模块 `context.store`，纳入框架备份；账号切换拒绝旧表单写入。无秘密、后台线程或付费服务。验证由模块 `checks/` 执行。
 
 ## 试用版本
 
@@ -45,6 +48,12 @@ OSM 衍生数据按 [ODbL 1.0](https://www.openstreetmap.org/copyright) 提供�
 体育馆采用 2026-10-17 使用者反馈的入口侧向：地图左侧（西侧）有两个入口，原先右侧到达点附近的入口不常开。`walking_approach` 将到达／出发道路限制在西侧，缺少可用道路时不回退到另一侧。该反馈与校方建筑来源分开标注，精度仅为建筑一侧，不虚构两个门的精确坐标；地图与课程路线显示“西侧入口附近”。
 
 验证增加最短路径、同一路段起终点、方向限制、相交但未连通道路、室内／地下／权限过滤、校园边界，以及北门至六处课程建筑的真实路网覆盖。`check_routing.mjs` 由原有模块检查执行。
+
+### 施工与通行维护
+
+入口在路线摘要“维护 / 复核”，也可展开地图下方的“施工与通行维护”。支持地点、地图选路段、两个对角点圈选区域；保存前显示影响范围，保存后即时重算路线。已确认的步行封闭从路网中排除，封闭地点不作为起终点；待核实线索默认提示，可主动选择避开。所选日期到达复核日或超过预计完工日时显示需复核，已确认封闭保持避让，恢复需新依据。来源只供用户查阅，不自动抓取或发送维护内容。
+
+记录保存失败保留表单；多标签页冲突要求刷新再核对。维护接口不可用、已确认限制失去底图定位时暂停路线，地图仍可用。撤回／恢复保留历史，支持撤销上次修改；进行中的记录上限 300 条。基础地图资源升级与本地维护记录独立。详细设计、维护节奏、数据更新流程与边界见 [维护方案](MAINTENANCE.md)。
 
 本轮保留在 `codex/campus-map` 分支，供本地试用后继续完善，不合入主分支。打开 `/#campus-map`，选择日期查看安排；点击日程或建筑查看详情，使用“电梯位置”切换资料图层。手机上点击安排会把对应地图位置带回可视区域。
 

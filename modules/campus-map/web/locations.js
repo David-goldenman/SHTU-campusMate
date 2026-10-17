@@ -47,7 +47,8 @@ export function projectCampus(data) {
   const point = ([x,y]) => [40 + (x - minX) * cos * scale, 40 + (maxY - y) * scale];
   const polygon = points => points.map(p => point(p).map(n => n.toFixed(2)).join(',')).join(' ');
   const center = points => {const xy = points.map(point);return [xy.reduce((s,p) => s+p[0],0)/xy.length, xy.reduce((s,p) => s+p[1],0)/xy.length];};
-  return {polygon, center, point, width: width * scale + 80, height: height * scale + 80};
+  const unproject=([x,y])=>[minX+(x-40)/cos/scale,maxY-(y-40)/scale];
+  return {polygon, center, point, unproject, width: width * scale + 80, height: height * scale + 80};
 }
 
 export function buildingLabel(building) {

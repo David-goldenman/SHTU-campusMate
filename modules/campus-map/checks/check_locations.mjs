@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import './check_routing.mjs';
+import './check_conditions.mjs';
 import {readFile} from 'node:fs/promises';
 import {matchLocation, eventTime, shiftDay, validDay, projectCampus, layoutLabels} from '../web/locations.js';
 const data=JSON.parse(await readFile(new URL('../data/places.json',import.meta.url),'utf8'));

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, HTTPException
 
 from backend.services.campus.analysis import account_revision
+from .conditions import create_conditions_router
 
 ZONE = ZoneInfo('Asia/Shanghai')
 FIELDS = ('id', 'title', 'course_title', 'event_type', 'source', 'start_time', 'at', 'starts_at', 'ends_at',
@@ -17,6 +18,8 @@ def create_router(context):
     places = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'places.json').read_text(encoding='utf-8'))
     places['basemap'] = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'osm-basemap.json').read_text(encoding='utf-8'))
     walking = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'walking-network.json').read_text(encoding='utf-8'))
+    leads = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'condition-leads.json').read_text(encoding='utf-8'))
+    router.include_router(create_conditions_router(context, places, walking, leads))
 
     @router.get('/places')
     def public_places():

@@ -28,21 +28,23 @@ export function walkable(tags={},node=false) {
   return ['footway','path','pedestrian','steps','residential','service','living_street','unclassified'].includes(tags.highway)||tags.highway==='cycleway'&&yes(tags.foot);
 }
 export function buildWalkingGraph(network) {
-  const nodes=new Map(),adj=new Map(),edges=[];
+  const nodes=new Map(),adj=new Map(),edges=[],knownEdgeKeys=new Set();
+  const edgeKey=(way,a,b)=>way+':'+[a,b].sort().join(':');
   for(const [id,node] of Object.entries(network.nodes))if(walkable(node.tags,true)){nodes.set(id,node.point);adj.set(id,[]);}
   const add=(a,b,edge)=>adj.get(a).push({to:b,edge,length:edge.length});
   for(const way of network.ways) {
+    for(let i=1;i<way.refs.length;i++)knownEdgeKeys.add(edgeKey(way.id,way.refs[i-1],way.refs[i]));
     if(!walkable(way.tags))continue;
     for(let i=1;i<way.refs.length;i++) {
       const a=way.refs[i-1],b=way.refs[i],p=nodes.get(a),q=nodes.get(b);if(!p||!q||a===b)continue;
       const length=distance(network.nodes[a].wgs||p,network.nodes[b].wgs||q);if(!Number.isFinite(length)||length===0)continue;
       const samples=Math.ceil(length/10);
       if(network.boundary?.length&&Array.from({length:samples+1},(_,n)=>mix(p,q,n/samples)).some(v=>!inside(v,network.boundary)))continue;
-      const edge={id:edges.length,a,b,p,q,length,way:way.id,tags:way.tags,forward:way.tags['oneway:foot']!=='-1',backward:!['yes','1','true'].includes(way.tags['oneway:foot'])};
+      const edge={id:edges.length,key:edgeKey(way.id,a,b),a,b,p,q,length,way:way.id,tags:way.tags,forward:way.tags['oneway:foot']!=='-1',backward:!['yes','1','true'].includes(way.tags['oneway:foot'])};
       edges.push(edge);if(edge.forward)add(a,b,edge);if(edge.backward)add(b,a,edge);
     }
   }
-  return {nodes,adj,edges};
+  return {nodes,adj,edges,knownEdgeKeys};
 }
 // The endpoint is a point on an outdoor road near the footprint, never an indoor connector.
 export function snapPlace(graph,place,maxGap=60) {
@@ -114,7 +116,7 @@ export function planWalk(graph,startPlace,endPlace) {
   const segments=[];
   for(let id='@end';id!=='@start';) {
     const prev=previous.get(id),link=prev.link;
-    segments.push({from:link.from||graph.nodes.get(prev.id),to:link.toPoint||graph.nodes.get(id),length:link.length,way:link.edge.way,tags:link.edge.tags});id=prev.id;
+    segments.push({from:link.from||graph.nodes.get(prev.id),to:link.toPoint||graph.nodes.get(id),length:link.length,way:link.edge.way,edgeKey:link.edge.key,tags:link.edge.tags});id=prev.id;
   }
   segments.reverse();const length=distances.get('@end');
   return {status:'ok',start,end,length,minutes:Math.max(1,Math.ceil(length/80)),segments,points:[start.point,...segments.map(s=>s.to)],steps:routeSteps(segments),stairs:segments.some(s=>s.tags.highway==='steps')};
