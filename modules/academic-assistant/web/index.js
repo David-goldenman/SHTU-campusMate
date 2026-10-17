@@ -82,7 +82,7 @@ export async function mount(container, context) {
   input.addEventListener('input',resizeInput,{signal:context.signal});
   search.addEventListener('input',drawConversations,{signal:context.signal});
   retry.onclick = () => form.requestSubmit();
-  function focusChat(active) {context.focus(active);const home=container.querySelector('[data-home]');home.setAttribute('aria-pressed',String(!active));home.textContent=active?'校园概览':'返回对话';}
+  function focusChat(active) {context.focus(active);const home=container.querySelector('[data-home]');home.setAttribute('aria-pressed',String(!active));home.textContent=active?'查看今日待办':'进入对话';}
   container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
   function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) {focusChat(true);showProfile(false);}}
   historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
@@ -182,7 +182,7 @@ export async function mount(container, context) {
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
   archived=conversations.items.find(item=>item.id===activeId)?.archived || false;
-  resizeInput();drawConversations();focusChat(true);
+  resizeInput();drawConversations();focusChat(false);
   function fillProfile(value) {
     if (!profileDirty) for (const name of ['major','cohort_year','direction','weekly_hours','notes']) profileForm.elements[name].value = value.profile[name] ?? '';
     container.querySelector('[data-academic-records]').textContent = [value.academic.plan_title || '',value.academic.updated_at ? '记录更新于 ' + time(value.academic.updated_at) : '查询培养方案后会显示方案来源。'].filter(Boolean).join(' · ');

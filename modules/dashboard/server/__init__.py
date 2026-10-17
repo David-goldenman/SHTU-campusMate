@@ -32,7 +32,7 @@ def create_router(context):
         today = datetime.now(ZoneInfo('Asia/Shanghai')).date().isoformat()
         days = schedule.json().get('calendar', {}).get('days', []) if schedule.status_code == 200 else []
         agenda = [day for day in days if day['date'] >= today][:2]
-        return {**value, **summarize(value["data"], pending, notifications), 'agenda': agenda}
+        return {**value, **summarize(value["data"], pending, notifications), 'pending': pending, 'agenda': agenda}
 
     @router.post("/sync", status_code=202)
     async def sync():

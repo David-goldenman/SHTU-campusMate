@@ -18,6 +18,7 @@ function fixture(modules,categories){
   if(path==='/bootstrap')return json({version:'synthetic',csrf_token:'synthetic',modules,categories});
   if(path==='/modules')return json({modules,categories});
   if(path==='/settings')return json({port:16666,active_port:16666,restart_required:false,storage:{directory:'.private',encryption:'Synthetic'}});
+  if(path==='/data/backups')return json({backups:[]});
   if(path==='/auth/providers')return json({providers:[]});
   if(path==='/ai/settings')return json({enabled:true,key_saved:true,model:'deepseek-flash'});
   if(path==='/modules/dashboard/snapshot')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
@@ -68,6 +69,8 @@ try{
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});await command('Page.navigate',{url:base+'/#dashboard'});
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<160;i++){if(condition())return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI condition timed out');};waitFor(()=>document.querySelector('[data-chat-form]'))`);
  await evaluate(`new Promise(r=>setTimeout(r,200))`);
+ assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Homepage starts with deadlines visible');
+ await evaluate(`document.querySelector('[data-home]').click();true`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'desktop input visible');
  await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.study-prompts').open=true;document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
  await evaluate(`waitFor(()=>document.querySelector('.study-streaming h2'))`);
