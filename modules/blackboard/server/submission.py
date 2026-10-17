@@ -54,14 +54,14 @@ def activity(html):
             status = 'exempt'
         elif any(word in text for word in ('needs grading', '需要评分', '待评分')):
             status = 'needs_grading'
+        elif any(word in text for word in ('no submission', 'not submitted', '未提交', '未尝试')):
+            status = 'not_submitted'
         elif 'graded_item_row' in classes:
             status = 'graded'
         elif 'submitted_item_row' in classes:
             status = 'submitted'
         elif any(word in text for word in ('draft', 'in progress', '草稿', '进行中')):
             status = 'draft'
-        elif any(word in text for word in ('no submission', 'not submitted', '未提交', '未尝试')):
-            status = 'not_submitted'
         else:
             status = 'unknown'
         value = state(status, 'activity')
@@ -138,12 +138,12 @@ def decide(grade, activity_value, load_history, previous, checked_at):
             result['submitted'] = True
     elif status == 'NeedsGrading':
         result = state('needs_grading', 'gradebook')
-    elif (score is not None and not negative) or status == 'Graded':
+    elif (score is not None or status == 'Graded') and not negative:
         result = state('graded', 'gradebook')
     elif activity_value['submission_status'] in POSITIVE:
         result = activity_value
     else:
-        result = (state('unknown', 'unavailable', submission_reason='成绩与提交记录不一致，需要核对提交历史。') if score is not None and negative else
+        result = (state('unknown', 'unavailable', submission_reason='成绩与提交记录不一致，需要核对提交历史。') if (score is not None or status == 'Graded') and negative else
                   state('draft', 'gradebook') if status == 'InProgress' else
                   state('not_submitted', 'gradebook') if status in {'NotAttempted', 'NotSubmitted'} else activity_value)
         if load_history is not None and result['submission_status'] != 'not_submitted':
@@ -154,7 +154,7 @@ def decide(grade, activity_value, load_history, previous, checked_at):
                     result = history
             except HTTPException:
                 if result['submission_status'] == 'unknown':
-                    result = state('unknown', 'unavailable')
+                    result = {**result, 'submission_evidence': 'unavailable'}
     if result['submission_status'] == 'unknown' and (type(previous.get('submitted')) is bool or previous.get('exempt') is True):
         preserved = {key: value for key, value in previous.items()
                      if key.startswith('submission_') or key in {'submitted', 'submitted_at', 'checked_at', 'exempt', 'due_at', 'due_at_evidence', 'score', 'max_score'}}

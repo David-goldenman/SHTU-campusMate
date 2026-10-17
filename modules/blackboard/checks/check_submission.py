@@ -54,6 +54,10 @@ conflict = {'displayGrade': {'score': 0}, 'status': 'NotAttempted'}
 assert rules.decide(conflict, None, lambda: HISTORY, {}, NOW)['submitted'] is True
 assert rules.decide(conflict, None, lambda: UPLOAD, {}, NOW)['submitted'] is False
 assert rules.decide(conflict, None, failed, {}, NOW)['submitted'] is None
+negative = rules.state('not_submitted', 'activity')
+assert rules.decide({'status': 'Graded'}, negative, lambda: UPLOAD, {}, NOW)['submitted'] is False
+assert rules.decide({'status': 'Graded', 'displayGrade': {'score': 0}}, negative, failed, {}, NOW)['submitted'] is None
+assert '不一致' in rules.decide({'status': 'Graded'}, negative, failed, {}, NOW)['submission_reason']
 
 for html in (HISTORY.replace('<li>synthetic.pdf</li>', ''), UPLOAD.replace('上载作业：合成作业', '访问失败')):
     try:
@@ -77,4 +81,6 @@ activity = rules.activity('''<div id="grades_wrapper">
 <div id="3" class="sortable_item_row"><div class="activity">未提交</div></div>
 <div id="4" class="sortable_item_row"><div class="gradeStatus">Exempt</div></div></div>''')
 assert [value['submission_status'] for value in activity.values()] == ['unknown', 'needs_grading', 'not_submitted', 'exempt']
+zero_without_submission = rules.activity('<div id="grades_wrapper"><div id="5" class="sortable_item_row graded_item_row"><div class="activity">No Submission</div><div class="grade">0</div></div></div>')
+assert zero_without_submission['_5_1']['submitted'] is False
 print('blackboard submission: explicit evidence, draft vs earlier submission, score conflicts, placeholders, failed reads and exact history dates passed')
