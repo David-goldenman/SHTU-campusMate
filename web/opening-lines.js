@@ -22,15 +22,18 @@ const lines = [
   "你的待办清单很有想象力，尤其是在估计用时的时候。",
   "为了防止知识溜走，你又把它存进了一个找不到的文件夹。"
 ];
-const node = document.querySelector('[data-opening-line]');
+let selectedLine;
 
-if (node) {
+export function openingLine() {
+  if (selectedLine) return selectedLine;
   const key = 'campus.opening-line.v1';
-  let line;
-  try { line = sessionStorage.getItem(key); } catch {}
-  if (!lines.includes(line)) {
-    line = lines[Math.floor(Math.random() * lines.length)];
-    try { sessionStorage.setItem(key, line); } catch {}
+  try { selectedLine = sessionStorage.getItem(key); } catch {}
+  if (!lines.includes(selectedLine)) {
+    selectedLine = lines[Math.floor(Math.random() * lines.length)];
+    try { sessionStorage.setItem(key, selectedLine); } catch {}
   }
-  node.textContent = line;
+  return selectedLine;
 }
+
+const node = document.querySelector('[data-opening-line]');
+if (node) node.textContent = openingLine();
