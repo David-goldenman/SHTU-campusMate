@@ -18,6 +18,7 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 | GET | `/health` | `{application:"campus-framework",version,launch_id}`；启动器校验本次服务已可访问 |
 | GET | `/settings` | `{port, active_port, restart_required, storage:{directory,encryption}}` |
 | PUT | `/settings` | 请求 `{port:16666}`，返回完整设置；修改后重启生效 |
+| GET | `/themes` | `{api_version:1,default:"default",items:[Theme],errors:[]}`；发现本地主题、样式和界面入口，详见 [主题契约](UI_THEME.md) |
 | POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope,backup:BackupInfo\|null}` |
 | GET | `/data/backups` | `{backups:[BackupInfo]}`，新备份在前；损坏项 `valid:false`，仍可删除 |
 | POST | `/data/backups` | 停止模块后创建快照，再重新加载；返回 `{backup:BackupInfo}` |
@@ -142,7 +143,7 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 
 | 方法 | 模块内路径 | 请求与结果 |
 | --- | --- | --- |
-| GET | `mail/intelligence` | 当前邮件与分类、筛选偏好、显示位置和兴趣类别 |
+| GET | `mail/intelligence` | 当前邮件与分类、`preferences/effective_preferences`、`review_status`；分类带 `input_revision/review_pending` |
 | GET/PUT | `mail/preferences` | GET 返回偏好与枚举；PUT 接收完整偏好 |
 | POST | `mail/review` | `{message_id,force?}`，原生 Harness 逐封复核 |
 | GET | `mail/review-context?message_id=` | 本次原文、偏好、分类 schema 与资料指纹 |
@@ -150,6 +151,8 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | GET | `campus-agent/status` | 后台状态、待处理数量、通知及活动建议 |
 | PUT | `campus-agent/settings` | `{enabled}`，关闭时取消当前检查 |
 | POST | `campus-agent/check` | 合并一轮最近资料检查，202 |
+| POST | `campus-agent/refresh` | 唤醒待复核队列，202，保留启停设置 |
+| GET | `campus-agent/queue` | 后台启停、运行、待复核数量及错误 |
 | GET | `campus-agent/proposals` | 当前账号的建议与参加状态 |
 | POST | `campus-agent/proposals/{id}/accept`、`/dismiss` | 明确参加或不参加；接受后幂等写入时间表 |
 | POST | `notifications/imports` | 带账号版本、稳定 ID、资料版本和来源的通知 |

@@ -26,6 +26,7 @@ from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
 from .core.vault import Vault
 from .core.backups import Backups
+from .core.themes import catalog as theme_catalog
 from .core.errors import PublicError, catch_errors, error_response, file_error, http_error, storage_error
 from .services.ai import AIService, create_router as ai_router
 from .services.ai.harness import Harness
@@ -135,6 +136,10 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     @app.get("/api/v1/health", tags=["框架"], summary="本机启动器就绪检查")
     def health():
         return {"application": "campus-framework", "version": VERSION, "launch_id": app.state.launch_id}
+
+    @app.get('/api/v1/themes', tags=['设置'], summary='发现本地界面主题与前端入口')
+    def themes():
+        return theme_catalog(WEB / 'themes')
 
     @app.get("/api/v1/settings", tags=["设置"], summary="读取全局设置与存储说明")
     def get_settings():

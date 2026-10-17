@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import threading
 from pathlib import Path
@@ -16,7 +17,7 @@ with sandbox('notifications') as context:
     raw = course('gradescope','1','合成课程','CS100','Fall 2026','https://www.gradescope.com/courses/1')
     data = validate_bundle({'courses':[{'id':'group:1','source':'catalog','title':'合成课程','term':'2026-fall','current':True,'course_ids':[raw['id']],'sources':[raw]}]})
     async def api(module,path='/snapshot',**kwargs):
-        if module == 'assignments' and path == '/snapshot':
+        if module in {'assignments', 'mail', 'campus-agent'}:
             return httpx.Response(404, json={'detail': 'Synthetic optional dependency is absent'})
         assert module == 'courses' and path == '/context' and kwargs['method'] == 'POST'
         return httpx.Response(200,json=build_context(data,account_revision(context),**kwargs['body']))
@@ -31,6 +32,10 @@ with sandbox('notifications') as context:
     assert service.generate(force=True)['items'][0]['read'] is True
     raw['title'] = '课程资料更新'
     assert service.generate(force=True)['items'][0]['read'] is False
+    data['messages']=[{'id':'mail:filtered','source':'mail','title':'已筛选文化节问卷截止','body_text':'问卷提交日期为明天。'}]
+    selected=asyncio.run(sys.modules[package.__name__ + '.service'].build_context(context))
+    assert not any(item.get('source')=='mail' for item in selected['items'])
+    assert '问卷提交' not in selected['text'], 'Raw mail cannot bypass classification through generic summaries'
     context.ai.result['content']['notifications'][0]['citation_ids'] = ['invented']
     try:
         service.generate(force=True)

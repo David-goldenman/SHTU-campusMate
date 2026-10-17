@@ -4,10 +4,11 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const base=process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap=await(await fetch(base+'/api/v1/bootstrap')).json();
+const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
 const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant'].includes(item.id));
 const profile=resolve('.codex/tmp/chat-web-'+process.pid);await mkdir(profile,{recursive:true});
 function browser(action){const r=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);}
-function fixture(modules,categories){
+function fixture(modules,categories, themeCatalog){
  const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],chats:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
  Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{state.clipboard=text;}}});
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
@@ -16,6 +17,7 @@ function fixture(modules,categories){
   const target=new URL(url,location.origin);if(!target.pathname.startsWith('/api/v1/'))return original(url,options);
   const path=target.pathname.replace('/api/v1',''),method=options.method||'GET';
   if(path==='/bootstrap')return json({version:'synthetic',csrf_token:'synthetic',modules,categories});
+  if(path==='/themes')return json(themeCatalog);
   if(path==='/modules')return json({modules,categories});
   if(path==='/settings')return json({port:16666,active_port:16666,restart_required:false,storage:{directory:'.private',encryption:'Synthetic'}});
   if(path==='/data/backups')return json({backups:[]});
@@ -65,11 +67,17 @@ try{
  const command=(method,params={})=>new Promise((ok,no)=>{const id=++serial,timer=setTimeout(()=>no(new Error(method)),20000);pending.set(id,{ok,no,timer});socket.send(JSON.stringify({id,method,params}));});
  const evaluate=expression=>command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}).then(r=>{assert(!r.exceptionDetails,JSON.stringify(r.exceptionDetails));return r.result.value;});
  await command('Page.enable');await command('Runtime.enable');await command('Network.enable');await command('Network.setBlockedURLs',{urls:[base+'/api/v1/*']});
- await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
+ await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify(themeCatalog)})`});
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});await command('Page.navigate',{url:base+'/#dashboard'});
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<160;i++){if(condition())return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI condition timed out');};waitFor(()=>document.querySelector('[data-chat-form]'))`);
  await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Homepage starts with deadlines visible');
+ assert(await evaluate(`document.querySelector('[data-history-toggle]>span').textContent==='历史对话' && getComputedStyle(document.querySelector('[data-history-toggle]>span')).display!=='none'`),'History has a visible text label');
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelector('[data-history-toggle]').getAttribute('aria-expanded')==='true')`);
+ assert(await evaluate(`document.activeElement.matches('[data-history-search]')`),'History opens at search');
+ await evaluate(`document.querySelector('[data-history-close]').click()`);
+ assert(await evaluate(`document.activeElement.matches('[data-history-toggle]')`),'Closing history returns focus to its entry');
+ await evaluate(`document.querySelector('[data-home]').click()`);
  await evaluate(`document.querySelector('[data-home]').click();true`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'desktop input visible');
  await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.study-prompts').open=true;document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
@@ -97,6 +105,11 @@ try{
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'small desktop input visible');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'mobile input visible');
+ assert(await evaluate(`document.querySelector('[data-history-toggle]>span').getBoundingClientRect().width>40`),'History label remains visible on mobile');
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden)`);
+ assert(await evaluate(`document.querySelector('.study-conversation').inert && getComputedStyle(document.querySelector('.study-history-scrim')).display==='block'`),'History drawer separates the underlying conversation');
+ await evaluate(`document.querySelector('.study-history-scrim').click()`);
+ assert(await evaluate(`!document.querySelector('.study-conversation').inert && document.activeElement.matches('[data-history-toggle]')`),'Closing the drawer restores its entry and the conversation');
  await writeFile(resolve('.codex/tmp/chat-markdown-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
  for(const mode of ['hold','error','truncated']){
   await evaluate(`chatCheck.mode='${mode}';document.querySelector('#study-message').value='合成重试问题';document.querySelector('[data-chat-form]').requestSubmit();true`);

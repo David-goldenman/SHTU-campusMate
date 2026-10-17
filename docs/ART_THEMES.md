@@ -12,13 +12,13 @@
 
 - web/themes/appearance.js：偏好校验、应用、保存、跨标签页同步和外观设置。存储键为 campus.appearance.v1。
 - web/themes/observatory.css、star-notes.css：各自配色和主图。
-- web/themes/art-workspace.css：公共控件、侧栏与外观设置样式。
+- web/themes/art-workspace.css：艺术主题的公共控件与侧栏；appearance.css 提供外观设置样式。
 - web/themes/assets/：两张新主图、四张已确认的人物插画、标记和提示词索引。
-- modules/academic-assistant/web/welcome.js、welcome.css：首页艺术区域和响应式布局。
+- web/themes/art.js、art-welcome.css：首页艺术展示区域和响应式布局，由主题清单加载。
 - web/settings.js：新增外观标签，保留原有设置分组。
 - web/index.html：主题加载、侧栏标记和外观快捷入口。
 
-切换主题只修改根属性与样式，不重挂聊天、不刷新模块。绑定到设置页的监听器沿用 context.signal，切页自动清理。首页艺术样式由模块自己的 useStyle 管理。
+主题按 [主题契约 v1](UI_THEME.md) 在各自的 theme.json 声明样式和展示入口。切换后保存选择并重新打开当前页面，统一恢复对应界面与模块。绑定到设置页的监听器沿用 context.signal，切页自动清理；人物偏好继续按主题保留。
 
 ## 资产与生成
 
@@ -28,7 +28,7 @@
 
 ## 验证
 
-完整检查：44 项 Python、4 项 JavaScript、Windows 启动器和 52 个 JavaScript 文件语法检查。偏好检查覆盖未知值、每主题人物记忆、只读副本、跨标签同步、存储限制时的回退。
+完整检查使用 check.ps1；偏好检查覆盖 Default 选择、每主题人物记忆、只读副本、跨标签同步、主题视图、专属偏好及暂时缺失的主题。浏览器检查覆盖三个主题的选择和重新打开。
 
 实际浏览器检查涵盖桌面、375px 手机、极窄窗口及横屏；验证输入后主图收起、跨标签切主题保留草稿、人物隐藏、键盘方向键、可见焦点、偏好刷新恢复与减少动效。未发送真实聊天或调用付费模型。主要正文保持 16px，辅助文字 12–14px；星夜手记抽查的正常文字对比度为 5.49:1–12.19:1，超过 4.5:1。观星台正文、辅助文字与侧栏同样核对；作业绿色评分与红色迟交文字采用更深的语义颜色，时间表迟交字样提升到 12px。
 

@@ -1,8 +1,11 @@
+import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from fastapi import HTTPException
+import httpx
 from backend.services.campus.data import validate_bundle
 from checks.module_support import load, sandbox
 
@@ -32,6 +35,14 @@ for body in ('如果完成签到，本次讲座计入形策考勤。', '本次�
     assert not models.preliminary({'title':'讲座通知','body_text':body},prefs)['protected'], body
 assert not models.preliminary({'title':'活动通知','body_text':'本次活动计入形策考勤。'},{**prefs,'shape':'done'})['protected']
 assert models.preliminary({'title':'CS100 作业截止','body_text':''},prefs)['bucket'] == 'focus'
+for year in (1, 2):
+    value = models.Preferences(year=year).model_dump()
+    assert models.preliminary({'title':'形策活动','body_text':'本次活动计入形策考勤。'},value)['bucket'] == 'focus'
+    assert models.preliminary({'title':'形策活动','body_text':'本次活动计入形策考勤。'},{**value,'shape':'done'})['bucket'] == 'digest'
+assert models.preliminary({'title':'大一心理健康活动','body_text':''},models.Preferences(year=1).model_dump())['bucket'] == 'focus'
+assert models.preliminary({'title':'心理活动通知','body_text':''},models.Preferences(year=2).model_dump())['bucket'] == 'digest'
+for title in ('CS100 作业发布', 'CS100 实验材料已上传', 'CS100 预习课件'):
+    assert models.preliminary({'title':title,'body_text':''},prefs)['bucket'] == 'focus', title
 with sandbox('mail') as context:
     package.create_router(context)
     source, intelligence = package._source, package._intelligence
@@ -55,7 +66,19 @@ with sandbox('mail') as context:
         raise AssertionError('Stale preference result')
     except HTTPException as error:
         assert error.status_code == 409
+    async def study_api(module, path='/snapshot', **kwargs):
+        if module == 'academic-assistant':
+            now = datetime.now(models.ZoneInfo('Asia/Shanghai'))
+            return httpx.Response(200,json={'profile':{'major':'合成专业','cohort_year':now.year - (now.month < 9)}})
+        return httpx.Response(200,json={'items':[{'title':'信号与系统','code':'EE100'}]})
+    context.api = study_api
+    asyncio.run(intelligence.refresh_context())
+    effective = intelligence.effective_preferences()
+    assert effective['year'] == 1 and effective['major'] == '合成专业' and '信号与系统' in effective['courses']
+    assert intelligence.preferences()['year'] is None and intelligence.preferences()['courses'] == [], 'Linked context must not overwrite manual preferences'
+    assert models.preliminary({'title':'信号与系统实验材料发布','body_text':''},effective)['bucket'] == 'focus'
     context.auth.revision = 'other-account'
+    assert intelligence.effective_preferences()['courses'] == [], 'Linked study context is account-scoped'
     assert intelligence.preferences()['requirements'] == '' and intelligence.records() == []
     package.stop(context)
 print('mail intelligence: literal matching, completion requirements, paragraphs, exact evidence, stale reviews, manual priority and account isolation passed')
