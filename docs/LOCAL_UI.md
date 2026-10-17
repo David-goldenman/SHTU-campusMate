@@ -94,7 +94,7 @@ git merge --no-commit origin/main
 - 桌面首页位置：`modules/academic-assistant/web/index.js` 的 `study-opening-line`；从公共开场白模块读取同一份本地文案，不重新挑选。
 - 独立样式与窄屏换行：`web/opening-lines.css`。
 
-开场白已通过 PR #42 合入团队 main（150a386），队友更新后即可使用。个人启动器继续只保存在本地。两套艺术主题仍处于单独设计阶段。
+开场白已通过 PR #42 合入团队 main（150a386），队友更新后即可使用。个人启动器继续只保存在本地。两套艺术主题已在本地实现，入口为设置 → 外观，说明见 ART_THEMES.md。
 
 最新主线使用 `httpx[socks]>=0.28`。本地启动器已识别该声明并检查 httpx 版本及 socksio 1.x；只接受项目实际使用的 extra，不忽略未知依赖。用户本次授权补装的 `socksio==1.0.0` 已安装到现有项目环境，启动器本身仍不安装软件。
 

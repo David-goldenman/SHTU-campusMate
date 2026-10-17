@@ -1,5 +1,6 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
 import {networkPanel, bindNetwork} from './network.js';
+import {appearancePanel, bindAppearance} from './themes/appearance.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
 const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',ecourse:'E 云课堂',timetable:'教务系统'};
@@ -47,6 +48,7 @@ export async function mount(container, context) {
   }
   if (context.signal.aborted) return;
   container.innerHTML =
+    appearancePanel() +
     networkPanel() +
     moduleManager(context.modules,context.labels) +
     '<div class="settings-columns"><section class="panel settings-section"><h2>本地服务</h2><p class="field-hint">端口修改会在下次启动工作台时生效。</p><form id="port-form"><label>服务端口<input name="port" type="number" min="1024" max="65535" value="' + settings.port + '" required></label><p class="field-hint">当前运行端口：' + settings.active_port + '</p><button class="button button-primary" type="submit">保存端口</button></form>' + (settings.restart_required ? '<p class="notice">端口已更新，下次启动使用 ' + settings.port + '。</p>' : '') + '</section>' +
@@ -55,8 +57,10 @@ export async function mount(container, context) {
     '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>已保存的连接会在读取时复用。首次连接请使用官方窗口，或展开账号密码登录。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
     '<section class="panel settings-section"><h2>统一 AI 服务</h2><p class="field-hint">各模块共用这个服务。API Key 加密保存在本机。</p><form id="ai-form" class="ai-form"><label>DeepSeek API Key<input name="api_key" type="password" autocomplete="off" placeholder="' + (ai.key_saved ? '已保存，填写可更新' : '填写 API Key') + '"></label><label>模型<select name="model">' + ['deepseek-flash','deepseek-v4-pro'].map(model => '<option value="' + model + '" ' + (ai.model === model ? 'selected' : '') + '>' + model + '</option>').join('') + '</select></label><label class="checkbox-label"><input name="enabled" type="checkbox" ' + (ai.enabled ? 'checked' : '') + '>启用统一 AI 服务</label><div class="form-actions"><button class="button button-primary" type="submit">保存 AI 设置</button>' + (ai.key_saved ? '<button class="text-button danger-text" id="delete-ai-key" type="button">删除 API Key</button>' : '') + '</div></form></section>';
 
+  bindAppearance(container.querySelector('.appearance-panel'),context.signal);
   const network = bindNetwork(container.querySelector('#network-panel'),context.signal);
   const groups = [
+    ['appearance','外观',container.querySelector('.appearance-panel')],
     ['accounts','账号连接',container.querySelector('.provider-grid').closest('section')],
     ['network','网络检测',container.querySelector('#network-panel')],
     ['ai','AI 服务',container.querySelector('#ai-form').closest('section')],

@@ -64,7 +64,7 @@ try {
   await command('Page.enable');
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong') && document.querySelector('.study-messages')");
-  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'248px');
+  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'228px');
   for(const [name,width,height] of [['ui-overview-desktop',1440,1060],['ui-overview-tablet',768,1024],['ui-overview-mobile',375,812],['ui-overview-landscape',812,375]]) {
     await evaluate('window.scrollTo(0,0)');await capture(name,width,height);
   }
@@ -77,9 +77,9 @@ try {
   assert(await evaluate("document.querySelector('.overview-columns').textContent.includes('合成课程日程')"),'Upstream agenda is preserved');
   await capture('ui-local-populated',1440,1060);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['12px','12px','12px','12px'],'Compact overview uses consistent themed spacing');
-  await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
+  await evaluate("document.documentElement.removeAttribute('data-ui-theme');document.documentElement.removeAttribute('data-art-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
-  await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
+  await evaluate("document.documentElement.dataset.uiTheme='nord-refined';document.documentElement.dataset.artTheme='observatory'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
   await evaluate("document.querySelector('[data-module-section=dashboard]').click()");
@@ -95,8 +95,8 @@ try {
   assert(await evaluate("!document.querySelector('link[href*=\"/dashboard/\"]') && !document.querySelector('link[href*=\"/academic-assistant/\"]')"),'Module style cleanup preserved');
   await evaluate("document.querySelector('[data-settings-tab=ai]').click();document.querySelector('#ai-form [name=api_key]').value='synthetic-draft';document.querySelector('[data-settings-tab=local]').click();document.querySelector('[data-settings-tab=ai]').click()");
   assert.equal(await evaluate("document.querySelector('#ai-form [name=api_key]').value"),'synthetic-draft','Settings tabs keep drafts');
-  await evaluate("document.querySelector('[data-settings-tab=accounts]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
-  assert.equal(await evaluate("document.activeElement.dataset.settingsTab"),'ai');
+  await evaluate("document.querySelector('[data-settings-tab=ai]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
+  assert.equal(await evaluate("document.activeElement.dataset.settingsTab"),'modules');
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.sidebar')).transitionDuration"),'0s');
   await evaluate("themeCheck.tabs=true;document.querySelector('[data-settings-tab=modules]').click();document.querySelector('#settings-reload').click()");
