@@ -17,6 +17,8 @@ assert reader.activity('<div id="grades_wrapper"><div id="12" class="sortable_it
 for term in ['2026秋季学期', '2026-2027学年秋季学期']:
     courses = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">PHYS1183 普通物理II-' + term + '</a></div>')
     assert courses['_9_1']['term'] == term
+english = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">EE115B 数字电路 【2026 Spring】</a></div>')
+assert english['_9_1']['term'] == '2026 Spring'
 
 
 class Tree:
@@ -43,10 +45,12 @@ class Remote:
         self.announcement = announcement
 
     def pages(self,url):
+        if '/terms' in url:
+            return iter([{'id':'_113_1','name':'2026-2027学年秋季学期'},{'id':'_114_1','name':'2026-2027学年春季学期'},{'id':'_115_1'}])
         return iter([{'courseId':'_9_1'}]) if url.endswith('/users/me/courses') else iter([])
 
     def json(self,method,url,**kwargs):
-        return {'name':'数字电路 【2026 Spring】','courseId':'EE123'}
+        return {'name':'数字电路 【2026 Spring】','courseId':'EE123','termId':'_113_1'}
 
     def html(self,url):
         if 'announcement' in url:
@@ -65,4 +69,5 @@ broken = reader.fetch(Remote(RuntimeError('unexpected page')),{'announcements':[
 assert broken['announcements'] == [old] and not broken['issues']
 readable = reader.fetch(Remote(page),{'announcements':[old],'courses':[]})
 assert [item['title'] for item in readable['announcements']] == ['开学通知'] and not readable['issues']
+assert readable['courses'][0]['term'] == '2026-2027学年秋季学期' and readable['courses'][0]['semester'] == '2026-fall'
 print('blackboard: availability windows, unknown states, submission evidence, cyclic folders, stable file paths and silently skipped announcements passed')

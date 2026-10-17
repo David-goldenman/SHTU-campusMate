@@ -10,7 +10,7 @@ from backend.services.campus.data import digest
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
-TERM = re.compile(r"20\d{2}(?:-20\d{2}学年)?\S*?[春夏暑秋]季?学期")
+TERM = re.compile(r"20\d{2}(?:[-–]20\d{2}学年)?\s*(?:[春夏暑秋]季?(?:学期)?|(?:fall|autumn|spring|summer))", re.I)
 
 
 def checked(value):
@@ -54,6 +54,14 @@ def portal(html):
             code = re.search(r"\b[A-Z]{2,}\d+[A-Z]?\b", label)
             term = TERM.search(label)
             result[cid] = {"status": state, "code": code[0] if code else "", "term": term[0] if term else ""}
+    return result
+
+
+def term_labels(remote):
+    result = {}
+    for value in remote.pages(BASE + "/learn/api/public/v1/terms?limit=100"):
+        if isinstance(value.get("id"), str) and isinstance(value.get("name"), str) and value["name"].strip():
+            result[value["id"]] = value["name"].strip()
     return result
 
 
@@ -147,6 +155,11 @@ def fetch(remote, previous):
         states = {item["source_id"]: item for item in previous.get("courses", [])}
         result["issues"].append("课程门户暂时不可读，保留已知课程学期。")
     memberships = list(remote.pages(BASE + "/learn/api/public/v1/users/me/courses"))
+    try:
+        labels = term_labels(remote)
+    except HTTPException:
+        labels = {}
+        result["issues"].append("Blackboard 学期列表暂时不可读，学期按课程名称推断。")
     for membership in memberships:
         try:
             cid = checked(membership.get("courseId"))
@@ -160,7 +173,9 @@ def fetch(remote, previous):
             if not isinstance(detail, dict) or not detail.get("name"):
                 raise SourceError("Blackboard 课程缺少名称。")
             info = states.get(cid, {})
-            term = TERM.search(info.get('term') or detail['name'])
+            # termId comes from the course REST record; the term name is the only
+            # reliable semester source because the portal label often omits it.
+            term = TERM.search(labels.get(detail.get("termId"), "")) or TERM.search(detail["name"]) or TERM.search(info.get("term") or "")
             item = course("blackboard", cid, detail["name"], info.get("code") or detail.get("courseId"), term[0] if term else '', BASE + "/webapps/blackboard/execute/launcher?" + urlencode({"type": "Course", "id": cid}), status=info.get("status", "unknown"))
             result["courses"].append(item)
             nodes = contents(remote, cid, result["issues"])
@@ -194,7 +209,7 @@ def fetch(remote, previous):
                 column = by_content.get(node["id"], {})
                 grade = grades.get(column.get("id"), {})
                 display = grade.get("displayGrade") if isinstance(grade.get("displayGrade"), dict) else {}
-                is_submitted = submitted.get(column.get("id"))
+                is_submitted = submitted.get(column.get("id")) is True
                 if display.get("score") is not None:
                     is_submitted = True
                 state, open_now = availability(node.get("availability"))
