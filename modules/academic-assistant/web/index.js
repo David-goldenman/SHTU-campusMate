@@ -2,6 +2,7 @@ import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
 import {openingLine} from '/assets/opening-lines.js';
 import {sendOnEnter, fitComposer} from './composer.js';
+import {welcomeMarkup} from './welcome.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
 
@@ -19,10 +20,11 @@ const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
+  const removeWelcomeStyle = context.ui.useStyle(new URL('./welcome.css',import.meta.url),context.signal);
   const card = container.closest('.module-card');
   const title = card.querySelector('.module-card-heading');
   let busy = false, profileDirty = false, frame, observer, follow = true, saveDraft = () => {};
-  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
+  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();removeWelcomeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai, presets, conversations;
   try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
@@ -78,7 +80,7 @@ export async function mount(container, context) {
   returnRunning.onclick=context.ui.safeAction(returnRunning,()=>openConversation(chatSession.current.conversationId));
   const search = container.querySelector('[data-history-search]');
   const generating = () => chatSession.current?.status==='running';
-  function resizeInput() {fitComposer(input);send.disabled=!configured||archived||generating()||!input.value.trim();}
+  function resizeInput() {conversation.classList.toggle('is-drafting',!!input.value.trim());fitComposer(input);send.disabled=!configured||archived||generating()||!input.value.trim();}
   input.addEventListener('input',resizeInput,{signal:context.signal});
   search.addEventListener('input',drawConversations,{signal:context.signal});
   retry.onclick = () => form.requestSubmit();
@@ -178,7 +180,7 @@ export async function mount(container, context) {
   }
   function empty() {
     conversation.classList.add('is-empty');
-    messages.innerHTML = '<div class="study-welcome"><div><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，想一起解决什么？</h3></div><p>理解知识、编写代码、调整日程，也一起管理作业、提醒和计划。</p></div>';
+    messages.innerHTML = welcomeMarkup();
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
   archived=conversations.items.find(item=>item.id===activeId)?.archived || false;
