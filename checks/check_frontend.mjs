@@ -3,6 +3,23 @@ import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
+import {deadlineInfo, deadlineMarkup} from '../web/deadlines.js';
+
+const deadlineNow = Date.parse('2026-10-17T20:00:00+08:00');
+const todayDeadline = deadlineInfo('2026-10-17T15:59:00Z',deadlineNow);
+assert.equal(todayDeadline.clock,'23:59');
+assert.equal(todayDeadline.date,'今天 · 10月17日');
+assert.equal(todayDeadline.urgency,'urgent');
+assert.equal(todayDeadline.relative,'剩余 3 小时 59 分钟');
+assert.equal(deadlineInfo('2026-10-18T18:00:00+08:00',deadlineNow).date,'明天 · 10月18日');
+assert.equal(deadlineInfo('2026-10-17T19:00:00+08:00',deadlineNow).relative,'已逾期 1 小时');
+assert.equal(deadlineInfo('2026-10-18T20:00:00+08:00',deadlineNow).urgency,'urgent');
+assert.equal(deadlineInfo('2026-10-19T08:00:00+08:00',deadlineNow).urgency,'upcoming');
+assert.equal(deadlineInfo('2027-01-01T08:00:00+08:00',deadlineNow).date,'2027年1月1日');
+for (const value of [null,'','invalid','2026-10-18']) assert.equal(deadlineInfo(value,deadlineNow).timestamp,null);
+assert.equal(deadlineInfo('2026-10-18',deadlineNow).clock,'时刻待定','Date-only deadlines never invent midnight');
+assert(!deadlineMarkup('2026-10-01T08:00:00+08:00',escape,{now:deadlineNow,emphasize:false}).includes('已逾期'),'Completed records can show neutral exact dates');
+console.log('deadlines: Beijing day labels, precise countdowns, urgency boundaries, unknown time and neutral completed records');
 
 for (const [keys, sends, prevents] of [
   [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
