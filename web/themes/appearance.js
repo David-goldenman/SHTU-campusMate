@@ -39,6 +39,7 @@ export function getCampusPreferences(id = selected.id) {
 }
 function apply() {
   document.documentElement.dataset.theme = selected.id;
+  document.documentElement.dataset.openingLines = entry.openingLines === true ? 'enabled' : 'hidden';
   if (entry.artTheme) document.documentElement.dataset.artTheme = selected.id;
   else delete document.documentElement.dataset.artTheme;
   document.documentElement.dataset.artMotion = state.reduceMotion ? 'reduced' : 'system';
