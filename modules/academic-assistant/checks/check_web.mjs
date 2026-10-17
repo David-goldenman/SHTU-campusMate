@@ -23,7 +23,7 @@ function fixture(modules,categories){
   if(path==='/modules/dashboard/snapshot')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
   if(path==='/modules/academic-assistant/presets')return json({items:[{label:'安排作业',prompt:'安排合成作业'},{label:'准备复习',prompt:'准备合成复习'}]});
   if(path==='/modules/academic-assistant/profile'){if(method==='PUT')state.profile=JSON.parse(options.body);return json({profile:state.profile,academic:{}});}
-  if(path==='/modules/academic-assistant/chat')return json({messages:state.messages,conversation_id:state.active_id});
+  if(path==='/modules/academic-assistant/chat')return json({messages:state.messages,conversation_id:state.active_id,owner:'synthetic-owner'});
   if(path==='/modules/academic-assistant/conversations'){
     if(method==='POST'){state.active_id=String(state.chats.length+1).padStart(32,'0');state.messages=[];const item={id:state.active_id,title:'合成对话 '+(state.chats.length+1),archived:false,updated_at:'2026-10-17T00:00:0'+state.chats.length+'Z',messages:state.messages};state.chats.push(item);return json(item);}
     return json({items:state.chats,active_id:state.active_id});
@@ -35,7 +35,7 @@ function fixture(modules,categories){
     state.active_id=identity;state.messages=item.messages;return json({conversation:item,messages:item.messages});
   }
   if(path==='/modules/academic-assistant/chat/stream'){
-   const mode=state.mode,body=JSON.parse(options.body);let closed=false;
+   const mode=state.mode,body=JSON.parse(options.body),messages=state.chats.find(item=>item.id===body.conversation_id).messages;let closed=false;
    const stream=new ReadableStream({start(controller){
     const emit=value=>{if(!closed)controller.enqueue(new TextEncoder().encode(JSON.stringify(value)+'\n'));};
     options.signal?.addEventListener('abort',()=>{if(!closed){closed=true;state.aborts++;controller.error(new DOMException('aborted','AbortError'));}},{once:true});
@@ -47,7 +47,7 @@ function fixture(modules,categories){
      if(mode==='truncated'){closed=true;controller.close();return;}
      emit({type:'delta',text:'\n\n**根据实际进度调整。**'});
      const answer={role:'assistant',text:text+'\n\n**根据实际进度调整。**',model:'deepseek-flash',created_at:'2026-10-17T00:00:00+08:00',citations:[3,4].map(page=>({source_id:'synthetic:page:'+page,record_id:'synthetic:slides',title:'合成课件.pdf',quote:'<script>synthetic</script> Vectors add by components.',page,kind:'pdf',url:'https://example.edu/course',download_url:'/api/v1/modules/blackboard/file?material_id=synthetic'})),navigation:null,tools:[]};
-     state.messages.push({role:'user',text:body.message},answer);emit({type:'complete',message:answer});closed=true;controller.close();
+     messages.push({role:'user',text:body.message},answer);emit({type:'complete',message:answer});closed=true;controller.close();
     })();
    },cancel(){closed=true;}});
    return new Response(stream,{headers:{'Content-Type':'application/x-ndjson'}});
@@ -80,14 +80,16 @@ try{
  await evaluate(`document.querySelector('.study-copy-code').click();waitFor(()=>chatCheck.clipboard.includes('print('))`);
  await writeFile(resolve('.codex/tmp/chat-markdown-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
  assert(await evaluate(`document.querySelector('[data-messages]').clientHeight>=350`),'Focused conversation uses the viewport height');
- assert(await evaluate(`document.querySelector('.study-assistant .study-text').getBoundingClientRect().width>=800`),'Desktop reply uses the available reading width');
+ assert(await evaluate(`(()=>{const width=document.querySelector('.study-assistant .study-text').getBoundingClientRect().width;return width>=600&&width<=800;})()`),'Desktop reply keeps a comfortable reading width');
  await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
  assert(await evaluate(`document.querySelector('.module-zone').classList.contains('module-focus')`),'Explicit new chat opens the composer even when empty');
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelectorAll('[data-open-chat]')[1].click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
- await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden).then(()=>[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id).click()).then(()=>waitFor(()=>chatCheck.chats[0].archived))`);
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden).then(()=>{const search=document.querySelector('[data-history-search]');search.value='不存在的对话';search.dispatchEvent(new Event('input'));})`);
+ assert.equal(await evaluate(`document.querySelectorAll('[data-open-chat]').length`),0,'History search filters the visible list');
+ await evaluate(`(()=>{const search=document.querySelector('[data-history-search]');search.value='';search.dispatchEvent(new Event('input'));const button=[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id);button.closest('details').open=true;button.click();return waitFor(()=>chatCheck.chats[0].archived);})()`);
  assert(await evaluate(`document.querySelector('[data-send]').disabled`),'Archived conversation is readable and cannot receive messages');
- await evaluate(`document.querySelector('[data-history-filter=archived]').click();document.querySelector('[data-archive-chat]').click();waitFor(()=>!chatCheck.chats[0].archived)`);
- await evaluate(`document.querySelector('[data-history-filter=active]').click();[...document.querySelectorAll('[data-delete-chat]')].find(node=>node.dataset.deleteChat!==chatCheck.active_id).click();waitFor(()=>document.querySelector('dialog[open] [value=confirm]')).then(()=>document.querySelector('dialog[open] [value=confirm]').click()).then(()=>waitFor(()=>chatCheck.chats.length===1)).then(()=>document.querySelector('[data-history-close]').click())`);
+ await evaluate(`document.querySelector('[data-history-filter=archived]').click();document.querySelector('[data-archive-chat]').closest('details').open=true;document.querySelector('[data-archive-chat]').click();waitFor(()=>!chatCheck.chats[0].archived)`);
+ await evaluate(`(()=>{document.querySelector('[data-history-filter=active]').click();const button=[...document.querySelectorAll('[data-delete-chat]')].find(node=>node.dataset.deleteChat!==chatCheck.active_id);button.closest('details').open=true;button.click();return waitFor(()=>document.querySelector('dialog[open] [value=confirm]')).then(()=>document.querySelector('dialog[open] [value=confirm]').click()).then(()=>waitFor(()=>chatCheck.chats.length===1)).then(()=>document.querySelector('[data-history-close]').click());})()`);
  await command('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false});await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'small desktop input visible');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await evaluate(`new Promise(r=>setTimeout(r,200))`);
@@ -99,12 +101,16 @@ try{
   await evaluate(`waitFor(()=>!document.querySelector('#study-message').disabled && !!document.querySelector('[data-error]').textContent)`);
   assert.equal(await evaluate(`document.querySelector('#study-message').value`),'合成重试问题');assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),2);
  }
- await evaluate(`chatCheck.mode='hold';document.querySelector('[data-chat-form]').requestSubmit();waitFor(()=>document.querySelector('.study-streaming h2')).then(()=>document.querySelector('.study-model').click()).then(()=>waitFor(()=>document.querySelector('[data-settings-tab="ai"][aria-selected="true"]')))`);
- assert(await evaluate(`chatCheck.aborts>=2`),'Leaving an active chat cancels the request');
+ await evaluate(`chatCheck.mode='hold';document.querySelector('[data-chat-form]').requestSubmit();waitFor(()=>document.querySelector('.study-streaming h2')).then(()=>document.querySelector('[data-new-chat]').click()).then(()=>waitFor(()=>chatCheck.chats.length===2&&!document.querySelector('[data-return-running]').hidden))`);
+ assert(await evaluate(`!document.querySelector('#study-message').disabled`),'A second conversation remains editable while the original generates');
+ await evaluate(`document.querySelector('[data-return-running]').click();waitFor(()=>document.querySelector('.study-streaming h2')).then(()=>document.querySelector('.study-model').click()).then(()=>waitFor(()=>document.querySelector('[data-settings-tab="ai"][aria-selected="true"]')))`);
+ assert.equal(await evaluate(`chatCheck.aborts`),1,'Leaving an active chat keeps the request running; only explicit Stop aborts');
  assert.equal(await evaluate(`!!document.querySelector('link[href*="/academic-assistant/"]')`),false);
  await evaluate(`document.querySelector('[data-nav="dashboard"]').click();waitFor(()=>document.querySelector('[data-chat-form]'))`);
- await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
- await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelector('[data-open-chat="'+chatCheck.chats[0].id+'"]').click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
+ await evaluate(`waitFor(()=>!document.querySelector('#study-message').disabled)`);
+ assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),4,'Returning restores the same turn exactly once');
+ await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===3&&!!document.querySelector('.study-welcome'))`);
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===3).then(()=>document.querySelector('[data-open-chat="'+chatCheck.chats[0].id+'"]').click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===4))`);
  await evaluate(`chatCheck.mode='answer';document.querySelector('#study-message').value='回车合成问题';document.querySelector('#study-message').focus();true`);
  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
@@ -112,7 +118,7 @@ try{
  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
  await evaluate(`waitFor(()=>document.querySelector('#study-message').disabled).then(()=>waitFor(()=>!document.querySelector('#study-message').disabled))`);
- assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),4,'Enter sends once after returning to the homepage');
+ assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),6,'Enter sends once after returning to the homepage');
  assert.deepEqual(await evaluate(`chatCheck.unexpected`),[]);assert.deepEqual(errors,[]);
  console.log('PASS chat UI: real progressive rendering, Markdown security, grouped pages, copy, reading position, desktop/mobile input visibility, stop, retry, truncated stream, AI settings and cleanup');
 }finally{socket?.close();browser('close');}

@@ -34,6 +34,8 @@ async def check(cancel):
 
         context.ai.run = run
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:
+            empty = (await client.get(BASE + '/chat')).json()
+            assert empty['owner'] and empty['messages'] == [] and empty['conversation_id'] is None
             first = (await client.post(BASE + '/conversations')).json()['id']
             request = Request({'type': 'http', 'scheme': 'http', 'server': ('test', 80), 'path': BASE + '/chat/stream', 'headers': []})
             endpoint = next(route.endpoint for route in router.routes if route.path == '/chat/stream')
@@ -58,6 +60,9 @@ async def check(cancel):
             assert not package._agent.tasks
             assert package._agent.conversations.index()['active_id'] == second, 'Old replies must not replace the user selection'
             assert len(package._agent.conversations.messages(first)) == (0 if cancel else 2)
+            context.auth.revision = 'another-synthetic-account'
+            changed = (await client.get(BASE + '/chat')).json()
+            assert changed['owner'] != empty['owner'] and changed['messages'] == [] and changed['conversation_id'] is None
 
 
 asyncio.run(check(True))
