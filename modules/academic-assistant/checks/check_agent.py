@@ -59,8 +59,14 @@ async def check():
             if name == 'blackboard':
                 return httpx.Response(200, content=slides(), headers={'content-type': 'application/zip'})
             if name == 'assignments':
-                return httpx.Response(200, json={'data': {'assignments': [assignment]}, 'pending': [assignment],
-                                                'summary': {'total': 1, 'unsubmitted': 1, 'pending': 1, 'by_source': {'gradescope': {'total': 1, 'unsubmitted': 1, 'pending': 1}}}})
+                blackboard = [{'id': 'blackboard:' + state, 'source': 'blackboard', 'title': '合成提交记录', 'submitted': True, 'submission_status': state}
+                              for state in ('submitted', 'graded')]
+                return httpx.Response(200, json={'data': {'assignments': [assignment, *blackboard]}, 'pending': [assignment],
+                    'summary': {'total': 3, 'unsubmitted': 1, 'pending': 1,
+                                'submission_states': {'not_submitted': 1, 'submitted': 1, 'graded': 1},
+                                'by_source': {'gradescope': {'total': 1, 'unsubmitted': 1, 'pending': 1},
+                                              'blackboard': {'total': 2, 'unsubmitted': 0, 'pending': 0,
+                                                             'submission_states': {'submitted': 1, 'needs_grading': 0, 'graded': 1}, 'needs_review': 0}}}})
             if name == 'courses':
                 return httpx.Response(200, json={'data': validate_bundle({'assignments': [assignment], 'materials': [material], 'metadata': {'source_metadata': {'blackboard': {'updated_at': 'synthetic-revision'}}}})})
             raise AssertionError((name, path))
@@ -87,6 +93,11 @@ async def check():
                 filtered = await client.post(base + '/tools/query', json={'area': 'assignments', 'q': '不存在的作业'}, headers=headers)
                 assert filtered.json()['items'] == [] and filtered.json()['total'] == 0
                 assert json.loads(filtered.json()['summary']['text'])['pending'] == 1, 'Global summary is independent of search and pagination'
+                scoped = (await client.post(base + '/tools/query', json={'area': 'assignments', 'q': 'blackboard', 'limit': 1}, headers=headers)).json()
+                scoped_summary = json.loads(scoped['summary']['text'])
+                assert len(scoped['items']) == 1 and scoped['total'] == 2 and scoped_summary['total'] == 3
+                assert scoped_summary['by_source']['blackboard']['submission_states'] == {'submitted': 1, 'needs_grading': 0, 'graded': 1}
+                assert scoped_summary['by_source']['blackboard']['needs_review'] == 0, 'Source-specific counts survive filtered, paginated AI queries'
                 response = await client.post(base + '/tools/document', json={'record_id': material['id'], 'q': 'superposition'}, headers=headers)
                 assert response.status_code == 200, response.text
                 document = response.json()['items'][0]

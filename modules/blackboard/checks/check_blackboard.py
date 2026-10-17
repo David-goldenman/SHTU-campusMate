@@ -204,7 +204,9 @@ async def check_cached_submissions():
                 overview = (await client.get('/assignments/snapshot')).json()
                 actual_pending = {item['id'] for item in overview['pending']}
                 assert actual_pending == {'blackboard:null', 'blackboard:false', 'gradescope:unknown'}, actual_pending
-                assert overview['summary']['by_source']['blackboard'] == {'total': 8, 'unsubmitted': 4, 'pending': 2}
+                source_counts = overview['summary']['by_source']['blackboard']
+                assert {key: source_counts[key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 8, 'unsubmitted': 4, 'pending': 2}
+                assert sum(source_counts['submission_states'].values()) == 8
                 assert next(item for item in overview['data']['assignments'] if item['id'] == 'gradescope:unknown')['submitted'] is None
                 response = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:null']})
                 assert response.status_code == 200, response.text

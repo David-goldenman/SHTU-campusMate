@@ -32,8 +32,8 @@ assert {item['id'] for item in values if item['pending']} == {'gradescope:late',
 assert package.counts(values) == {'pending':4,'late':1,'graded':1,'completed':1,'ended':2}
 counts = package.summary(values)
 assert (counts['total'], counts['unsubmitted'], counts['pending'], counts['needs_review']) == (9, 6, 4, 1)
-assert counts['by_source']['blackboard'] == {'total': 1, 'unsubmitted': 1, 'pending': 0}
-assert counts['by_source']['gradescope'] == {'total': 8, 'unsubmitted': 5, 'pending': 4}
+assert {key: counts['by_source']['blackboard'][key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 1, 'unsubmitted': 1, 'pending': 0}
+assert {key: counts['by_source']['gradescope'][key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 8, 'unsubmitted': 5, 'pending': 4}
 ordered = package.arrange(data,datetime(2026,10,16,tzinfo=timezone.utc),{'pending':['gradescope:unknown','gradescope:future'],'late':['gradescope:late']})
 pending = [item['id'] for item in ordered if item['category'] == 'pending']
 assert pending[:2] == ['gradescope:unknown','gradescope:future'] and pending[-2:] == ['gradescope:legacy-open','blackboard:old']
@@ -55,6 +55,15 @@ assert {item['submission_status'] for item in state_values if item['pending']} =
 assert package.summary(state_values)['unsubmitted'] == 2
 assert package.summary(state_values)['needs_review'] == 1
 assert all(value == 1 for value in package.summary(state_values)['submission_states'].values())
+mixed = package.summary(state_values + [item for item in values if item['source'] == 'gradescope'])
+blackboard = mixed['by_source']['blackboard']
+gradescope = mixed['by_source']['gradescope']
+assert mixed['total'] == 15 and blackboard['total'] == 7 and gradescope['total'] == 8
+assert all(count == 1 for count in blackboard['submission_states'].values()), 'Every Blackboard state remains distinct from other sources'
+assert gradescope['submission_states']['not_submitted'] == 5 and gradescope['submission_states']['unknown'] == 1
+assert gradescope['submission_states']['submitted'] == 1 and gradescope['submission_states']['graded'] == 1 and gradescope['needs_review'] == 1
+assert sum(blackboard['submission_states'][state] for state in ('submitted', 'needs_grading', 'graded')) == 3
+assert all(sum(counts['submission_states'].values()) == counts['total'] for counts in [mixed, blackboard, gradescope])
 states['metadata']['source_metadata']['blackboard']['status'] = 'error'
 cached_values = package.arrange(states)
 assert all(item['needs_review'] and item['source_stale'] for item in cached_values)

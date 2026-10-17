@@ -4,7 +4,7 @@
 
 快照为每条作业提供 `needs_review`、`source_status`、`source_updated_at` 和 `source_stale`。读取失败保留上次结果并明确显示缓存，未知和过期缓存集中出现在“待核实”；已知的缓存待办数量保留，不把网络失败解释为作业已完成。详情显示判定依据和检查时间，原站明确提供的提交时间与截止时间分别展示。
 
-`summary.submission_states` 统计全部缓存的七种状态，`summary.needs_review` 为全部缓存需核实的记录数；原有 `total/unsubmitted/pending/by_source` 保持。`unsubmitted` 包括明确未提交和草稿，不含豁免与未知；所有统计与关键词或分页无关。
+`summary.submission_states` 统计全部缓存的七种互斥状态，`summary.needs_review` 为全部缓存需核实的记录数；`by_source[平台]` 提供该平台自己的 `submission_states/needs_review` 及原有 `total/unsubmitted/pending`。七种状态相加等于同范围 `total`，`submitted` 仅表示提交已确认、评分情况未确认；所有正式提交为 `submitted/needs_grading/graded` 之和。`unsubmitted` 包括明确未提交和草稿，不含豁免与未知；所有统计与关键词或分页无关。
 
 依赖课程中心公开 API。`GET /snapshot` 汇总 Gradescope 与 Blackboard 作业，返回按发布时间倒序的列表、五类计数 `counts` 与按截止时间排序的 `pending`。`pending` 仅包含本学期仍可提交的项目（含迟交），供主页统计使用。
 
