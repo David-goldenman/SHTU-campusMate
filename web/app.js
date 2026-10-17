@@ -2,6 +2,7 @@ import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './
 import * as settings from './settings.js';
 import {icon as navIcon} from './icons.js';
 import {cleanupAll, withTimeout} from './lifecycle.js';
+import {initializeThemes, themeContext, viewURL} from './themes/appearance.js';
 
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
@@ -86,18 +87,25 @@ async function mountModule(module, container, scope, background = false) {
   if (scope.controller.signal.aborted) abort();
   let mounting;
   try {
-    const url = new URL(background ? module.background_url : module.frontend_url,location.origin);
+    const themed = viewURL(module.id,background);
+    const url = new URL(themed || (background ? module.background_url : module.frontend_url),location.origin);
     const prefix = '/module-assets/' + encodeURIComponent(module.id) + '/';
-    if (url.origin !== location.origin || !url.pathname.startsWith(prefix)) throw new Error('模块入口需要位于本机模块资源目录。');
+    if (url.origin !== location.origin || !url.pathname.startsWith(themed ? '/assets/themes/' : prefix)) throw new Error('界面入口需要位于本机模块或主题资源目录。');
     const entry = await withTimeout(import(url.href),30000,abort);
     if (scope.controller.signal.aborted) return;
     if (typeof entry.mount !== 'function') throw new Error('模块入口需要导出 mount(container, context)。');
     body.replaceChildren();
-    mounting = Promise.resolve().then(()=>entry.mount(body,{
+    const moduleContext = {
       api:moduleApi(module.id,lifetime.signal), ui, navigate, module:{...module},
       focus:active => {card.classList.toggle('module-focused',active);container.classList.toggle('module-focus',!!container.querySelector('.module-focused'));},
       signal:lifetime.signal, services:services(lifetime.signal),
-    }));
+      theme:themeContext(),
+    };
+    moduleContext.defaultView = async host => {
+      const original=await import(background ? module.background_url : module.frontend_url);
+      return original.mount(host,moduleContext);
+    };
+    mounting = Promise.resolve().then(()=>entry.mount(body,moduleContext));
     const cleanup = await withTimeout(mounting,35000,abort);
     if (cleanup !== undefined && typeof cleanup !== 'function') throw new Error('模块 mount 需要返回清理函数或不返回值。');
     if (scope.controller.signal.aborted) { if (cleanup) await cleanupAll([cleanup]); }
@@ -191,10 +199,34 @@ async function render(refreshMetadata = false) {
   }
   const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
-    work.push(settings.mount(main.querySelector('#settings-area'),{
+    const settingsContext = {
       modules:state.modules, labels, signal:scope.controller.signal,
       reload:reloadModules, setEnabled, refresh, beforeClear:async()=>{await dispose();await stopBackground();},
-    }));
+      api:(path,options={})=>api(path,{...options,signal:scope.controller.signal}), ui, navigate, services:services(scope.controller.signal), theme:themeContext(),
+    };
+    settingsContext.defaultView = host => settings.mount(host,settingsContext);
+    const area=main.querySelector('#settings-area');
+    work.push((async()=>{
+      let mounting;
+      const abort=()=>scope.controller.abort();
+      try {
+        const url=viewURL('settings'), entry=url ? await withTimeout(import(url),30000,abort) : settings;
+        if(scope.controller.signal.aborted)return;
+        if(typeof entry.mount!=='function')throw new Error('主题设置入口需要导出 mount(container, context)。');
+        mounting=Promise.resolve().then(()=>entry.mount(area,settingsContext));
+        const cleanup=await withTimeout(mounting,35000,abort);
+        if(cleanup!==undefined && typeof cleanup!=='function')throw new Error('设置界面需要返回清理函数或不返回值。');
+        if(typeof cleanup==='function'){
+          if(scope.controller.signal.aborted)await cleanupAll([cleanup]);else scope.cleanups.push(cleanup);
+        }
+      } catch(error) {
+        abort();
+        if(mounting)void mounting.then(cleanup=>typeof cleanup==='function'?cleanupAll([cleanup]):undefined).catch(()=>{});
+        if(!area.isConnected)return;
+        area.innerHTML=empty('设置界面暂时无法打开',error.message,'<button class="button button-secondary" data-default-theme type="button">使用 Default 主题</button>');
+        area.querySelector('[data-default-theme]').onclick=()=>themeContext().select('default');
+      }
+    })());
   } else {
     main.querySelector('#settings-area').remove();
     if (!visible.length) zone.innerHTML = empty('这个分类已准备好接入模块','在设置中启用此分类的模块后，内容会显示在这里。','<a class="button button-secondary" href="#settings">管理模块 →</a>');
@@ -231,6 +263,8 @@ async function refresh() {
 async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
+  const themeMessage=await initializeThemes(await api('/themes'));
+  if(themeMessage)toast(themeMessage);
   document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date());
   await render();
 }

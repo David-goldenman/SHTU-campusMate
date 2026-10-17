@@ -56,9 +56,8 @@ def review_key(value):
 def grounded(event, text, received_at=None):
     if normalized(event.quote) not in normalized(text):
         raise HTTPException(422, '活动依据必须来自本次读取的原文。')
-    quote = event.quote
-    if re.search(r'报名.{0,8}截止|截止.{0,8}报名', quote) and not re.search(r'活动时间|讲座时间|会议时间|举办时间|授课时间|开始时间|活动日期', quote):
-        raise HTTPException(422, '报名截止日期不能作为活动开始时间。')
+    quote = '\n'.join(part for part in re.split(r'[。；;\n]', event.quote)
+                      if not re.search(r'报名|问卷|调查|反馈|申请|提交|截止|deadline|survey|registration', part, re.I))
     start = event.starts_at.astimezone(ZONE)
     dates = list(re.finditer(r'(?:(20\d{2})[年/.-])?(\d{1,2})[月/.-](\d{1,2})日?', quote))
     received_year = datetime.fromisoformat(received_at).astimezone(ZONE).year if received_at else None
@@ -188,7 +187,7 @@ class CampusAgent:
         return await self.api('notifications', '/imports', method='POST', body={'account_revision': owner or account_revision(self.context), 'id': identity, 'title': title[:120], 'summary': summary[:3000],
             'importance': importance, 'why': why[:1000], 'source_revision': revision, 'citations': citations or [], 'proposal_id': proposal_id, 'event_at': event_at})
 
-    async def propose(self, owner, module, source, event, mandatory=False):
+    async def propose(self, owner, module, source, event):
         event_value = grounded(event, source['text'], source.get('received_at'))
         if event.starts_at <= datetime.now(timezone.utc):
             raise HTTPException(422, '这条活动已经开始，请查看原始资料核对。')
@@ -201,16 +200,27 @@ class CampusAgent:
             item = next((item for item in values if item['id'] == identity), None)
             if item is None:
                 item = {'id': identity, 'state': 'pending', 'source_id': source['id'], 'module': module, 'event': event_value,
-                        'quote': event.quote, 'title': source['title'], 'url': source.get('url', ''), 'created_at': datetime.now(timezone.utc).isoformat()}
+                        'quote': event.quote, 'title': source['title'], 'url': source.get('url', ''), 'source_revision': source.get('classification', {}).get('input_revision'), 'created_at': datetime.now(timezone.utc).isoformat()}
                 values.insert(0, item)
                 self.context.store.write(self.key('proposals'), values)
-            elif item['state'] == 'pending' and item['event'] != event_value:
-                item.update(event=event_value, quote=event.quote)
+            elif item['state'] in {'pending', 'withdrawn'}:
+                item.update(state='pending', event=event_value, quote=event.quote, source_revision=source.get('classification', {}).get('input_revision'))
                 self.context.store.write(self.key('proposals'), values)
-        if mandatory and item['state'] == 'pending':
-            await self.decide(identity, 'accept')
-            item = next(value for value in self.proposals() if value['id'] == identity)
         return item
+
+    def reconcile_proposals(self, owner, messages):
+        current = {item['id']: item['classification'] for item in messages}
+        with self.lock:
+            if owner != account_revision(self.context) or self.cancelled.is_set():
+                raise HTTPException(409, '账号或模块状态已更新。')
+            values, changed = self.proposals(), False
+            for item in values:
+                classification = current.get(item['source_id']) if item['module'] == 'mail' else None
+                if item['state'] == 'pending' and classification and (classification.get('bucket') not in {'focus', 'recommend'} or classification.get('review_pending')):
+                    item['state'] = 'withdrawn'
+                    changed = True
+            if changed:
+                self.context.store.write(self.key('proposals'), values)
 
     async def decide(self, identity, action):
         with self.lock:
@@ -218,12 +228,21 @@ class CampusAgent:
             item = next((item for item in self.proposals() if item['id'] == identity), None)
             if item is None:
                 raise HTTPException(404, '当前账号没有这条日程建议。')
+            if item['state'] == 'withdrawn':
+                raise HTTPException(409, '这条建议已随邮件分类更新，请刷新通知。')
             if item['state'] != 'pending':
                 return item
             if action == 'accept' and datetime.fromisoformat(item['event']['starts_at']) <= datetime.now(timezone.utc):
                 raise HTTPException(409, '活动已经开始，请在时间表中手动核对。')
         result = None
         if action == 'accept':
+            if item['module'] == 'mail':
+                mail = await self.api('mail', '/intelligence')
+                current = next((value['classification'] for value in mail['messages'] if value['id'] == item['source_id']), None)
+                if not current or current.get('review_pending') or current['bucket'] not in {'focus', 'recommend'} or item.get('source_revision') != current.get('input_revision'):
+                    raise HTTPException(409, '邮件分类或偏好已更新，请等待复核后确认安排。')
+            if owner != account_revision(self.context) or self.stopping.is_set():
+                raise HTTPException(409, '账号或模块状态已更新。')
             result = await self.api('timetable', '/events/import', method='POST', body={**item['event'], 'origin_id': 'campus-agent:' + identity,
                 'account_revision': owner, 'notes': ('来源：' + item['title'] + '\n' + item['quote'])[:2000]})
         with self.lock:
@@ -277,15 +296,13 @@ class CampusAgent:
             proposal = None
             if review.get('event') and review['bucket'] in {'focus', 'recommend'} and not review.get('needs_check'):
                 try:
-                    preliminary = prepared['preliminary']
-                    required = (mail['preferences']['shape'] == 'required' and review['topic'] == 'shape'
-                                and preliminary['topic'] == 'shape' and preliminary['protected'] and review['by'] != 'manual')
-                    proposal = await self.propose(owner, 'mail', source, Event.model_validate(review['event']), bool(required))
+                    proposal = await self.propose(owner, 'mail', source, Event.model_validate(review['event']))
                 except (HTTPException, ValueError):
                     review = {**review, 'needs_check': True}
             revision = review_key(item['classification'])
-            if review['bucket'] in {'focus', 'recommend'}:
-                await self.notice('mail:' + digest(identity), item['title'], review['summary'], revision, why=review['reason'] + (' 活动时间需要核对。' if review.get('needs_check') else ''),
+            if review['bucket'] in {'focus', 'recommend'} and (proposal is None or proposal['state'] != 'dismissed'):
+                notice_revision = digest([prepared['notification'], review['bucket'], review.get('needs_check'), review.get('event')])
+                await self.notice('mail:' + digest(identity), item['title'], review['summary'], notice_revision, why=review['reason'] + (' 活动时间需要核对。' if review.get('needs_check') else ' 可选择是否参加并加入时间表。' if proposal and proposal['state'] == 'pending' else ''),
                     owner=owner, importance='important' if review['bucket'] == 'focus' else 'normal', citations=[{'id': identity, 'title': item['title'], 'source': 'mail', 'url': item.get('url', '')}],
                     proposal_id=proposal['id'] if proposal else None, event_at=proposal['event']['starts_at'] if proposal else None)
             handled[identity] = revision
@@ -299,6 +316,7 @@ class CampusAgent:
         state = self.context.store.read(state_key, {})
         modules, snapshots, mail = await self.collect()
         job.check()
+        self.reconcile_proposals(owner, mail['messages'])
         observed = {}
         for module, value in snapshots.items():
             if module in {'courses', 'assignments', 'dashboard', 'assistant', 'education'}:
@@ -308,19 +326,16 @@ class CampusAgent:
                 data = [{key: item.get(key) for key in ('id', 'title', 'received_at')} for item in data.get('messages', [])]
             health = value.get('status') if value.get('status') in {'error', 'login_required', 'verification_required'} else 'available'
             observed[module] = digest([health, value.get('message'), source_content(data)])
-        mail_seen = {item['id']: digest([item['title'], item.get('received_at'), mail['preferences']]) for item in mail['messages']}
+        mail_seen = {item['id']: item['classification'].get('input_revision') or digest([item['title'], item.get('received_at'), mail['preferences']]) for item in mail['messages']}
         changed = list(dict.fromkeys([*state.get('changes_pending', []), *(module for module, revision in observed.items() if state.get('observed', {}).get(module) != revision)]))
         changed = [module for module in changed if module in snapshots]
-        pending = list(dict.fromkeys([*state.get('pending', []), *(identity for identity, revision in mail_seen.items() if state.get('mail_seen', {}).get(identity) != revision)]))
+        pending = list(dict.fromkeys([*state.get('pending', []), *(item['id'] for item in mail['messages'] if item['classification'].get('review_pending', not item['classification'].get('fingerprint')))]))
         if not state and not force:
-            pending, changed = [], []
-            state['review_seen'] = {item['id']: review_key(item['classification']) for item in mail['messages'] if item['classification'].get('fingerprint')}
+            changed = []
         elif force:
             pending = list(dict.fromkeys([*(item['id'] for item in mail['messages'][:3]), *pending]))
-        pending = [identity for identity in pending if identity in mail_seen]
-        if 'mail' in changed and len(pending) > 5 and state.get('mail_seen'):
-            # A preference edit rechecks recent notices; the mailbox keeps per-message review controls.
-            pending = pending[:5]
+        manual = {item['id'] for item in mail['messages'] if item['classification'].get('by') == 'manual'}
+        pending = [identity for identity in pending if identity in mail_seen and identity not in manual]
         state.update(observed=observed, mail_seen=mail_seen, pending=pending, changes_pending=changed, last_checked=datetime.now(timezone.utc).isoformat())
         job.check()
         self.context.store.write(state_key, state)

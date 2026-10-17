@@ -4,7 +4,7 @@
 
 ## 设计依据与信息层级
 
-界面采用 Material 3 的信息组织与交互原则，配色使用 Nord。设计依据包括 [自适应页面结构](https://m3.material.io/foundations/layout/canonical-examples/overview)、[列表](https://m3.material.io/components/lists/guidelines)、[按钮层级](https://m3.material.io/components/buttons/guidelines)、[卡片边界](https://m3.material.io/components/cards/guidelines)、[字体角色](https://m3.material.io/styles/typography/applying-type) 和 [表面色角色](https://m3.material.io/styles/color/the-color-system)。列表与详情按当前任务切换；相关内容通过分区、留白和分隔线归组，卡片承载独立对象。低频操作放入菜单，常用入口提供可见文字。UI/UX Pro Max 的可访问性与桌面密度规则用于核对焦点、目标尺寸、对比度和窄屏行为。
+默认界面采用 Material 3 的信息组织与交互原则，配色使用 Nord。设计依据包括 [自适应页面结构](https://m3.material.io/foundations/layout/canonical-examples/overview)、[列表](https://m3.material.io/components/lists/guidelines)、[按钮层级](https://m3.material.io/components/buttons/guidelines)、[卡片边界](https://m3.material.io/components/cards/guidelines)、[字体角色](https://m3.material.io/styles/typography/applying-type) 和 [表面色角色](https://m3.material.io/styles/color/the-color-system)。列表与详情按当前任务切换；相关内容通过分区、留白和分隔线归组，卡片承载独立对象。低频操作放入菜单，常用入口提供可见文字。UI/UX Pro Max 的可访问性与桌面密度规则用于核对焦点、目标尺寸、对比度和窄屏行为。
 
 | 使用场景 | 页面组织 | 信息优先级 |
 | --- | --- | --- |
@@ -236,10 +236,10 @@ CSS 的 .button、.button-primary、.button-secondary、.button-danger、.text-b
 
 ## 蓝白艺术主题
 
-默认使用“观星台”，可在设置的“外观”中切换“星夜手记”。data-art-theme 选择艺术主题，data-ui-theme 保留 Nord 布局基础。主题只更新 CSS 变量、根属性与插画，不刷新业务模块或请求课程资料。两套主题都使用深色文字、浅色阅读区、清楚的焦点和原有状态语义。
+首次使用选择 Default · Nord，可在设置的“外观”中选择“观星台”和“星夜手记”，之后保留用户选择。`data-theme` 标识当前主题，艺术主题通过自己的样式和展示区域提供插画与布局。两套艺术主题使用深色文字、浅色阅读区、清楚的焦点和原有状态语义；模块可由主题提供独立视图，功能数据和动作遵循 [主题契约](UI_THEME.md)。
 
 新版首页保留待办首屏；艺术出现在学习助手空白对话的紧凑主图与外观设置预览。首页输入后、已有消息时和低于 520px 的短屏窗口收起主图；正常聊天区没有纹理或人物。两组男女插画仅在外观设置中展示，各主题独立记住男版、女版或隐藏偏好。
 
-共享实现位于 web/themes/appearance.js、art-workspace.css、observatory.css 和 star-notes.css；首页主图由学习助手自己的 web/welcome.js 和 welcome.css 管理。各页面继续使用语义颜色和既有业务布局。人物选择、主题与减少动效设置保存在当前浏览器，存储被禁用时当次选择仍可应用。手动减少动态效果和系统 prefers-reduced-motion 都能停止装饰运动。
+共享实现位于 `web/themes/appearance.js`、`appearance.css` 和各主题清单；艺术区域由主题的 `art.js`、`art-welcome.css` 与 `art-workspace.css` 管理。人物选择、主题与减少动效设置保存在当前浏览器，主题切换保存后重新打开当前页面。手动减少动态效果和系统 `prefers-reduced-motion` 都能停止装饰运动。
 
 完整实现、资产来源与验证记录见 ART_THEMES.md。

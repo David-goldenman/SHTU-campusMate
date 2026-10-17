@@ -6,6 +6,7 @@ import {resolve} from 'node:path';
 
 const base = process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap = await (await fetch(base + '/api/v1/bootstrap')).json();
+const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
 const modules = bootstrap.modules.filter(item => ['timetable','assignments','blackboard','gradescope','assistant','deadlines'].includes(item.id));
 assert(modules.find(item => item.id === 'timetable')?.frontend_url, 'Enable the timetable module before checking its UI');
 const profile = resolve('.codex/tmp/web-check-' + process.pid);
@@ -15,7 +16,7 @@ function browser(action) {
   assert.equal(result.status,0,result.stderr);
 }
 
-function fixture(initial, categories) {
+function fixture(initial, categories, themeCatalog) {
   const savedFetch = window.fetch.bind(window);
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
   const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
@@ -28,6 +29,7 @@ function fixture(initial, categories) {
     const method = options.method || 'GET', body = options.body ? JSON.parse(options.body) : {};
     state.calls.push({path,method,target:body.target});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
+    if (path === '/themes') return json(themeCatalog);
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
     if (path === '/data/backups') return json({backups:[]});
     if (path === '/ai/catalog') return json({providers:[{id:'deepseek',name:'DeepSeek',models:['deepseek-flash','deepseek-v4-pro']},{id:'openai',name:'openai',models:['gpt-4']}],protocols:['openai-completions','openai-responses','anthropic-messages']});
@@ -159,7 +161,7 @@ try {
   await command('Page.enable');
   await command('Network.enable');
   await command('Network.setBlockedURLs',{urls:[base + '/api/v1/*']});
-  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
+  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify(themeCatalog)})`});
   await command('Page.navigate',{url:base + '/#settings'});
   await evaluate(`window.waitFor = async condition => {for(let n=0;n<100;n++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out');}; waitFor(()=>window.webCheck && document.querySelector('[data-credentials=gradescope]'))`);
   const login = await evaluate(`(async()=>{

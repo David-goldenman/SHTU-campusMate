@@ -1,4 +1,4 @@
-/* Scoped to this module: imagery never sits behind messages or form text. */
+/* Illustration stays separate from messages and form text. */
 [data-art-theme] .academic-chat { --study-width:820px; }
 [data-art-theme] .academic-chat .study-header { border-bottom:1px solid var(--border); min-height:76px; }
 [data-art-theme] .academic-chat .study-new-button,[data-art-theme] .academic-chat .study-menu>div { border-radius:5px; }

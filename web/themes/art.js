@@ -1,5 +1,9 @@
 // A decorative plate; chat state and requests stay with the existing conversation.
-export function welcomeMarkup() {
+export const artTheme = true;
+export const icon = '/assets/themes/assets/observatory-mark.svg';
+export const themeColor = id => id === 'observatory' ? '#173caa' : '#2852b8';
+export function renderSlot(name) {
+  if (name !== 'assistant.welcome') return;
   return '<div class="study-welcome">' +
     '<div class="study-welcome-plate"><div class="study-welcome-copy">' +
     '<span class="study-art-label" aria-hidden="true">A SPACE FOR YOUR CURIOSITY</span>' +

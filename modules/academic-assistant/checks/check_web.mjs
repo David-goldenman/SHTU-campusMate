@@ -4,10 +4,11 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const base=process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap=await(await fetch(base+'/api/v1/bootstrap')).json();
+const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
 const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant'].includes(item.id));
 const profile=resolve('.codex/tmp/chat-web-'+process.pid);await mkdir(profile,{recursive:true});
 function browser(action){const r=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);}
-function fixture(modules,categories){
+function fixture(modules,categories, themeCatalog){
  const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],chats:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
  Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{state.clipboard=text;}}});
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
@@ -16,6 +17,7 @@ function fixture(modules,categories){
   const target=new URL(url,location.origin);if(!target.pathname.startsWith('/api/v1/'))return original(url,options);
   const path=target.pathname.replace('/api/v1',''),method=options.method||'GET';
   if(path==='/bootstrap')return json({version:'synthetic',csrf_token:'synthetic',modules,categories});
+  if(path==='/themes')return json(themeCatalog);
   if(path==='/modules')return json({modules,categories});
   if(path==='/settings')return json({port:16666,active_port:16666,restart_required:false,storage:{directory:'.private',encryption:'Synthetic'}});
   if(path==='/data/backups')return json({backups:[]});
@@ -65,7 +67,7 @@ try{
  const command=(method,params={})=>new Promise((ok,no)=>{const id=++serial,timer=setTimeout(()=>no(new Error(method)),20000);pending.set(id,{ok,no,timer});socket.send(JSON.stringify({id,method,params}));});
  const evaluate=expression=>command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}).then(r=>{assert(!r.exceptionDetails,JSON.stringify(r.exceptionDetails));return r.result.value;});
  await command('Page.enable');await command('Runtime.enable');await command('Network.enable');await command('Network.setBlockedURLs',{urls:[base+'/api/v1/*']});
- await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
+ await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify(themeCatalog)})`});
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});await command('Page.navigate',{url:base+'/#dashboard'});
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<160;i++){if(condition())return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI condition timed out');};waitFor(()=>document.querySelector('[data-chat-form]'))`);
  await evaluate(`new Promise(r=>setTimeout(r,200))`);

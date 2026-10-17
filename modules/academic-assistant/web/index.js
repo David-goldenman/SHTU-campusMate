@@ -2,7 +2,6 @@ import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
 import {openingLine} from '/assets/opening-lines.js';
 import {sendOnEnter, fitComposer} from './composer.js';
-import {welcomeMarkup} from './welcome.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
 
@@ -20,11 +19,10 @@ const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
-  const removeWelcomeStyle = context.ui.useStyle(new URL('./welcome.css',import.meta.url),context.signal);
   const card = container.closest('.module-card');
   const title = card.querySelector('.module-card-heading');
   let busy = false, profileDirty = false, frame, observer, follow = true, saveDraft = () => {};
-  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();removeWelcomeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
+  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai, presets, conversations;
   try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
@@ -188,7 +186,7 @@ export async function mount(container, context) {
   }
   function empty() {
     conversation.classList.add('is-empty');
-    messages.innerHTML = welcomeMarkup();
+    messages.innerHTML = context.theme.renderSlot('assistant.welcome',{},'<div class="study-welcome"><div><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，想一起解决什么？</h3></div><p>理解知识、调整日程，一起安排作业、复习和学习计划。</p></div>');
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
   archived=conversations.items.find(item=>item.id===activeId)?.archived || false;

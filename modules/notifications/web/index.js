@@ -28,7 +28,7 @@ export async function mount(container,context) {
     filters.innerHTML=Object.entries({unread:'未读',all:'全部',read:'已读'}).map(([id,label])=>`<button type="button" data-notice-filter="${id}" aria-pressed="${filter===id}">${label}<span>${value.items.filter(item=>id==='all'||item.read===(id==='read')).length}</span></button>`).join('');
     filters.querySelectorAll('[data-notice-filter]').forEach(button=>button.onclick=()=>{filter=button.dataset.noticeFilter;refresh().catch(retry);});
     const items=value.items.filter(item=>filter==='all'||item.read===(filter==='read'));
-    const proposals=new Map((agent.proposals||[]).map(item=>[item.id,item]));
+    const proposals=new Map((agent.proposals||[]).filter(item=>item.state!=='withdrawn').map(item=>[item.id,item]));
     container.querySelector('[data-notices]').innerHTML=items.map(item=>{
       const p=proposals.get(item.proposal_id), markdown=renderMarkdown(item.summary);
       const plain=document.createElement('div');plain.innerHTML=markdown;

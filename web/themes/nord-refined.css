@@ -76,7 +76,7 @@
 .source-actions { display:flex; align-items:center; gap:8px; flex:none; }.source-state { position:relative; min-width:0; font-size:12px; color:var(--muted); }.source-state>summary { cursor:pointer; display:flex; align-items:center; gap:8px; padding:6px 0; list-style:none; }.source-state>summary::-webkit-details-marker { display:none; }.source-state>summary::after { content:'⌄'; font-size:12px; }
 .source-indicator { width:6px; height:6px; border-radius:50%; background:var(--nord14); }.source-state[data-state=syncing] .source-indicator { background:var(--nord9); }.source-state:is([data-state=error],[data-state=login_required],[data-state=verification_required],[data-state=partial]) .source-indicator { background:var(--nord12); }
 .source-state[data-state=not_connected] .source-indicator { background:var(--nord4); }
-.source-state { flex:1; }.source-state-body { margin-top:8px; max-height:45vh; overflow:auto; padding:16px; border-left:2px solid var(--border); border-radius:0 8px 8px 0; background:var(--surface-low); font-size:13px; }.source-toolbar:has(.source-state[open]) { align-items:flex-start; }
+.source-state { flex:1; }.source-state-body { margin-top:8px; padding:16px; border-left:2px solid var(--border); border-radius:0 8px 8px 0; background:var(--surface-low); font-size:13px; }.source-toolbar:has(.source-state[open]) { align-items:flex-start; }
 .source-state-body [data-issues]:not(:empty) { margin:10px 0 0; padding:10px 0 0; background:transparent; border:0; border-top:1px solid var(--border); font-size:13px; }.source-state-body>p { font-size:12px; }
 [data-ui-theme="nord-refined"] [data-module-id] .campus-toolbar { gap:12px; margin-bottom:16px; }
 [data-ui-theme="nord-refined"] [data-module-id] .campus-list { gap:10px; }

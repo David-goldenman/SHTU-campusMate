@@ -1,5 +1,48 @@
 # UI 主题维护与协作
 
+## 主题契约 v1
+
+设置 → 外观提供 `default`（当前 Nord 界面）、`observatory`（观星台）和 `star-notes`（星夜手记）。首次使用选择 `default`；之后按当前浏览器的 `campus.appearance.v1` 保存用户选择，服务重启和页面刷新继续使用。切换主题保存后重新打开当前页面，以统一卸载页面、后台组件与样式。原有艺术主题及人物偏好继续读取；主题暂时缺失时显示 Default，并保留原选择供重新安装后恢复。
+
+`GET /api/v1/themes` 自动发现 `web/themes/<id>/theme.json`，返回 `{api_version:1,default:"default",items,errors}`。添加主题只需提交自己的目录和清单；清单错误单独列出，其他主题继续使用。资源路径相对清单目录解析，必须指向 `web/themes/` 内的本地文件。
+
+```json
+{
+  "id": "sample",
+  "name": "示例主题",
+  "description": "面向阅读的布局",
+  "api_version": 1,
+  "styles": ["styles.css"],
+  "preview": "preview.webp",
+  "entry": "index.js",
+  "views": {"mail": "mail.js"},
+  "backgrounds": {}
+}
+```
+
+只有 `id` 和 `name` 必填，`id` 与目录一致；当前接口版本为 1。`styles` 是有顺序的 CSS 列表；`preview` 是设置页预览。`entry` 可导出 `renderSlot(name, props)`，返回展示用 HTML；未实现的区域返回 `undefined`，使用模块原界面。当前区域为 `assistant.welcome`。主题可导出 `icon` 和 `themeColor(id)` 设置标记与浏览器颜色。
+
+`views` 以模块 ID 指定完整界面入口，`settings` 代表全局设置。`backgrounds` 用于常驻组件。入口统一导出 `mount(container, context)`，与原模块共用 API、模块启停及账号版本；只有可用模块才会加载对应视图。未指定的页面使用原界面。主题可以改变信息布局、组件结构、字体、色彩和交互组织，通用 UI helper 作为可选工具使用。
+
+| 注入接口 | 使用方式 |
+| --- | --- |
+| `context.api(path, options)` | 当前模块的公开业务 API；设置视图使用框架 API。请求自动带框架令牌与卸载信号 |
+| `context.services.auth / ai` | 文档化的共享认证状态和 AI 接口，凭据保留在共享服务 |
+| `context.ui` | `escape`、`dialog`、`toast`、`safeAction`、`useStyle`、`bindMenus` 等公共组件；详见 [模块接口](MODULES.md) |
+| `context.navigate(category)` | 使用现有导航分类和路由 |
+| `context.focus(active)` | 请求内容区使用完整工作区 |
+| `context.defaultView(container)` | 挂载当前模块原界面，返回其清理函数，适合组合原有功能 |
+| `context.theme.id / list() / select(id)` | 当前主题、安装清单、保存并切换主题 |
+| `context.theme.preferences() / savePreferences(value)` | 读取副本、保存当前主题专属的展示偏好 |
+| `context.theme.renderSlot(name, props, fallback)` | 模块声明的可替换展示区域 |
+| `context.signal` | 切页、模块停用或刷新时结束组件资源 |
+
+业务信息的定义、查询、分类、通知决策和写入校验由模块公开 API 负责。主题决定如何显示这些信息、如何安排用户操作；主题对同一动作使用相同请求和确认含义。例如活动加入仍调用参加接口，主题不能把默认选中等同于用户同意。数据缺失、验证要求、失败及部分结果需要保持可识别，使用已有接口字段表达。
+
+组件在首次 `await` 前注册 signal 清理，使用 `context.ui.useStyle(url, context.signal)` 管理自己的样式。`mount` 可返回清理函数；组合 `defaultView` 时将其清理函数返回或纳入自身清理。监听、定时器、请求和后台显示随卸载结束。动态文字使用 `context.ui.escape` 或 `textContent`；主题本身是本地受信任代码，CSS 建议按 `html[data-theme="sample"]` 限定，组件内部类名由主题自行组织。
+
+新主题 PR 保留其原有视觉设计，在自身目录实现这些接口，复用业务后端。评审核对功能操作、账号切换、已停用模块、重新打开后的选择、键盘焦点与窄屏显示；布局可以充分变化。修改接口时同步本文件、调用方和检查，不把业务规则复制到主题中。
+
 ## 样式与交互分工
 
 Nord 精调主题位于 `web/themes/nord-refined.css`，由 `web/index.html` 的样式链接和 `data-ui-theme="nord-refined"` 启用。语义颜色、字体角色、间距、控件密度和浮层层次集中维护；公共组件基础样式位于 `web/styles.css`。模块通过 `context.ui.useStyle` 管理自己的布局与清理，业务状态与数据通过现有 API 取得。设计依据与页面组织见 [设计规范](DESIGN.md)。
@@ -19,6 +62,8 @@ Nord 精调主题位于 `web/themes/nord-refined.css`，由 `web/index.html` 的
 | `modules/campus-agent/web/` | 顶部通知入口、提醒及资源清理 |
 
 ## 视觉规则
+
+以下为 Default 的视觉规则。主题可以替换布局和组件形态，同时保留可访问操作、必要状态及相同业务含义。必要滚动区域提供细圆角滚动条，课程卡片和来源说明通过完整页面或详情组织。鼠标滚轮、键盘与触屏滚动保持可用；实现依据 [MDN 滚动条说明](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/::-webkit-scrollbar)，高对比度模式使用系统颜色。
 
 页面背景、白色内容区、次级分区和浮层分别使用 `--bg`、`--paper`、`--surface-low/--surface`、`--surface-raised`。浮层使用 `--outline` 与 `--popup-shadow` 保持清楚的边界。文字、链接与选中容器使用 `--text`、`--muted`、`--link`、`--primary-container`，状态使用 Nord Aurora 并提供文字。普通文字对比至少 4.5:1，选中、悬停与键盘焦点分别核对。
 

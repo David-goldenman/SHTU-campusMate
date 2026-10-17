@@ -5,6 +5,7 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const base=process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap=await (await fetch(base+'/api/v1/bootstrap')).json();
+const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
 const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant','assignments'].includes(item.id));
 assert.equal(modules.length,3);
 const profile=resolve('.codex/tmp/theme-check-'+process.pid);
@@ -13,7 +14,7 @@ function browser(action) {
   const result=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});
   assert.equal(result.status,0,result.stderr);
 }
-function fixture(modules,categories) {
+function fixture(modules,categories, themeCatalog) {
   const original=window.fetch.bind(window);
   const state=window.themeCheck={modules,categories,empty:false,tabs:false,unexpected:[]};
   const due=hours=>new Date(Date.now()+hours*3600000).toISOString();
@@ -24,6 +25,7 @@ function fixture(modules,categories) {
   window.fetch=async(url,options={})=>{
     const path=new URL(url,location.origin).pathname.replace('/api/v1','');
     if(!new URL(url,location.origin).pathname.startsWith('/api/v1/')) return original(url,options);
+    if(path==='/themes')return response(themeCatalog);
     const categories=state.categories.map(item=>item.id==='dashboard'&&state.tabs?{...item,layout:'tabs'}:item);
     if(path==='/bootstrap')return response({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if(path==='/modules/reload')return response({modules:state.modules,categories});
@@ -60,7 +62,20 @@ try {
   socket=new WebSocket(tabs.find(tab=>tab.type==='page').webSocketDebuggerUrl);
   await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});
   let serial=0;const pending=new Map();
-  socket.addEventListener('message',({data})=>{const message=JSON.parse(data),task=pending.get(message.id);if(!task)return;clearTimeout(task.timer);pending.delete(message.id);message.error?task.reject(new Error(JSON.stringify(message.error))):task.resolve(message.result);});
+  socket.addEventListener('message',({data})=>{
+    const message=JSON.parse(data);
+    if(message.method==='Fetch.requestPaused') {
+      const source=`export async function mount(container,context){
+        const id=context.module?.id||'settings';
+        context.signal.addEventListener('abort',()=>{(window.themeContractUnmounts||=[]).push(id);},{once:true});
+        const cleanup=await context.defaultView(container);
+        const marker=document.createElement('p');marker.dataset.themeView=id;marker.textContent=context.theme.id;container.prepend(marker);
+        return cleanup;
+      }`;
+      void command('Fetch.fulfillRequest',{requestId:message.params.requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'text/javascript'}],body:Buffer.from(source).toString('base64')});return;
+    }
+    const task=pending.get(message.id);if(!task)return;clearTimeout(task.timer);pending.delete(message.id);message.error?task.reject(new Error(JSON.stringify(message.error))):task.resolve(message.result);
+  });
   const command=(method,params={})=>new Promise((resolve,reject)=>{const id=++serial,timer=setTimeout(()=>{pending.delete(id);reject(new Error('Timed out: '+method));},20000);pending.set(id,{resolve,reject,timer});socket.send(JSON.stringify({id,method,params}));});
   const evaluate=expression=>command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}).then(result=>{assert(!result.exceptionDetails,JSON.stringify(result.exceptionDetails));return result.result.value;});
   const wait=condition=>evaluate(`(async()=>{for(let i=0;i<150;i++){if(${condition})return true;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out: '+${JSON.stringify(condition)}+' | '+JSON.stringify(window.themeCheck?.unexpected));})()`);
@@ -81,7 +96,7 @@ try {
   await command('Network.enable');
   await command('Network.setBlockedURLs',{urls:[base+'/api/v1/*']});
   await command('Page.navigate',{url:'about:blank'});
-  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
+  const fixtureScript=await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify(themeCatalog)})`});
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong')?.textContent==='12' && document.querySelector('.study-messages')");
   assert(await evaluate("document.querySelector('.overview-columns').textContent.includes('合成课程日程')"),'Upstream agenda is preserved');
@@ -117,7 +132,7 @@ try {
   assert(await evaluate("document.querySelectorAll('.overview-stats a').length===4 && !document.querySelector('.overview-sources').open"),'Secondary statistics stay available in a disclosure');
   await evaluate("document.documentElement.removeAttribute('data-ui-theme');document.documentElement.removeAttribute('data-art-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
-  await evaluate("document.documentElement.dataset.uiTheme='nord-refined';document.documentElement.dataset.artTheme='observatory'");
+  await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
   assert(await evaluate("document.querySelectorAll('h1').length===1 && !document.querySelector('.module-shortcuts')"),'The page has one title and its own contextual actions');
@@ -146,5 +161,38 @@ try {
   await evaluate("document.querySelector('[data-view=academic-assistant]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
   await wait("document.querySelector('.overview-stats')");
   assert.deepEqual(await evaluate('themeCheck.unexpected'),[]);
-  console.log('PASS: real and synthetic dashboards, agenda, empty/error feedback, 4 viewports, theme isolation, skip link and contextual actions, settings drafts/tabs, generic module tabs and style cleanup');
+  await evaluate("location.hash='settings?tab=appearance'");
+  await wait("document.querySelectorAll('[name=art-theme]').length>=3");
+  for(const id of ['observatory','star-notes','default']) {
+    await evaluate(`document.querySelector('[name="art-theme"][value="${id}"]').click()`);
+    await wait(`document.documentElement?.dataset.theme==='${id}' && document.querySelector('[name="art-theme"][value="${id}"]')?.checked`);
+    await command('Page.reload');
+    await wait(`document.documentElement?.dataset.theme==='${id}' && document.querySelector('[name="art-theme"][value="${id}"]')?.checked`);
+    assert(await evaluate("document.documentElement.scrollWidth<=innerWidth"),'Theme selection fits the viewport');
+    await capture('ui-theme-'+id,1440,1060);
+    await capture('ui-theme-'+id+'-mobile',375,812);
+    await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1060,deviceScaleFactor:1,mobile:false});
+    await evaluate("location.hash='dashboard'");
+    await wait("document.querySelector('.study-welcome')");
+    assert.equal(await evaluate("!!document.querySelector('.study-welcome-illustration')"),id!=='default','Theme owns the welcome presentation');
+    await evaluate("location.hash='settings?tab=appearance'");
+    await wait("document.querySelector('[name=art-theme]')");
+  }
+  assert.equal(await evaluate("getComputedStyle(document.documentElement,'::-webkit-scrollbar').width"),'6px','Compact scrollbars are shared by themes');
+  assert.equal(await evaluate("getComputedStyle(document.documentElement).scrollbarColor"),'auto','Native scrollbar color must not override the compact Edge styling');
+  const view='/assets/themes/contract-check/view.js',custom={id:'contract-check',name:'Contract check',description:'Synthetic theme',styles:[],entry:null,views:{assignments:view,settings:view},backgrounds:{}};
+  await command('Fetch.enable',{patterns:[{urlPattern:base+view}]});
+  await command('Page.removeScriptToEvaluateOnNewDocument',{identifier:fixtureScript.identifier});
+  await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify({...themeCatalog,items:[...themeCatalog.items,custom]})})`});
+  await evaluate("localStorage.setItem('campus.appearance.v1',JSON.stringify({...JSON.parse(localStorage.getItem('campus.appearance.v1')),theme:'contract-check'}))");
+  await command('Page.navigate',{url:base+'/#assignments'});
+  await wait("location.hash==='#assignments' && document.querySelector('.assignment-card')");
+  await command('Page.reload');
+  await wait("document.querySelector('[data-theme-view=assignments]')?.textContent==='contract-check' && document.querySelector('.assignment-card')");
+  await evaluate("location.hash='settings?tab=appearance'");
+  await wait("document.querySelector('[data-theme-view=settings]') && document.querySelector('[name=art-theme]')");
+  assert.deepEqual(await evaluate('themeContractUnmounts'),['assignments'],'Theme wrappers release the original view on navigation');
+  await evaluate("document.querySelector('[name=art-theme][value=default]').click()");
+  await wait("document.documentElement?.dataset.theme==='default' && document.querySelector('[name=art-theme][value=default]')?.checked");
+  console.log('PASS: dashboards, agenda, four viewports, three remembered themes, module/settings view overrides, API reuse, cleanup, scrollbars, settings tabs and keyboard actions');
 } finally {socket?.close();browser('close');}

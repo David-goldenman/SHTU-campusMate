@@ -59,9 +59,10 @@ with ExitStack() as stack:
     assert agent.status()['last_run']['reviewed'] == 2
     required = next(item for item in agent.proposals() if item['source_id']=='mail:required')
     optional = next(item for item in agent.proposals() if item['source_id']=='mail:optional')
-    assert required['state']=='accepted' and optional['state']=='pending'
+    assert required['state']=='pending' and optional['state']=='pending'
     async def verify():
-        assert len((await api('timetable','/events')).json()['items']) == 1
+        assert len((await api('timetable','/events')).json()['items']) == 0
+        await agent.decide(required['id'],'accept')
         await agent.decide(optional['id'],'accept')
         await agent.decide(optional['id'],'accept')
         events = (await api('timetable','/events')).json()['items']
@@ -122,6 +123,37 @@ with ExitStack() as stack:
     assert len(asyncio.run(api('timetable','/events')).json()['items'])==event_count, 'Non-credit activities require user confirmation'
     assert not any(item['source_id']==exceptions[0]['id'] for item in agent.proposals()), 'Filtered notices stay filtered'
     assert next(item for item in agent.proposals() if item['source_id']==exceptions[1]['id'])['state']=='pending', 'Current source evidence overrides a saved protected flag'
+    more = [{**items[1], 'id':'mail:queue'+str(index), 'source_id':'queue'+str(index), 'title':'合成讲座 '+str(index)} for index in range(7)]
+    seed([*items, third, *exceptions, *more])
+    asyncio.run(agent.check())
+    assert agent.status()['pending_count'] >= 3, 'Every cached message stays queued beyond the first batch'
+    for _ in range(4):
+        asyncio.run(agent.check())
+    assert agent.status()['pending_count'] == 0
+    assert all(item['classification']['by']=='agent' for item in intelligence.records())
+    notice = next(item for item in asyncio.run(api('notifications')).json()['items'] if any(c['id']=='mail:required' for c in item['citations']))
+    asyncio.run(api('notifications','/'+notice['id']+'/read',method='PUT',body={'read':True}))
+    # Updating preferences invalidates every cached review, including messages beyond the latest five.
+    asyncio.run(api('mail','/preferences',method='PUT',body={**intelligence.preferences(),'requirements':'只关注合成的新偏好'}))
+    for _ in range(5):
+        asyncio.run(agent.check())
+    assert all(not item['classification']['review_pending'] for item in intelligence.records())
+    assert next(item for item in asyncio.run(api('notifications')).json()['items'] if item['id']==notice['id'])['read'], 'Rechecking unchanged mail preserves its read state'
+    proposal = next(item for item in agent.proposals() if item['source_id']==more[0]['id'])
+    asyncio.run(agent.decide(proposal['id'],'dismiss'))
+    notices = asyncio.run(api('notifications')).json()['items']
+    assert not any(any(c['id']==more[0]['id'] for c in item['citations']) for item in notices), 'Declining removes related activity reminders'
+    asyncio.run(api('mail','/labels',method='POST',body={'message_id':more[1]['id'],'label':'已筛选活动','bucket':'filter'}))
+    notices = asyncio.run(api('notifications')).json()['items']
+    assert not any(any(c['id']==more[1]['id'] for c in item['citations']) for item in notices), 'Filtering a mail also filters earlier reminders'
+    asyncio.run(agent.check())
+    assert next(item for item in agent.proposals() if item['source_id']==more[1]['id'])['state']=='withdrawn'
+    survey = event_models.Event(title='活动问卷', event_type='activity', starts_at='2030-10-18T14:00:00+08:00',quote='调查问卷提交截止：2030年10月18日 14:00。')
+    try:
+        event_models.grounded(survey,survey.quote)
+        raise AssertionError('A survey deadline is not an activity start')
+    except HTTPException as error:
+        assert error.status_code==422
     try:
         event_models.grounded(event_models.Event(title='虚构日期',event_type='lecture',starts_at='2031-10-18T14:00:00+08:00',quote=items[0]['body_text']),items[0]['body_text'],items[0]['received_at'])
         raise AssertionError('Ungrounded date')

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from .service import Notifications, ImportedNotice
@@ -22,11 +23,13 @@ def create_router(context):
     @router.get("/snapshot")
     async def snapshot():
         await _service.reconcile_assignments()
+        await _service.reconcile_mail()
         return _service.snapshot()
 
     @router.post("/generate")
-    def generate(force: bool = False):
-        return _service.generate(force)
+    async def generate(force: bool = False):
+        await _service.reconcile_mail()
+        return await run_in_threadpool(_service.generate, force)
 
     @router.post('/imports')
     def import_notice(body: ImportedNotice):
