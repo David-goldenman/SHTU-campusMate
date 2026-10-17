@@ -27,6 +27,7 @@ function fixture(modules,categories) {
     if(path==='/auth/providers')return response({providers:[]});
     if(path==='/ai/settings')return response({model:'deepseek-flash',enabled:false,key_saved:false});
     if(path==='/data/backups')return response({backups:[]});
+    if(path==='/auth/network'||path==='/auth/network/check')return response({checked_at:new Date().toISOString(),services:[],summary:'合成网络可达',scope:'合成网络检测',proxy_configured:false});
     if(path==='/modules/academic-assistant/chat')return response({messages:[]});
     if(path==='/modules/academic-assistant/conversations')return response({items:[],active_id:null});
     if(path==='/modules/academic-assistant/profile')return response({profile:{},academic:{}});
@@ -98,7 +99,7 @@ try {
   await evaluate("document.querySelector('[data-settings-tab=ai]').click();document.querySelector('#ai-form [name=api_key]').value='synthetic-draft';document.querySelector('[data-settings-tab=local]').click();document.querySelector('[data-settings-tab=ai]').click()");
   assert.equal(await evaluate("document.querySelector('#ai-form [name=api_key]').value"),'synthetic-draft','Settings tabs keep drafts');
   await evaluate("document.querySelector('[data-settings-tab=accounts]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
-  assert.equal(await evaluate("document.activeElement.dataset.settingsTab"),'ai');
+  assert.equal(await evaluate("document.activeElement.dataset.settingsTab"),'network');
   await command('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
   assert.equal(await evaluate("getComputedStyle(document.querySelector('.sidebar')).transitionDuration"),'0s');
   await evaluate("themeCheck.tabs=true;document.querySelector('[data-settings-tab=modules]').click();document.querySelector('#settings-reload').click()");

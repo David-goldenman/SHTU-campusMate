@@ -148,6 +148,7 @@ try {
   assert(await evaluate(`document.querySelector('.sidebar').getBoundingClientRect().right<=0`),'Mobile sidebar starts closed');
   await writeFile(resolve('.codex/tmp/web-check-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await evaluate(`document.querySelector('[data-settings-tab=ai]').click();document.querySelector('[data-ai-edit=deepseek]').click();waitFor(()=>document.querySelector('#ai-form')?.hidden === false)`);
+  assert(await evaluate(`document.querySelector('#ai-form [type=radio]').getBoundingClientRect().width<=24`),'Provider options use compact radio controls');
   await evaluate(`document.querySelector('#ai-form').elements.api_key.value='synthetic-saved-key';document.querySelector('#ai-form').requestSubmit();waitFor(()=>webCheck.ai.enabled && document.querySelector('#ai-form')?.hidden === true)`);
   assert.equal(await evaluate(`webCheck.ai.enabled`),true,'Saving a key enables AI');
   await evaluate(`document.querySelector('[data-ai-add]').click();waitFor(()=>document.querySelector('#ai-form')?.hidden === false)`);

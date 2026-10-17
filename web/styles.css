@@ -23,6 +23,7 @@ input,select,textarea { width:100%; min-width:0; min-height:44px; padding:10px 1
 input::placeholder,textarea::placeholder { color:#65748a; opacity:1; }
 textarea { min-height:120px; line-height:1.8; resize:vertical; }
 input[type=checkbox] { width:18px; height:18px; min-height:18px; margin:0; accent-color:var(--link); flex:none; }
+input[type=radio] { width:18px; height:18px; min-height:18px; padding:0; margin:0; accent-color:var(--link); flex:none; }
 label { display:grid; gap:8px; font-size:14px; line-height:1.7; font-weight:500; }
 h1,h2,h3,p { margin:0; }
 h1 { font-size:32px; font-weight:600; line-height:1.4; letter-spacing:-.6px; }
@@ -142,7 +143,8 @@ main:has(.module-focus) .module-shortcuts { display:none; }
 .ai-provider-editor { margin-top:24px; padding:24px; border:1px solid var(--border); border-radius:8px; }
 .ai-provider-mode { display:flex; flex-wrap:wrap; gap:14px 24px; border:0; padding:0; }
 .ai-provider-mode legend { margin-bottom:12px; }
-.ai-provider-mode label { display:flex; align-items:center; gap:8px; }
+.ai-provider-mode label { display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; white-space:nowrap; cursor:pointer; }
+.ai-provider-mode label:has(input:checked) { border-color:var(--link); background:var(--surface); }
 .ai-field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:18px; margin-bottom:18px; }
 .notice { margin-top:20px; padding:12px 15px; border:1px solid #a6bed0; border-radius:4px; background:#e3edf3; color:#385d78; font-size:15px; line-height:1.8; }
 .module-row { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:22px 0; border-top:1px solid var(--border); }
