@@ -1,7 +1,7 @@
 {
   "id": "observatory",
   "name": "观星台",
-  "description": "雕塑、天球与深钴蓝。把好奇心，放在更远的地方。",
+  "description": "深蓝夜间界面，雕塑、天球与星光。把好奇心，放在更远的地方。",
   "api_version": 1,
   "styles": [
     "../art-workspace.css",

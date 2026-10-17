@@ -1,7 +1,7 @@
 {
   "id": "star-notes",
   "name": "星夜手记",
-  "description": "星图、纸页与轻盈线条。为日常，留一点遐想。",
+  "description": "纸白日间界面，星图与轻盈线条。为日常，留一点遐想。",
   "api_version": 1,
   "styles": [
     "../art-workspace.css",
