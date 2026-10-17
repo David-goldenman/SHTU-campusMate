@@ -112,6 +112,11 @@ with tempfile.TemporaryDirectory(dir=temporary) as directory:
                     except httpx.ProxyError:
                         pass
                 assert len(proxy.seen) == 5
+            # An installed SOCKS proxy configuration must not break client creation,
+            # even when the campus request itself never uses that proxy.
+            socks_env = {**env, 'HTTP_PROXY': '', 'HTTPS_PROXY': '', 'ALL_PROXY': 'socks5://127.0.0.1:9'}
+            with patch.dict(os.environ, socks_env, clear=True), protocols.http_client() as client:
+                assert client.get('https://elrc.shanghaitech.edu.cn/', timeout=3).status_code == 200
             # Direct routing must not disable certificate authentication.
             del os.environ['SSL_CERT_FILE']
             with protocols.http_client() as client:
@@ -126,4 +131,4 @@ with tempfile.TemporaryDirectory(dir=temporary) as directory:
             server.server_close()
             worker.join(timeout=2)
 
-print('campus network: direct TLS, port 8443, redirects, external proxy, lookalike domains and CA verification passed')
+print('campus network: direct TLS, port 8443, redirects, HTTP/SOCKS proxy settings, domain boundaries and CA verification passed')

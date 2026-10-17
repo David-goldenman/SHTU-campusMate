@@ -15,7 +15,7 @@ Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账�
 
 ## 校园网络、代理与校外 VPN
 
-共享认证客户端对 `shanghaitech.edu.cn` 及其子域默认跳过 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`，覆盖教务、Blackboard 的 8443 端口、ELRC、IDS 和学校邮箱。域名由本机解析，连接交给操作系统网络；Gradescope、Piazza 等外部来源继续使用用户原有代理配置。学校官方登录的独立 Edge 窗口同样跳过浏览器代理。该策略只在本应用中生效，不修改用户的系统代理、环境变量或路由表，保留证书验证与自定义 CA 支持。
+共享认证客户端对 `shanghaitech.edu.cn` 及其子域默认跳过 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`，覆盖教务、Blackboard 的 8443 端口、ELRC、IDS 和学校邮箱。域名由本机解析，连接交给操作系统网络；Gradescope、Piazza 等外部来源继续使用用户原有的 HTTP／SOCKS 代理配置。依赖包含 HTTPX 的 SOCKS 支持，避免用户配置 `ALL_PROXY=socks5://…` 时连客户端都无法创建。学校官方登录的独立 Edge 窗口同样跳过浏览器代理。该策略只在本应用中生效，不修改用户的系统代理、环境变量或路由表，保留证书验证与自定义 CA 支持。
 
 | 使用环境 | 默认路径 |
 | --- | --- |
