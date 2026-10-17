@@ -6,7 +6,6 @@ export async function mount(container,context) {
   container.classList.add('campus-overview','overview-compact');
   const card = container.closest('.module-card');
   card.classList.add('overview-card');
-  card.style.order = '-1';
   let expanded = false;
   const cleanup = await sourcePanel(container,context,(body,snapshot) => {
     const labels = {ready:'已同步',partial:'部分数据可用',cached:'本地缓存',syncing:'同步中',error:'读取失败',not_connected:'未连接',login_required:'需要登录',verification_required:'需要验证'};
@@ -26,5 +25,5 @@ export async function mount(container,context) {
     columns.replaceWith(details);details.append(summary,columns,body.querySelector('.overview-sources'));
     details.open = expanded;details.ontoggle = () => {expanded = details.open;};
   });
-  return () => {cleanup();removeStyle();card.classList.remove('overview-card');card.style.removeProperty('order');};
+  return () => {cleanup();removeStyle();card.classList.remove('overview-card');};
 }
