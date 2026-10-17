@@ -1,4 +1,5 @@
 import {sourcePanel, records, link, time, submissionLabel} from '/assets/campus.js';
+import {decorateCourse} from './appearance.js';
 
 const platforms={timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'录播',ecourse:'E 云课堂'};
 const kinds={assignments:'作业',materials:'资料',announcements:'公告',posts:'讨论',lessons:'录播',timetable:'上课安排',grades:'成绩'};
@@ -14,7 +15,7 @@ export async function mount(container,context) {
     function draw(){
       const list=values();if(!list.some(item=>item.id===selected))selected=list[0]?.id;
       body.querySelector('[data-courses]').innerHTML=list.map(item=>`<button type="button" class="course-choice ${selected===item.id?'selected':''}" data-course="${e(item.id)}" aria-pressed="${selected===item.id}"><span>${e(item.code || '课程')}</span><strong>${e(item.title)}</strong><small>${e(item.sources.map(value=>platforms[value.source]||value.source).join(' · '))}</small></button>`).join('')||'<p class="field-hint">当前范围没有课程。可查看其他学期，或连接账号后同步。</p>';
-      body.querySelectorAll('[data-course]').forEach(button=>button.onclick=context.ui.safeAction(button,async()=>{selected=button.dataset.course;draw();await detail();}));
+      body.querySelectorAll('[data-course]').forEach(button=>{decorateCourse(button,list.find(item=>item.id===button.dataset.course));button.onclick=context.ui.safeAction(button,async()=>{selected=button.dataset.course;draw();await detail();});});
     }
     async function detail(){
       const host=body.querySelector('[data-detail]');
@@ -25,6 +26,7 @@ export async function mount(container,context) {
       data.grades=data.course.sources.flatMap(source=>(source.grades||[]).map(item=>({...item,source:source.source})));
       const available=Object.keys(kinds).filter(kind=>data[kind].length);
       host.innerHTML=`<header><p class="field-hint">${e(data.course.code)} · ${e(data.course.term)}</p><h3>${e(data.course.title)}</h3><div class="course-platforms">${data.course.sources.map(source=>link(source.url,platforms[source.source]||source.source,e)).join('')}</div></header><div class="course-content-tabs" role="tablist" aria-label="课程内容">${available.map((kind,index)=>`<button type="button" role="tab" id="course-tab-${kind}" aria-controls="course-content" aria-selected="${index===0}" tabindex="${index===0?'0':'-1'}" data-kind="${kind}">${kinds[kind]} <span>${data[kind].length}</span></button>`).join('')}</div><div id="course-content" role="tabpanel" data-content></div>`;
+      decorateCourse(host.querySelector('header'),data.course);
       function content(kind){
         host.querySelectorAll('[data-kind]').forEach(button=>{button.setAttribute('aria-selected',String(button.dataset.kind===kind));button.tabIndex=button.dataset.kind===kind?0:-1;});
         const panel=host.querySelector('[data-content]');panel.setAttribute('aria-labelledby','course-tab-'+kind);

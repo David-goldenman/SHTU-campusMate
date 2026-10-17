@@ -1,5 +1,14 @@
 import {bindSyncNetwork} from './sync-network.js';
 
+// Generic presentation helper; callers own the palette and record matching.
+export function applyAccent(element, appearance = {}) {
+  for (const key of ['accent','tint','ink']) {
+    const value = appearance[key];
+    if (/^#[\da-f]{6}$/i.test(value || '')) element.style.setProperty('--record-' + key, value);
+    else element.style.removeProperty('--record-' + key);
+  }
+}
+
 export function link(url, label, escape) {
   try {
     const target = new URL(url, location.origin);
