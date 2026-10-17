@@ -122,7 +122,7 @@ export async function mount(container, context) {
     form.onsubmit = act(form.querySelector('[type=submit]'),async () => {
       if (!form.reportValidity()) return;
       const data = {...Object.fromEntries(new FormData(form)),...timingData(form)};delete data.timing;
-      try {await context.api('/commands',{method:'POST',body:{action:item?'update':'create',record_id:item?.id || '',expected_revision:item?.revision,account_revision:owner,request_id:requestId,event:data}});dialog.close();await refresh();}
+      try {await context.api('/commands',{method:'POST',body:{action:item?'update':'create',record_id:item?.id || '',expected_revision:item ? item.revision || '' : undefined,account_revision:owner,request_id:requestId,event:data}});dialog.close();await refresh();}
       catch (error) {if (!context.signal.aborted) form.querySelector('[data-error]').textContent = error.message;}
     });
     form.querySelector('[data-delete]')?.addEventListener('click',act(form.querySelector('[data-delete]'),async () => {

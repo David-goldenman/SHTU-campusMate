@@ -77,6 +77,12 @@ async def check():
                 assert any(row['second_id']=='eams:exam' or row['first_id']=='eams:exam' for row in result['conflicts']['items'])
                 assert (await edit(task,'create',event=fields))==created
                 assert len((await client.get('/events')).json()['items'])==1
+                old_events=calendar_context.store.read('events:'+source.owner())
+                old_events[0].pop('revision')
+                calendar_context.store.write('events:'+source.owner(),old_events)
+                legacy_edit=await client.post('/commands',json={'action':'update','request_id':uuid4().hex,'account_revision':account_revision(calendar_context),
+                    'record_id':identity,'expected_revision':'','event':{'location':'B202'}})
+                assert legacy_edit.status_code==200 and legacy_edit.json()['after']['revision'], 'Legacy personal records acquire a revision on first edit'
                 for message in ['不要添加合成习题课','如果添加合成习题课会怎样','我只想了解如何添加合成习题课','原文写着：添加合成习题课']:
                     blocked=study.Task(context,message,work)
                     await rejected(edit(blocked,'create',event=fields))
