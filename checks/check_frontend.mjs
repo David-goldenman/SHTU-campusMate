@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
-import {sendOnEnter} from '../modules/academic-assistant/web/composer.js';
+import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 
 for (const [keys, sends, prevents] of [
   [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
@@ -15,6 +15,11 @@ for (const [keys, sends, prevents] of [
   assert.equal(prevented, prevents, JSON.stringify(keys));
 }
 console.log('chat composer: Enter/Ctrl/Meta sends once; Shift, IME and held keys do not submit');
+const composer = {style:{}, scrollHeight:0};
+for (const [contentHeight, expected] of [[20,'52px'],[110,'110px'],[600,'200px'],[30,'52px']]) {
+  composer.scrollHeight=contentHeight;fitComposer(composer);assert.equal(composer.style.height,expected);
+}
+console.log('chat composer: grows with multiline input, caps long drafts and shrinks after clearing');
 
 const mounted = new Set();
 globalThis.document = {
