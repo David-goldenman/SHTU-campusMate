@@ -47,5 +47,42 @@ export function projectCampus(data) {
   const point = ([x,y]) => [40 + (x - minX) * cos * scale, 40 + (maxY - y) * scale];
   const polygon = points => points.map(p => point(p).map(n => n.toFixed(2)).join(',')).join(' ');
   const center = points => {const xy = points.map(point);return [xy.reduce((s,p) => s+p[0],0)/xy.length, xy.reduce((s,p) => s+p[1],0)/xy.length];};
-  return {polygon, center, width: width * scale + 80, height: height * scale + 80};
+  return {polygon, center, point, width: width * scale + 80, height: height * scale + 80};
+}
+
+export function buildingLabel(building) {
+  if(building.short_name)return building.short_name;
+  return building.name.replace('H1,校园服务中心,309室 IT服务中心','H1 校园服务中心')
+    .replace('H2楼,学生科创中心','H2 学生科创中心').replace('数学科学研究所','数学所')
+    .replace('创意与艺术学院','创艺学院').replace('创业与管理学院','创管学院')
+    .replace('人文科学研究院','人文研究院').replace('上海张江海科雅乐轩酒店','雅乐轩酒店');
+}
+
+// Work in screen pixels so labels stay readable at every zoom and viewport size.
+export function layoutLabels(items, view, size) {
+  const scale=Math.min(size.width/view.w,size.height/view.h);
+  if(!Number.isFinite(scale)||scale<=0)return [];
+  const offset=[(size.width-view.w*scale)/2,(size.height-view.h*scale)/2];
+  const occupied=[{x:size.width-65,y:size.height-170,w:65,h:170},
+    {x:size.width-118,y:0,w:118,h:58},{x:0,y:0,w:60,h:70},
+    {x:0,y:size.height-28,w:size.width,h:28}],result=[];
+  for(const item of items.filter(item=>item.marker)){const x=(item.point[0]-view.x)*scale+offset[0],y=(item.point[1]-view.y)*scale+offset[1];occupied.push({x:x-18,y:y-29,w:36,h:29});}
+  const intersects=(a,b)=>a.x<b.x+b.w+5&&a.x+a.w+5>b.x&&a.y<b.y+b.h+4&&a.y+a.h+4>b.y;
+  const sorted=[...items].sort((a,b)=>b.priority-a.priority||a.id.localeCompare(b.id));
+  for(const item of sorted) {
+    const anchor=[(item.point[0]-view.x)*scale+offset[0],(item.point[1]-view.y)*scale+offset[1]];
+    if(anchor[0]<6||anchor[0]>size.width-6||anchor[1]<8||anchor[1]>size.height-8)continue;
+    const lines=item.label.split('\n'),font=item.kind==='road'?12:14;
+    const textWidth=Math.max(...lines.map(line=>[...line].reduce((n,c)=>n+(/[\u2e80-\uffff]/.test(c)?font:font*.58),0)));
+    const w=Math.ceil(textWidth+16+(item.kind==='gate'?18:0)),h=lines.length*19+10;
+    const pin=item.marker?7:0;
+    const candidates=[[0,pin],[-w/2-9,0],[w/2+9,0],[0,-h-pin-4],[-w/2-9,-h],[w/2+9,-h],[0,h+pin+5],
+      [-w/2-12,h+8],[w/2+12,h+8],[-w/2-12,-h*2-8],[w/2+12,-h*2-8],[0,-h*3],[0,h*3]];
+    let box;
+    for(const [dx,dy] of candidates){const trial={x:Math.max(7,Math.min(size.width-w-7,anchor[0]-w/2+dx)),y:Math.max(7,Math.min(size.height-h-7,anchor[1]+dy)),w,h};if(!occupied.some(old=>intersects(trial,old))){box=trial;break;}}
+    if(!box)continue;
+    occupied.push(box);
+    result.push({...item,lines,font,box,anchor,units:1/scale,x:view.x+(box.x-offset[0])/scale,y:view.y+(box.y-offset[1])/scale});
+  }
+  return result;
 }

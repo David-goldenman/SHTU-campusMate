@@ -1,4 +1,4 @@
-import {today, shiftDay, validDay, matchLocation, eventTime, projectCampus} from './locations.js';
+import {today, shiftDay, validDay, matchLocation, eventTime, projectCampus, buildingLabel, layoutLabels} from './locations.js';
 
 const kinds = {class:'课程', deadline:'作业截止', exam:'考试', quiz:'Quiz', tutorial:'习题课', study:'学习', presentation:'展示', activity:'活动', lecture:'讲座', calendar:'校历'};
 const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在图上标记', ambiguous:'包含多个建筑，请选择具体地点'};
@@ -6,41 +6,58 @@ const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在
 export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), context.signal);
-  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', drag, moved = false;
-  const cleanup = () => {request?.abort();removeStyle();container.classList.remove('campus-map');};
+  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', drag, moved = false, observer;
+  const cleanup = () => {request?.abort();observer?.disconnect();removeStyle();container.classList.remove('campus-map','map-expanded');};
   context.signal.addEventListener('abort', cleanup, {once:true});
   container.classList.add('campus-map');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   let day = validDay(params.get('date')) ? params.get('date') : today();
   let view;
   container.innerHTML = `<header class="map-heading"><div><span class="map-eyebrow">SHANGHAITECH · CAMPUS</span><h2>今天，去哪儿</h2><p>把每天的安排，放回校园里。</p></div><a class="button" href="https://map.shanghaitech.edu.cn/" target="_blank" rel="noopener noreferrer">学校官方地图 ↗</a></header>
-    <div class="map-layout"><section class="map-panel" aria-label="校园建筑地图"><div class="map-tools"><div class="map-layers" aria-label="地图图层"><button type="button" data-layer="day" aria-pressed="true">当天地点</button><button type="button" data-layer="elevators" aria-pressed="false">电梯位置</button></div><label class="map-search-label"><span class="map-sr-only">搜索建筑或教室</span><input data-search type="search" placeholder="搜索建筑 / 教室，如信息学院1D-102" autocomplete="off"></label></div><div data-results class="map-search-results" hidden></div>
-    <div class="map-canvas"><div data-loading class="map-loading" role="status">正在读取校园建筑图…</div><svg data-map aria-label="上海科技大学建筑地图，可用方向键平移、加减号缩放" tabindex="0" role="group"></svg><span class="map-north" aria-hidden="true">↑<small>北 N</small></span><div class="map-zoom" aria-label="地图缩放"><button type="button" data-zoom="in" aria-label="放大地图">＋</button><button type="button" data-zoom="out" aria-label="缩小地图">−</button><button type="button" data-zoom="reset">全图</button></div></div>
-    <div class="map-legend"><span class="map-key map-key-teaching">教学科研</span><span class="map-key map-key-sport">运动场馆</span><span class="map-key map-key-service">生活服务</span><span>建筑级定位 · 点击建筑查看详情</span></div><div data-detail class="map-detail" aria-live="polite"><h3>校园里的下一站</h3><p>选择一项安排，或搜索建筑名称。地图标记对应整栋建筑，教室与电梯的楼内位置见详情。</p></div></section>
+    <div class="map-layout"><section class="map-panel" aria-label="校园建筑地图"><div class="map-tools"><div class="map-layers" aria-label="地图图层"><button type="button" data-layer="day" aria-pressed="true">当天地点</button><button type="button" data-layer="elevators" aria-pressed="false">电梯位置</button><button type="button" data-layer="gates" aria-pressed="false">出入口</button></div><label class="map-search-label"><span class="map-sr-only">搜索建筑或教室</span><input data-search type="search" placeholder="搜索建筑 / 教室，如信息学院1D-102" autocomplete="off"></label></div><div data-results class="map-search-results" hidden></div>
+    <div class="map-canvas"><div data-loading class="map-loading" role="status">正在读取校园建筑图…</div><svg data-map aria-label="上海科技大学建筑地图，可用方向键平移、加减号缩放" tabindex="0" role="group"></svg><span class="map-north" aria-hidden="true">↑<small>北 N</small></span><button class="map-expand" type="button" data-expand aria-expanded="false">⤢ 展开地图</button><span class="map-gesture-hint">拖动浏览 · 放大查看更多楼名</span><div class="map-zoom" aria-label="地图缩放"><button type="button" data-zoom="in" aria-label="放大地图">＋</button><button type="button" data-zoom="out" aria-label="缩小地图">−</button><button type="button" data-zoom="reset">全图</button></div><a class="map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">道路与绿地 © OpenStreetMap contributors</a></div>
+    <div class="map-legend"><span class="map-key map-key-teaching">教学科研</span><span class="map-key map-key-sport">运动场馆</span><span class="map-key map-key-service">生活服务</span><span class="map-key map-key-road">道路</span><span class="map-key map-key-path">步行道</span></div><div class="map-gates" data-gates aria-label="校园出入口"></div><div data-detail class="map-detail" aria-live="polite"><h3>校园里的下一站</h3><p>选择一项安排，或搜索建筑名称。地图标记对应整栋建筑，教室与电梯的楼内位置见详情。</p></div></section>
     <aside class="map-agenda"><div class="map-agenda-heading"><div><span class="map-eyebrow">YOUR DAY</span><h3>当天安排</h3></div><a href="#timetable">时间表 ↗</a></div><div class="map-date"><button class="button" type="button" data-day="prev" aria-label="前一天">‹</button><input data-date type="date" aria-label="查看日期" value="${e(day)}"><button class="button" type="button" data-day="next" aria-label="后一天">›</button><button class="button" type="button" data-day="today">今天</button></div><div data-agenda aria-live="polite"></div></aside></div>
-    <footer class="map-source">建筑轮廓来自学校官方地图 · 收录 ${e('2026-10-17')} · 电梯资料目前覆盖 2 栋建筑、3 条位置说明，未收录不代表没有电梯。</footer>`;
+    <footer class="map-source">建筑与 5 处校门来自学校官方地图；道路、水系与绿地来自 OpenStreetMap · 资料收录 2026-10-17。道路仅供方位参考，开放情况以现场为准。电梯资料覆盖 2 栋建筑、3 条位置说明。</footer>`;
   const svg = container.querySelector('[data-map]'), agenda = container.querySelector('[data-agenda]'), detail = container.querySelector('[data-detail]');
   const on = (node, name, handler) => node.addEventListener(name, handler, {signal:context.signal});
   const buildingById = id => data.buildings.find(item => item.id === id);
   const entries = () => (schedule?.events || []).map((item, index) => ({item, index, match:matchLocation(item.location, data.buildings)}));
-  function setView() {if(view) svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);}
+  function setView() {if(view){svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);drawAnnotations();}}
   function resetView() {if (!projection) return;view={x:0,y:0,w:projection.width,h:projection.height};setView();}
   function zoom(factor) {
     if (!view) return;
     const w = Math.min(projection.width*1.2, Math.max(projection.width/5,view.w*factor)), h = w*projection.height/projection.width;
     view={x:view.x+(view.w-w)/2,y:view.y+(view.h-h)/2,w,h};setView();
   }
-  function drawMap() {
-    if (!data) return;
+  function mapMarks() {
     const marks = new Map();
     if(layer === 'elevators') for(const item of data.elevators) marks.set(item.building_id, '↕');
-    else for(const {index,match} of entries()) if(match.status === 'matched') {const id=match.buildings[0].id;marks.set(id, [...(marks.get(id)||[]),index+1]);}
-    const important = new Set(['图书馆','教学中心','体育馆','生命学院','信息学院1号楼','信息学院2号楼','信息学院3号楼','创意与艺术学院','数学科学研究所','行政中心']);
-    svg.innerHTML = `<polygon class="map-boundary" points="${projection.polygon(data.campus.polygon)}"/>` + data.buildings.map(building => {
-      const [x,y]=projection.center(building.polygon), mark=marks.get(building.id), active=selected===building.id;
-      const label=building.name.replace('号楼','').replace('数学科学研究所','数学所').replace('创意与艺术学院','创艺学院');
-      return `<g data-building="${e(building.id)}" role="button" tabindex="0" aria-label="${e(building.name)}" aria-pressed="${active}" class="map-building category-${e(building.category)}${active?' is-selected':''}${mark?' is-marked':''}"><title>${e(building.name)}</title><polygon points="${projection.polygon(building.polygon)}"/>${important.has(building.name)||active ? `<text class="map-building-label" x="${x.toFixed(2)}" y="${(y+(mark?24:3)).toFixed(2)}">${e(label)}</text>`:''}</g>`;
-    }).join('') + [...marks].map(([id,mark]) => {const b=buildingById(id),[x,y]=projection.center(b.polygon);const label=Array.isArray(mark)?mark.join('·'):mark;return `<g data-building="${e(id)}" class="map-pin${layer==='elevators'?' map-pin-elevator':''}" role="button" tabindex="0" aria-label="${e(b.name+(layer==='elevators'?'，有电梯位置资料':'，当天安排 '+label))}" transform="translate(${x.toFixed(2)},${(y-13).toFixed(2)})"><rect x="${-Math.max(14,label.length*4.5)}" y="-14" width="${Math.max(28,label.length*9)}" height="28" rx="14"/><text y="5">${e(label)}</text></g>`;}).join('');
+    else if(layer==='day')for(const {index,match} of entries()) if(match.status === 'matched') {const id=match.buildings[0].id;marks.set(id, [...(marks.get(id)||[]),index+1]);}
+    return marks;
+  }
+  const primaryNames = ['图书馆','教学中心','体育馆','生命学院','信息学院1号楼','信息学院2号楼','信息学院3号楼','创意与艺术学院','数学科学研究所','行政中心','创业与管理学院','体育场','游泳馆','会议中心','H1,校园服务中心,309室 IT服务中心','H2楼,学生科创中心'];
+  function drawAnnotations() {
+    const host=svg.querySelector('[data-annotations]');if(!host||!projection||!view)return;
+    const size=svg.getBoundingClientRect(),marks=mapMarks(),zoomLevel=projection.width/view.w;
+    const candidates=data.buildings.filter(b=>b.kind==='gate'||b.id===selected||marks.has(b.id)||primaryNames.includes(b.name)||zoomLevel>1.4).map(b=>({id:b.id,label:buildingLabel(b),point:projection.center(b.polygon),kind:b.kind||'building',marker:marks.has(b.id),priority:b.id===selected?100:b.kind==='gate'?90:marks.has(b.id)?85:primaryNames.includes(b.name)?60-primaryNames.indexOf(b.name):20}));
+    const roadsByName=new Map();
+    for(const road of data.basemap?.roads||[])if(road.name&&(!roadsByName.has(road.name)||road.points.length>roadsByName.get(road.name).points.length))roadsByName.set(road.name,road);
+    for(const [name,road] of roadsByName)candidates.push({id:'road-'+road.id,label:name,point:projection.point(road.points[Math.floor(road.points.length/2)]),kind:'road',priority:1});
+    const units=1/Math.min(size.width/view.w,size.height/view.h);
+    const pins=[...marks].map(([id,mark])=>{const b=buildingById(id),[x,y]=projection.center(b.polygon),label=Array.isArray(mark)?mark.join('·'):mark;return `<g data-building="${e(id)}" class="map-pin${layer==='elevators'?' map-pin-elevator':''}" role="button" tabindex="0" aria-label="${e(b.name+(layer==='elevators'?'，有电梯位置资料':'，当天安排 '+label))}" transform="translate(${x},${y}) scale(${units})"><rect x="${-Math.max(14,label.length*5)}" y="-28" width="${Math.max(28,label.length*10)}" height="28" rx="14"/><text y="-9">${e(label)}</text></g>`;}).join('');
+    host.innerHTML=pins+layoutLabels(candidates,view,size).map(item=>{
+      const gate=item.kind==='gate',road=item.kind==='road',b=buildingById(item.id),x=item.box.w/2+(gate?7:0);
+      const stemX=(item.point[0]-item.x)/item.units,stemY=(item.point[1]-item.y)/item.units;
+      return `<g ${road?'':`data-building="${e(item.id)}" role="button" tabindex="0" aria-label="定位${e(b.name)}"`} class="map-label ${gate?'map-label-gate':road?'map-label-road':''}${selected===item.id?' is-selected':''}" transform="translate(${item.x},${item.y}) scale(${item.units})">${road?'':`<line class="map-label-stem" x1="${stemX}" y1="${stemY}" x2="${item.box.w/2}" y2="${item.box.h/2}"/><circle class="map-label-dot" cx="${stemX}" cy="${stemY}" r="${gate?4:2.3}"/>`}<rect class="map-label-bg" width="${item.box.w}" height="${item.box.h}" rx="${gate?14:5}"/>${gate?'<path class="map-gate-icon" d="M9 20V9h10v11 M12 15h11 m-3-3 3 3-3 3"/>':''}<text x="${x}" y="19">${item.lines.map((line,index)=>`<tspan x="${x}" dy="${index?19:0}">${e(line)}</tspan>`).join('')}</text></g>`;
+    }).join('');
+  }
+  function drawMap() {
+    if (!data) return;
+    const marks=mapMarks(),basemap=data.basemap||{roads:[],landscape:[]};
+    const roadMarkup=basemap.roads.map(road=>`<polyline class="map-road ${road.type==='footway'?'is-footway':''}" points="${projection.polygon(road.points)}"/>`).join('');
+    svg.innerHTML=`<polygon class="map-boundary" points="${projection.polygon(data.campus.polygon)}"/><g class="map-landscape">${basemap.landscape.map(item=>item.polygon?`<polygon class="map-land-${e(item.kind)}" points="${projection.polygon(item.polygon)}"/>`:`<polyline class="map-land-waterway" points="${projection.polygon(item.points)}"/>`).join('')}</g><g class="map-road-casings">${roadMarkup}</g><g class="map-road-surfaces">${roadMarkup}</g><g class="map-buildings">`+data.buildings.filter(b=>b.kind!=='gate').map(building=>`<g data-building="${e(building.id)}" role="button" tabindex="0" aria-label="${e(building.name)}" aria-pressed="${selected===building.id}" class="map-building category-${e(building.category)}${selected===building.id?' is-selected':''}${marks.has(building.id)?' is-marked':''}"><title>${e(building.name)}</title><polygon points="${projection.polygon(building.polygon)}"/></g>`).join('')+'</g><g data-annotations></g>';
+    drawAnnotations();
   }
   function renderAgenda() {
     if (!schedule) return;
@@ -51,7 +68,7 @@ export async function mount(container, context) {
     const building=buildingById(selected);
     if(!building) {detail.innerHTML='<h3>校园里的下一站</h3><p>选择一项安排，或搜索建筑名称。地图标记对应整栋建筑，教室与电梯的楼内位置见详情。</p>';return;}
     const elevators=data.elevators.filter(item=>item.building_id===selected);
-    detail.innerHTML=`<div class="map-detail-heading"><div><span class="map-eyebrow">${e(building.category_label)}</span><h3>${e(building.name)}</h3></div><a href="${e(building.source_url)}" target="_blank" rel="noopener noreferrer">官方地图 / 导航 ↗</a></div>${locationText?`<p class="map-room">教室 / 地点：<strong>${e(locationText)}</strong></p>`:''}<p class="map-detail-hint">已定位到建筑。具体入口和楼内走法请以现场指引为准。</p>${elevators.length?'<div class="map-elevators"><h4>↕ 电梯位置说明</h4>'+elevators.map(item=>`<article><strong>${e(item.floor)} · ${e(item.name)}</strong><p>${e(item.location)}</p><a href="${e(item.source_url)}" target="_blank" rel="noopener noreferrer">${e(item.source_title)} ↗</a></article>`).join('')+'<p class="map-detail-hint">图上标记属于整栋建筑，楼内位置以文字说明为准；未核实当前开放状态。</p></div>':layer==='elevators'?'<p class="map-notice">这栋建筑暂未收录有出处的电梯位置资料。</p>':''}`;
+    detail.innerHTML=`<div class="map-detail-heading"><div><span class="map-eyebrow">${building.kind==='gate'?'校园出入口':e(building.category_label)}</span><h3>${e(building.short_name||building.name)}</h3></div><a href="${e(building.source_url)}" target="_blank" rel="noopener noreferrer">官方地图 / 导航 ↗</a></div>${building.address?`<p class="map-room">${e(building.address)}</p>`:''}${locationText?`<p class="map-room">教室 / 地点：<strong>${e(locationText)}</strong></p>`:''}<p class="map-detail-hint">${building.kind==='gate'?'校门位置来自学校官方地图，人员与车辆通行安排以现场管理为准。':'已定位到建筑。具体入口和楼内走法请以现场指引为准。'}</p>${elevators.length?'<div class="map-elevators"><h4>↕ 电梯位置说明</h4>'+elevators.map(item=>`<article><strong>${e(item.floor)} · ${e(item.name)}</strong><p>${e(item.location)}</p><a href="${e(item.source_url)}" target="_blank" rel="noopener noreferrer">${e(item.source_title)} ↗</a></article>`).join('')+'<p class="map-detail-hint">图上标记属于整栋建筑，楼内位置以文字说明为准；未核实当前开放状态。</p></div>':layer==='elevators'?'<p class="map-notice">这栋建筑暂未收录有出处的电梯位置资料。</p>':''}`;
   }
   function selectBuilding(id, locationText='', focus=true) {
     selected=id;const building=buildingById(id);if(!building)return;
@@ -78,7 +95,9 @@ export async function mount(container, context) {
   on(container,'click',event=>{
     if(!data)return;
     const button=event.target.closest('button,a,[data-building]');if(!button)return;
-    if(button.dataset.layer){layer=button.dataset.layer;container.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));drawMap();if(layer==='elevators'&&!selected)selectBuilding(data.elevators[0].building_id,'',false);else renderDetail();}
+    if(button.dataset.layer){layer=button.dataset.layer;container.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));drawMap();if(layer==='gates'){selectedEvent=undefined;resetView();selectBuilding(data.buildings.find(b=>b.kind==='gate').id,'',false);}else if(layer==='elevators'&&!selected)selectBuilding(data.elevators[0].building_id,'',false);else renderDetail();}
+    if(button.hasAttribute('data-expand')){const expanded=container.classList.toggle('map-expanded');button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'⤡ 收起地图':'⤢ 展开地图';}
+    if(button.dataset.gate){selectedEvent=undefined;selectBuilding(button.dataset.gate);}
     if(button.dataset.zoom){if(button.dataset.zoom==='reset')resetView();else zoom(button.dataset.zoom==='in'?.75:1.333);}
     if(button.hasAttribute('data-event'))selectEvent(Number(button.dataset.event));
     if(button.dataset.building&&!moved){selectedEvent=undefined;selectBuilding(button.dataset.building,'',false);}
@@ -103,8 +122,10 @@ export async function mount(container, context) {
   on(svg,'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.hypot(dx,dy)>4)moved=true;const rect=svg.getBoundingClientRect(),scale=Math.max(drag.view.w/rect.width,drag.view.h/rect.height);view={...drag.view,x:drag.view.x-dx*scale,y:drag.view.y-dy*scale};setView();});
   const release=event=>{if(drag?.id===event.pointerId){const id=drag.building;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);drag=undefined;if(id&&!moved&&event.type==='pointerup'){selectedEvent=undefined;selectBuilding(id,'',false);}}};
   on(svg,'pointerup',release);on(svg,'pointercancel',release);
+  observer=new ResizeObserver(()=>drawAnnotations());observer.observe(svg);
   try {
     data=await context.api('/places');if(context.signal.aborted)return cleanup;
+    container.querySelector('[data-gates]').innerHTML='<span>校门</span>'+data.buildings.filter(b=>b.kind==='gate').map(b=>`<button type="button" data-gate="${e(b.id)}" title="${e(b.address)}">${e(b.short_name)} <span>↗</span></button>`).join('');
     projection=projectCampus(data);resetView();drawMap();container.querySelector('[data-loading]').hidden=true;
     await loadDay();if(context.signal.aborted)return cleanup;
     const locationText=params.get('location'),match=matchLocation(locationText,data.buildings);if(match.status==='matched')selectBuilding(match.buildings[0].id,locationText);

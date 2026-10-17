@@ -15,6 +15,7 @@ FIELDS = ('id', 'title', 'course_title', 'event_type', 'source', 'start_time', '
 def create_router(context):
     router = APIRouter()
     places = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'places.json').read_text(encoding='utf-8'))
+    places['basemap'] = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'osm-basemap.json').read_text(encoding='utf-8'))
 
     @router.get('/places')
     def public_places():

@@ -2938,7 +2938,10 @@
         "中科路1号",
         "东门"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=c9e29e1ba374411bbbda3ee581a73c64typebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=c9e29e1ba374411bbbda3ee581a73c64typebuilding|22f2832a4e894959954f838da53632c1",
+      "kind": "gate",
+      "short_name": "东门",
+      "address": "中科路1号"
     },
     {
       "id": "6cccd83bc8554dfcadd9a1a226cd91ca",
@@ -2968,9 +2971,14 @@
         ]
       ],
       "aliases": [
-        "上海科技大学南门(华夏中路393号)"
+        "上海科技大学南门(华夏中路393号)",
+        "南门",
+        "华夏中路393号"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=6cccd83bc8554dfcadd9a1a226cd91catypebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=6cccd83bc8554dfcadd9a1a226cd91catypebuilding|22f2832a4e894959954f838da53632c1",
+      "kind": "gate",
+      "short_name": "南门",
+      "address": "华夏中路393号"
     },
     {
       "id": "18dccb41f7fb4464bf6ca1e457b2be98",
@@ -3000,7 +3008,10 @@
         "环科路199号",
         "东南门"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=18dccb41f7fb4464bf6ca1e457b2be98typebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=18dccb41f7fb4464bf6ca1e457b2be98typebuilding|22f2832a4e894959954f838da53632c1",
+      "kind": "gate",
+      "short_name": "东南门",
+      "address": "环科路199号"
     },
     {
       "id": "bf9445e8e352431984e9176c1eb6bd78",
@@ -3030,7 +3041,10 @@
         "集慧路249号",
         "西门"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=bf9445e8e352431984e9176c1eb6bd78typebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=bf9445e8e352431984e9176c1eb6bd78typebuilding|22f2832a4e894959954f838da53632c1",
+      "kind": "gate",
+      "short_name": "西门",
+      "address": "集慧路249号"
     },
     {
       "id": "cf81ca1c074245e3b501121765e9fbd8",
@@ -3060,7 +3074,10 @@
         "海科路230号",
         "北门"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=cf81ca1c074245e3b501121765e9fbd8typebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=cf81ca1c074245e3b501121765e9fbd8typebuilding|22f2832a4e894959954f838da53632c1",
+      "kind": "gate",
+      "short_name": "北门",
+      "address": "海科路230号"
     },
     {
       "id": "9267d351830441fb84713b2dbc10ef25",
