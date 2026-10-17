@@ -94,3 +94,7 @@ Nord 变量统一在 `web/styles.css` 定义：Polar Night 用于侧栏与正文
 交互式 API 页面从 jsDelivr 加载 Swagger UI；离线时可直接使用 OpenAPI JSON 和项目内接口文档。学校登录协议、二次验证和会话有效期由相应网站决定；以真实登录探测结果确认会话状态。
 
 模块边界、独立启停与完整主分支约定见 [AGENTS.md](AGENTS.md) 和 [架构决策](docs/architecture/0001-module-boundaries.md)。完整检查自动覆盖当前安装模块，移除业务模块后仍可启动框架设置页。
+
+## GitHub 自动检查
+
+PR 和 main 推送执行 `CI required`：完整 Python 回归、Windows DPAPI、原生 Harness、前端资源清理与启动器检查。提交后查看检查结果，并由另一位成员审核后合并。私有仓库的强制保护当前受套餐限制；详细状态、运行方式和待启用规则见 [CI 约定](docs/CI.md)。

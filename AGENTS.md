@@ -18,3 +18,5 @@
 - 常驻界面使用可选 `web/background.js` 与同一 mount/清理契约，切页保留，模块停用、刷新和清数据时卸载。课程等聚合页面使用 `navigation.layout:primary`，来源服务继续提供 API；框架只实现通用布局和后台入口。
 - 合并门槛：当前提交的 Windows `check.ps1` 或 WSL `check.sh` 通过，包括完整模块集成、各模块独立启用/停用/再启用、依赖缺失、移除模块后的空框架；验证失败不能合入 main。业务检查放进本模块 `checks/`，框架检查覆盖通用契约；不调用真实账号或付费模型来替代合成回归。边界细节见 [架构决策](docs/architecture/0001-module-boundaries.md)。
 - 当前目标为本地网页验证。Electron 最后由桌面负责人统一接入，业务模块维持网页与 HTTP API 边界。
+
+- GitHub PR 自动执行 `CI required`；本地 `check.ps1`、`check.sh` 与 CI 使用同一检查入口。合并前至少另一位有写权限的成员审核最新修改。当前私有仓库套餐尚未支持强制保护，不能把 CI 绿灯误认为服务器已禁止直接推送；状态与待启用配置见 [CI 约定](docs/CI.md)。
