@@ -25,9 +25,11 @@ def windows_tool(name: str) -> str:
 
 
 def protect(text: str, action: str) -> str:
+    # Unsigned helper scripts are blocked by the machine's execution policy; Windows
+    # PowerShell also reports such errors in the ANSI code page, so decoding must be lenient.
     result = subprocess.run(
-        [windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-File", windows_path(PROJECT / "scripts" / "dpapi.ps1"), action],
-        input=text, text=True, encoding="utf-8", capture_output=True, timeout=20,
+        [windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", windows_path(PROJECT / "scripts" / "dpapi.ps1"), action],
+        input=text, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=20,
     )
     if result.returncode:
         raise RuntimeError("Windows 用户密钥无法处理此凭据，请在原 Windows 账号下运行或重新配置。")
