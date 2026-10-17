@@ -39,7 +39,7 @@ export function apply(ctx) {
   const pagination = {offset:{type:'integer'},limit:{type:'integer'}};
   const timing = {starts_at:{type:'string',description:'带时区的 ISO 时间，北京时间使用 +08:00。'},ends_at:string,date:{type:'string',description:'按节次安排的 YYYY-MM-DD 日期。'},period_start:{type:'integer'},period_end:{type:'integer'},location:string,notes:string};
   register('study_capabilities','capabilities','查询当前助手实际支持的阅读、日程和学习事务能力及可用状态。',{});
-  register('study_work_edit','work-edit','按本次明确指令管理本地作业进度、提醒和学习计划。quote 完整复制本次消息。create 新增 reminder/plan；update/delete 前先 query workspace；set_assignment 前先 query assignments，record_id 用原作业 ID，仅更新本地 status/notes，不代表学校平台提交。提醒必须有带时区的 due_at；计划正文放 notes。',{
+  register('study_work_edit','work-edit','按本次明确指令管理本地作业进度、提醒和学习计划。quote 完整复制本次消息。create 新增 reminder/plan；update/delete 前先 query workspace，update 只传需要修改的 title/status/due_at/notes，不传 kind 或记录元数据；set_assignment 前先 query assignments，record_id 用原作业 ID，仅更新本地 status/notes，不代表学校平台提交。提醒必须有带时区的 due_at；计划正文放 notes。',{
     action:{type:'string',required:true,enum:['create','update','delete','set_assignment']},quote:{type:'string',required:true},record_id:string,
     item:{type:'object',additionalProperties:false,properties:{kind:{type:'string',enum:['reminder','plan']},title:string,status:{type:'string',enum:['todo','in_progress','done','cancelled']},due_at:timing.starts_at,notes:string}},
   });
@@ -67,6 +67,6 @@ export function apply(ctx) {
     category:{type:'string',required:true,enum:['dashboard','mail','timetable','courses','assignments','eams','notifications','assistant','settings']},
   });
   register('study_finish','finish','回答前核对本次来源与引用。quote 只复制实际来源 text 的原文短句，校验失败时修正并再次调用；accepted=true 后用 Markdown 正常输出完整中文回答，不再调用其他工具。无需在此工具传正文。',{
-    text:{type:'string'},citations:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{source_id:{type:'string',required:true},quote:{type:'string',required:true}}}},insufficient_context:{type:'boolean'},basis:{type:'string',enum:['sources','general'],description:'纯通用知识、代码、写作或规划用 general；引用具体校园资料用 sources。'},
+    citations:{type:'array',required:true,items:{type:'object',additionalProperties:false,properties:{source_id:{type:'string',required:true},quote:{type:'string',required:true}}}},insufficient_context:{type:'boolean'},basis:{type:'string',enum:['sources','general'],description:'纯通用知识、代码、写作或规划用 general；引用具体校园资料用 sources。'},
   });
 }
