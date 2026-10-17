@@ -99,3 +99,10 @@ git merge --no-commit origin/main
 最新主线使用 `httpx[socks]>=0.28`。本地启动器已识别该声明并检查 httpx 版本及 socksio 1.x；只接受项目实际使用的 extra，不忽略未知依赖。用户本次授权补装的 `socksio==1.0.0` 已安装到现有项目环境，启动器本身仍不安装软件。
 
 本次同步还包含按来源隔离的作业状态统计、作业状态分类、时间表中的作业日期、Blackboard 提交证据、草稿／待评分／豁免／待核实状态，以及同步失败旁的网络诊断。启动器合成检查的随机端口现复用应用端口校验，避免偶然选中浏览器限制的 2049 等端口；实际默认端口仍为 16666。
+
+### 本次验证
+
+已同步主线 56db61f 并保留个人启动器和开场白。完整回归通过：41 项 Python 检查、3 项 JavaScript 检查、Windows 启动器及 47 个 JavaScript 文件语法检查。日志保存在 .codex/local-update-56db61f-checks.log。
+
+实际浏览器验证了 1280px 桌面与 375px 窄屏：首页对话、校园概览、设置页均只有一条可见开场白；刷新与切页保持同一句，无页面横向溢出，输入框正常可见，未发送聊天或调用付费模型。截图保存在 .codex/screenshots/opening-line-final-desktop-20261017.jpg 与 opening-line-final-mobile-20261017.jpg。
+
