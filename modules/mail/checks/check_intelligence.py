@@ -21,6 +21,15 @@ for body in ('本次活动不计入形策考勤。', '本次活动无法计入�
 assert not models.preliminary({'title':'本次活动计入形策考勤','body_text':'认定情况请等待后续通知。'},prefs)['protected'], 'The title alone is not recognition evidence'
 for body in ('本次活动可计入形策考勤。', '本次讲座纳入《形势与政策》课程学时。'):
     assert models.preliminary({'title':'活动通知','body_text':body},prefs)['protected'], body
+for body in ('本次讲座计入形策考勤，不需要提前报名。', '不需要提前报名，本次讲座计入形策考勤。',
+             '本次讲座计入形策考勤，请勿迟到。'):
+    result = models.preliminary({'title':'讲座通知','body_text':body}, {**prefs, 'interests': {'research':'hide'}})
+    assert result['protected'] and result['bucket'] == 'focus' and result['topic'] == 'shape', body
+for body in ('如果完成签到，本次讲座计入形策考勤。', '本次讲座计入形策考勤，尚待确认。',
+             '本次讲座计入形策考勤，尚需确认。', '本次讲座计入形策考勤，也许。',
+             '本次讲座计入形策考勤，最终以教务通知为准。', '本次讲座计入形策考勤，但该说法不实。',
+             '不需要提前报名，本次讲座不计入形策考勤。'):
+    assert not models.preliminary({'title':'讲座通知','body_text':body},prefs)['protected'], body
 assert not models.preliminary({'title':'活动通知','body_text':'本次活动计入形策考勤。'},{**prefs,'shape':'done'})['protected']
 assert models.preliminary({'title':'CS100 作业截止','body_text':''},prefs)['bucket'] == 'focus'
 with sandbox('mail') as context:
