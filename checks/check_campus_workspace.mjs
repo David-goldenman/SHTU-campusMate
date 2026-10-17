@@ -49,7 +49,9 @@ try{
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await command('Page.navigate',{url:base+'/#mail'});
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<180;i++){if(condition())return;await new Promise(r=>setTimeout(r,60));}throw new Error('Workspace UI timed out');};waitFor(()=>document.querySelector('[data-message]'))`);
- await evaluate(`document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
+ assert.equal(await evaluate(`document.querySelector('[data-bucket=focus]').getAttribute('aria-pressed')`),'true','Mail starts with priority messages');
+ assert.equal(await evaluate(`document.querySelectorAll('[data-message]').length`),0,'Recommendations remain in their own level');
+ await evaluate(`document.querySelector('[data-bucket=recommend]').click();document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  assert.equal(await evaluate(`document.querySelectorAll('.mail-body p').length`),2);
  assert(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.mail-body p')).marginBottom)>=14`),'Readable paragraph spacing');
  assert(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.mail-body')).lineHeight)>26`));
@@ -78,6 +80,9 @@ try{
  await evaluate(`document.querySelector('[data-attend]').click();waitFor(()=>workspaceCheck.proposals[0].state==='accepted'&&!document.querySelector('[data-attend]'))`);
  assert(await evaluate(`document.querySelector('.notice-event').textContent.includes('已加入时间表')`));
  await writeFile(resolve('.codex/tmp/workspace-notifications-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+ await evaluate(`document.querySelector('[data-read]').click();waitFor(()=>!document.querySelector('[data-read]'))`);
+ await evaluate(`document.querySelector('[data-notice-filter=read]').click();waitFor(()=>document.querySelector('[data-read]'))`);
+ assert.equal(await evaluate(`document.querySelector('[data-read]').textContent`),'标记未读','Read history remains accessible');
  assert.deepEqual(await evaluate(`workspaceCheck.unexpected`),[]);assert.deepEqual(errors,[]);
  console.log('PASS campus workspace UI: email reading/preferences/manual priority, course-first integration, background alerts, consent actions, Markdown, mobile and style cleanup');
 }finally{socket?.close();browser('close');}

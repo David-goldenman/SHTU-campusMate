@@ -2,6 +2,8 @@
 
 通知中心汇总带来源的学习待办、邮件重点、服务故障和活动建议，保留已读状态。页面提供后台助手的启停与“检查一次”，活动卡片展示时间、地点与原文依据；可选活动使用“参加并加入时间表”或“不参加”。确认后显示时间表入口，参加确认与原站报名分别处理。右下角常驻提醒由独立的 `campus-agent` 模块提供。
 
+默认查看未读通知，已读和全部历史可切换查看。布置、截止或待提交提醒仅引用明确对应的作业，且全部关联作业的最新可靠记录均已提交时，自动标为已读，保留 `auto_read` 的原因、时间与作业 ID。成绩、批改和反馈通知保留未读。草稿、未知、读取失败或旧缓存不会触发处理；混合其他来源的通知保留给用户核对。曾自动处理的通知遇到明确未提交或草稿会重新显示，用户手动设置的已读／未读优先。检测通过作业管理公开 `/snapshot` 完成，读取通知及后台每 30 秒核对，不调用 AI，也不修改学校通知或原邮件。
+
 `POST /imports` 接收 `{account_revision,id,title,summary,source_revision,importance?,why?,citations?,proposal_id?,event_at?}`，按当前账号及稳定 ID 更新；账号不一致返回 409。每条 citation 为 `{id,title,source,url}`，importance 为 `urgent/important/normal`。相同资料保留已读，资料版本更新恢复未读；导入通知最多保留最近 300 条，原有提炼结果单独保留。
 
 `GET /agent/status`、`PUT /agent/settings {enabled}`、`POST /agent/check` 通过公开 API 代理后台助手；缺失时保留本模块的通知显示。`POST /proposals/{id}/accept|dismiss` 代理明确参加／拒绝动作，错误状态沿用来源接口。后台普通写入使用框架保护，任务工具使用各自模块的短期令牌。
