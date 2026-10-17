@@ -152,6 +152,16 @@ def check_runtime():
                 raise RuntimeError("依赖条件已变化，请维护者更新启动检查：" + declaration)
             if sys.platform != "win32":
                 continue
+        # The current project requests httpx's SOCKS extra (socksio 1.x).
+        # Keep unknown extras explicit instead of silently skipping dependencies.
+        if requirement.startswith("httpx[socks]"):
+            requirement = "httpx" + requirement[len("httpx[socks]"):]
+            try:
+                socks = importlib.metadata.distribution("socksio")
+                if socks.version.split(".")[0] != "1":
+                    missing.append("socksio==1.* (httpx[socks])")
+            except importlib.metadata.PackageNotFoundError:
+                missing.append("socksio==1.* (httpx[socks])")
         match = re.fullmatch(r"([A-Za-z0-9_.-]+)(>=|==)([^ ,;]+)", requirement)
         git = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*@\s*git\+(https://[^\s#]+)@([a-fA-F0-9]{40})", requirement)
         if not match and not git:

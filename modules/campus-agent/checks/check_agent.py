@@ -99,6 +99,27 @@ with ExitStack() as stack:
     asyncio.run(agent.check())
     recovered=asyncio.run(api('notifications')).json()['items']
     assert next(item for item in recovered if item['id']=='service:mail')['title'].endswith('已恢复')
+    event_count = len(asyncio.run(api('timetable','/events')).json()['items'])
+    exceptions = [{**items[0], 'id':'mail:'+key, 'source_id':key, 'title':'合成非必修活动',
+                   'body_text':'本次活动不计入形策考勤。活动时间：2030年10月18日 14:00–15:00；地点：教学楼。'}
+                  for key in ('noncredit-filter', 'noncredit-focus')]
+    seed([*items,third,*exceptions])
+    for item, bucket in zip(exceptions, ('filter', 'focus')):
+        prepared=intelligence.prepared(item['id'])
+        result=intelligence.submit(mail_models.Submission(message_id=item['id'],fingerprint=prepared['fingerprint'],decision={
+            **decision, 'bucket':bucket, 'topic':'shape', 'evidence':[{'source':'body_text','quote':'本次活动不计入形策考勤。'}],
+            'event':{**optional['event'],'title':item['title'],'quote':item['body_text']}}))
+        assert result['bucket']==bucket and not result['protected'], 'A negative recognition statement must not force focus'
+    # Existing saved classifications may still have the old protected flag.
+    reviews=mail_context.store.read(intelligence.key('reviews'))
+    reviews[exceptions[1]['id']]['protected']=True
+    mail_context.store.write(intelligence.key('reviews'), reviews)
+    before=len(calls)
+    asyncio.run(agent.check())
+    assert len(calls)==before, 'Already-reviewed notices do not need another model call'
+    assert len(asyncio.run(api('timetable','/events')).json()['items'])==event_count, 'Non-credit activities require user confirmation'
+    assert not any(item['source_id']==exceptions[0]['id'] for item in agent.proposals()), 'Filtered notices stay filtered'
+    assert next(item for item in agent.proposals() if item['source_id']==exceptions[1]['id'])['state']=='pending', 'Current source evidence overrides a saved protected flag'
     try:
         event_models.grounded(event_models.Event(title='虚构日期',event_type='lecture',starts_at='2031-10-18T14:00:00+08:00',quote=items[0]['body_text']),items[0]['body_text'],items[0]['received_at'])
         raise AssertionError('Ungrounded date')

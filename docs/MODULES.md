@@ -26,6 +26,8 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
+`name` 是页面标题、模块管理和导航中使用的展示名称，只描述功能，不附成员姓名或个人缩写。
+
 `id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 使用同样的 ID 格式，`settings` 由框架保留。业务分类由模块自行声明，无需修改框架白名单。可选 `navigation:{label,icon,description,order,layout}` 决定侧栏文本、图标、描述及顺序（order 为 0–10000；layout 为 `stack`、`tabs` 或 `primary`，默认 `stack`）；相同分类的模块须声明一致内容。旧清单未声明时以分类 ID、▧、空描述、order=100 兼容。冲突时显式声明优先，其后按模块 ID 排序选择第一项；分类按 order、分类 ID 排序。框架设置始终在最后。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`web/background.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
@@ -51,7 +53,7 @@ export async function mount(container, context) {
 | --- | --- |
 | `context.module` | 当前模块的 `ModuleInfo` |
 | `context.focus(active)` | 将当前模块设为本分类的主要阅读区；其他卡片暂时隐藏，false 恢复，卸载时清理 |
-| `context.api(path, options)` | 请求 `/api/v1/modules/<id>` 下的接口，自动 JSON 与本地写请求头 |
+| `context.api(path, options)` | 请求 `/api/v1/modules/<id>` 下的接口，自动 JSON 与本地写请求头；可用 `timeoutMs` 调整等待上限 |
 | `context.api(path, {onEvent, signal, ...options})` | 流式 NDJSON 接口逐行调用 `onEvent(event)`；自定义取消信号与模块卸载信号共同生效 |
 | `context.services.auth.providers()` | 列出共享认证配置状态 |
 | `context.services.auth.status(id)` | 查询某认证提供方的本地状态 |
@@ -91,13 +93,14 @@ def create_router(context):
 | --- | --- |
 | `context.id` | 当前模块 ID |
 | `context.modules()` | 当前模块和分类的公开元数据，与管理接口结构一致；不返回凭据 |
+| `context.runtime.watch(name, worker)` | 登记已有 Thread 或 concurrent.futures.Future 的运行状态，不启动或停止任务；每模块最多 16 个名称，同名替换，名称不含账号或私人内容 |
 | `context.store.read(key, default=None)` | 读取本模块非秘密 JSON 状态 |
 | `context.store.write(key, value)`、`.delete(key)`、`.clear()` | 管理本模块 SQLite 命名空间 |
 | `context.secrets.get(key)`、`.save(key, dict)`、`.delete(key)` | 管理本模块 DPAPI 加密秘密，缺失返回 `{}` |
 | `context.data_dir` | 本模块 `.private/modules/<id>/`，存放持久文件 |
 | `context.auth` | 共享认证服务，提供已登录 HTTP 客户端 |
 | `context.ai` | 共享 AI，提供 `generate`、`chat`、`run` 和安全配置状态 |
-| `await context.api(module_id, path="/snapshot", method="GET", body=None)` | 调用其他模块公开 HTTP API，返回 `httpx.Response`；停用或未安装返回 404，跨模块写操作按公开接口协作 |
+| `await context.api(module_id, path="/snapshot", method="GET", body=None, timeout=None)` | 调用其他模块公开 HTTP API，返回 `httpx.Response`；默认等候 20 秒，可用 `timeout`（秒）调整；停用返回 404、并发已满返回 503、等待超时返回 504 |
 
 每个模块的状态和秘密按模块 ID 分开。账号、密码、Cookie、Key、token 一律交给共享认证或 `context.secrets`，普通配置与缓存放在自己的 store，文件放在自己的 data_dir。模块通过公开 HTTP API 读取其他模块提供的数据；需要跨模块聚合时由集成人员确定公开请求/响应，调用方不得直接访问对方的数据库、文件或私有代码。
 
@@ -111,11 +114,15 @@ def create_router(context):
 
 1. 将完整模块目录放入 `modules/`，在设置中选择刷新模块。新发现模块默认启用，启停状态由框架保存。
 2. 侧栏显示存在已启用界面模块的分类，启停后立即更新；同分类的最后一个页面停用时隐藏入口。一个分类可同时挂载多个模块，加载错误保留入口并单独显示；纯后台与 AI 插件在设置中管理。设置始终可访问。
-3. 更新模块代码后刷新模块。后端先停止并释放，再重新导入；前端获得新的版本地址重新挂载。刷新会释放全部模块，启停一个模块只切换该模块。
-4. 停用模块后其后端和静态资源停止服务。已有接口请求需先结束，执行中请求会让热切换返回 409；页面发出的请求用 `context.signal` 取消。
+3. 更新模块代码后刷新模块。后端逐模块停止并重新导入；忙碌模块保留原实例，停止失败或超时的模块隔离为 error，正常模块继续刷新。响应在原有模块清单外附加 `warnings` 数组。前端获得新的版本地址重新挂载；单个模块启停只卸载该模块的常驻入口。
+4. 停用模块后其后端和静态资源停止服务。已有接口请求需先结束，单个模块启停和清数据在执行中返回 409；全局刷新跳过忙碌模块。页面请求用 `context.signal` 取消。
 5. 移除模块时先停用，再删除其代码目录并刷新。用户数据按模块 ID 保留；需要清除时在设置中选择模块数据清除，包含已移除模块留下的数据。
 
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
+
+运行状态登记已用于共享 Source 同步、时间表校历更新、校园后台助手、通知检查和学习提醒。在线程 start 或提交 Future 后调用 `context.runtime.watch('简短任务名', worker)`；重复任务使用固定名称，不能按任务 ID 无限添加。框架记录接口时间、HTTP 状态及错误编号，业务成功与数据新鲜度仍由模块 API 表达。状态仅存于当前实例内存，详见 [运行状态响应](API.md#模块管理)。合成上下文可省略 runtime，调用方用 `getattr(context,'runtime',None)` 兼容。
+
+清除模块数据前会自动快照；恢复同时替换所有模块的普通状态和文件，不处理秘密或核心账号状态。快照需要所有模块的 stop 成功后才读取，后台任务必须完成清理才能参与恢复。不得把凭据放入 store/data_dir；备份只遵循这两个公开的非秘密数据边界。使用 `HTTPException(status, '可公开说明')` 报告预期业务错误，未经处理的异常由框架提供通用提示和错误编号。
 
 原生 AI 插件位于 `harness/`，使用标准 npm package.json 与 Cordis 接口，也支持官方 `dsh.bundle.patch`。模块清单响应的 `harness: true` 表示该模块提供原生插件；它与模块共用启停和刷新。`context.ai.run(..., plugins=[模块ID])` 在独立官方运行时中加载所选插件，并在结束时释放。执行期间插件所属模块保持活动请求计数。详见 [AI 与插件文档](AI.md#原生-harness-插件)。
 
@@ -140,5 +147,17 @@ ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们�
 模块启停与刷新按生命周期串行执行，停止钩子运行时释放注册表读取锁，允许后台任务完成已有的跨模块调用。开始停止前先关闭对应路由入口；正在执行的请求仍按原契约返回 409。
 
 模块的 signal 在切页、停用、刷新和该模块 mount 失败时中止；一个模块加载失败不会中止同页其他模块。计时器、全局监听器等须在首次异步等待前注册 abort 清理。仅在 mount 最后返回 cleanup 无法覆盖提前抛错。
+
+## 故障隔离与等待上限
+
+前端普通读取默认 30 秒，写请求默认 120 秒；AI 调用方显式选择 600 秒，流式请求默认总计 600 秒、连续无事件 240 秒。`timeoutMs` 与 `idleTimeoutMs` 可按公开接口的实际耗时调整。到期中止浏览器请求，保留调用方输入并提示检查结果；不自动重试写入。非 JSON 错误页转换为可读错误，不把原始响应内容显示给用户。
+
+前端入口导入上限 30 秒、mount 上限 35 秒；卸载清理并行执行，每项最多等待 3 秒。失败或超时不会阻止其他页面／后台组件清理，迟到的 mount 返回仍会执行清理。模块必须遵守 abort 信号，避免卸载后修改界面。同步 JavaScript 死循环仍会阻塞浏览器事件循环，超时机制不隔离这种不遵守契约的代码。
+
+后端停止钩子最多等待 5 秒。每个模块只保留一个未完成的停止任务；超时后关闭其公开入口，保留原 Store、Python 包和清理任务，不创建第二个实例。实际清理结束后才释放资源，再次刷新可以恢复该模块。停止钩子抛错时允许修复后重试，因此应保持可重入和幂等。其他模块继续工作。清数据只有全部模块安全停止后才能执行；失败时恢复可用模块并保留数据。
+
+跨模块请求统一在宿主事件循环执行，调用方超时或取消只结束等待。真实请求仍计入所属模块，完成前不能卸载或关闭 Store；每模块最多 8 个未完成的内部请求，避免轮询重复堆积。聚合方按非 200 响应显示来源不可用，其他来源继续汇总。写请求超时不代表服务端未写入，重试前检查结果或使用业务提供的去重标识。
+
+这些边界沿用单进程框架和官方 Harness 子进程，不强行终止任意 Python 线程。不遵守取消约定的任务保持隔离，可能需要重启本地服务；不能把停止等待当成任务已经结束。故障回归见 `checks/check_resilience.py`、`checks/check_frontend.mjs` 和 `checks/check_harness_cancel.py`。
 
 模块之间只能经 `context.api(module_id, path, method="GET", body=None)` 调用公开接口。课程资料选择接口属于课程中心，见 [课程中心](../modules/courses/README.md)。框架可在 modules 目录为空时启动设置页；独立启用允许依赖功能暂时不可用，模块自身生命周期必须正常。

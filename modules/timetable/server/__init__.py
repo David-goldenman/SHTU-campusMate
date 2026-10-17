@@ -1,7 +1,6 @@
 import asyncio
 from datetime import date, datetime
-from uuid import uuid4
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -11,7 +10,8 @@ from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
-from .calendar import Event, SemesterSettings, ZONE, calendar
+from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
+from .commands import Command, adjustments_key, event_record, execute
 from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
@@ -22,6 +22,14 @@ _calendar = None
 class ImportedEvent(Event):
     origin_id: str = Field(min_length=1, max_length=300)
     account_revision: str = Field(min_length=1, max_length=100)
+
+
+class UpdatedEvent(Event):
+    @model_validator(mode='before')
+    @classmethod
+    def ignore_saved_metadata(cls, value):
+        # Existing clients PUT the full GET record; these fields are server-owned.
+        return {key: item for key, item in value.items() if key not in {'id', 'source', 'revision', 'at', 'origin_id', 'start_time'}} if isinstance(value, dict) else value
 
 
 def create_router(context):
@@ -53,7 +61,9 @@ def create_router(context):
         official = school.saved(metadata)
         automatic = official.get('terms', {}).get(term_key(metadata), {})
         manual = context.store.read(settings_key(), {})
-        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')), 'source': 'manual' if manual else 'school',
+        week_one = manual.get('week_one') or automatic.get('week_one')
+        origin = 'manual' if manual.get('week_one') else 'school' if automatic.get('week_one') else None
+        return {**automatic, **manual, 'week_one': week_one, 'source': origin,
                 'url': official.get('url'), 'pdf_url': official.get('pdf_url'), 'checked_at': official.get('checked_at'), 'error': official.get('error')}
 
     @router.put('/calendar-settings')
@@ -75,9 +85,15 @@ def create_router(context):
     def events():
         return {'items': local_events()}
 
+    @router.get('/capabilities')
+    def capabilities():
+        return {'available': True, 'event_types': Event.model_json_schema()['properties']['event_type']['enum'],
+                'actions': ['create', 'update', 'delete', 'leave', 'cancel', 'move', 'restore'], 'scopes': ['once', 'following'],
+                'timing': ['带时区的钟点', '日期与起止节次'], 'conflicts': '检查同节次及已知时间段重叠，缺少钟点时明确提示', 'local_only': True}
+
     @router.post('/events', status_code=201)
     def add_event(body: Event):
-        item = {**body.model_dump(mode='json'), 'id': 'local:' + uuid4().hex, 'source': 'local', 'at': body.starts_at.astimezone(ZONE).isoformat()}
+        item = event_record(body)
         with source.lock:
             context.store.write('events:' + source.owner(), [*local_events(), item])
         return item
@@ -94,21 +110,24 @@ def create_router(context):
             existing = next((item for item in items if item['id'] == identity), None)
             if existing:
                 return {**existing, 'existing': True}
-            item = {**body.model_dump(mode='json', exclude={'account_revision'}), 'id': identity, 'source': 'local', 'at': body.starts_at.astimezone(ZONE).isoformat()}
+            item = {**event_record(body, identity), 'origin_id': body.origin_id}
+            item.pop('account_revision', None)
             if owner != source.owner():
                 raise HTTPException(409, '账号已更新，请重新确认安排。')
             context.store.write(key, [*items, item])
         return item
 
     @router.put('/events/{event_id}')
-    def update_event(event_id: str, body: Event):
+    def update_event(event_id: str, body: UpdatedEvent):
         with source.lock:
             owner = source.owner()
             items = context.store.read('events:' + owner, [])
             item = next((item for item in items if item['id'] == event_id), None)
             if item is None:
                 raise HTTPException(404, '未找到这条安排。')
-            item.update(**body.model_dump(mode='json'), at=body.starts_at.astimezone(ZONE).isoformat())
+            item.update(**event_record(body, item['id']))
+            if body.event_type != 'exam' or not body.starts_at:
+                item.pop('start_time', None)
             context.store.write('events:' + owner, items)
         return item
 
@@ -122,6 +141,15 @@ def create_router(context):
             context.store.write('events:' + owner, [item for item in items if item['id'] != event_id])
         return {'deleted': True}
 
+    @router.post('/commands')
+    async def command(body: Command):
+        combined = await schedule()
+        return execute(context, source, settings, body, combined['data'])
+
+    @router.get('/changes')
+    def changes():
+        return {'items': [item['result'] for item in context.store.read('calendar-commands:' + source.owner(), [])][-50:]}
+
     @router.get("/schedule")
     async def schedule(week_start: date | None = None):
         owner = account_revision(context)
@@ -129,6 +157,8 @@ def create_router(context):
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
         events, issues, undated = local_events(), [], 0
+        if not dates['week_one'] and values['timetable']['data']['timetable']:
+            issues.append(MISSING_WEEK_ONE)
         for item in dates.get('closures', []):
             events.append({'id': 'calendar:' + item['date'], 'title': item['title'], 'source': 'calendar', 'event_type': 'calendar',
                            'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})
@@ -149,14 +179,20 @@ def create_router(context):
                 events.append({**item, "at": at, "event_type": "exam" if name == "eams" else "deadline", "course_title": courses.get(item.get("course_id"), "")})
         if unavailable:
             issues.append("以下来源未启用或暂时不可用：" + "、".join(SCHEDULE_SOURCES[name] for name in unavailable))
-        events.sort(key=lambda item: (datetime.fromisoformat(item["at"]).timestamp(), item["id"]))
+        events.sort(key=lambda item: (datetime.fromisoformat(item.get('at') or item['date'] + 'T00:00:00+08:00').timestamp(), item.get('period_start') or 0, item['id']))
         syncing = any(value.get("status") == "syncing" for value in values.values())
         updated = max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None)
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取时间表。")
         data = {**values['timetable']['data'], 'events': events, 'undated': undated, 'issues': issues}
+        adjustments = context.store.read(adjustments_key(source), [])
+        missing = {item['lesson_id'] for item in adjustments} - {item['id'] for item in data['timetable']}
+        if missing:
+            issues.append(str(len(missing)) + ' 项课程调整暂时无法匹配最新教务课表，原调整记录仍保留。')
+        plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
-                "updated_at": updated, "data": data, 'calendar': calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one']),
+                "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
+                'calendar': {**plan, 'week_one_source': dates['source']},
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)
@@ -175,7 +211,9 @@ def start(context):
                 _calendar.refresh(metadata)
             except HTTPException:
                 pass
-        _source.executor.submit(update)
+        pending = _source.executor.submit(update)
+        if getattr(context, 'runtime', None):
+            context.runtime.watch('校历更新', pending)
 
 
 def stop(context):

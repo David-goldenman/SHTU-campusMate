@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
+from uuid import uuid4
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -10,6 +11,7 @@ from backend.services.campus.analysis import account_revision
 from backend.services.campus.data import digest
 from .documents import extract
 from .models import Profile
+from .workspace import WorkCommand, Workspace
 
 
 def profile_owner(context):
@@ -24,11 +26,14 @@ def read_profile(context):
 
 
 class Task:
-    def __init__(self, context, message):
+    def __init__(self, context, message, workspace=None):
         self.context, self.message = context, message
         self.owner, self.school_owner = account_revision(context), profile_owner(context)
         self.references, self.activity, self.navigation = {}, [], None
         self.answer = None
+        self.schedule_records, self.calendar_requests, self.calendar_results, self.changes = {}, {}, {}, []
+        self.work = workspace or Workspace(context)
+        self.work_records, self.assignment_records = {}, {}
         self.emit = lambda event: None
 
     def check(self):
@@ -74,6 +79,11 @@ class Task:
         if area == 'assignments':
             value = await self.api('assignments')
             items = value['pending'] if body.pending else value['data']['assignments']
+            local = {row['assignment_id']: row for row in self.work.snapshot()['items'] if row['kind'] == 'assignment'}
+            items = [{**row, 'local_status': local.get(row['id'], {}).get('status', 'todo'), 'local_revision': local.get(row['id'], {}).get('revision', '')} for row in items]
+        elif area == 'workspace':
+            value = self.work.snapshot()
+            items = value['items']
         elif area == 'courses':
             value = await self.api('courses')
             items = value['data']['courses']
@@ -100,14 +110,151 @@ class Task:
         else:
             value = await self.api('mail')
             items = value['data']['messages']
-        return {**self.rows(items, body), 'issues': value.get('data', {}).get('issues', []), 'updated_at': value.get('updated_at'), 'status': value.get('status')}
+        result = self.rows(items, body)
+        if area == 'assignments' and value.get('summary') is not None:
+            sources = value.get('data', {}).get('metadata', {}).get('source_metadata', {})
+            summary = {**value['summary'], 'sources': {name: {key: sources[name].get(key) for key in ('status', 'updated_at')}
+                       for name in ('blackboard', 'gradescope') if name in sources}}
+            result['summary'] = self.source('study:assignment-summary', '当前账号全部缓存作业统计', json.dumps(summary, ensure_ascii=False))
+        visible = {row['record_id'] for row in result['items']}
+        if area in {'workspace', 'assignments'}:
+            records = self.work_records if area == 'workspace' else self.assignment_records
+            records.update({item['id']: dict(item) for item in items if item['id'] in visible})
+        if area == 'timetable':
+            visible = {row['record_id'] for row in result['items']}
+            self.schedule_records.update({item['id']: dict(item) for item in items if item['id'] in visible})
+            result.update(week_start=value['calendar']['week_start'], week_one=value['calendar'].get('week_one'),
+                          week_one_source=value['calendar'].get('week_one_source'), teaching_week=value['calendar'].get('teaching_week'),
+                          periods=value['calendar'].get('periods', []), conflicts=value['calendar'].get('conflicts'))
+        return {**result, 'issues': value.get('data', {}).get('issues', []), 'updated_at': value.get('updated_at'), 'status': value.get('status')}
+
+    async def capabilities(self, body):
+        self.check()
+        response = await self.context.api('timetable', '/capabilities')
+        self.check()
+        calendar = response.json() if response.status_code == 200 else {'available': False, 'message': '时间表模块未就绪，请在设置启用。'}
+        value = {'general': ['知识讲解', '题目分析', '代码与写作辅助', '学习与复习规划'],
+                 'workspace': ['本地作业进度（不代表原站提交）', '一次性提醒（运行时检查并发送通知中心）', '学习计划的保存、编辑和完成状态'],
+                 'read': ['课程、作业、时间表', '课件、录播和讨论', '邮件和通知', '培养方案和历史修读记录'], 'calendar': calendar,
+                 'scope': '写操作作用于本地工作台；学校端报名、请假审批、作业提交与选课仍由原系统办理。'}
+        return {'items': [self.source('study:capabilities', '当前助手能力', json.dumps(value, ensure_ascii=False))]}
+
+    def intent(self, quote, verbs):
+        if quote.strip() != self.message.strip():
+            raise HTTPException(422, '请完整引用本次消息，不得截取局部文字作为授权。')
+        uncertain = re.search(r'如果|假如|假设|要是|考虑|是否支持|能否支持|能不能支持|怎么|怎样|如何|会不会|是否应该|什么意思|翻译|转述|原文|他说|她说|只(?:想)?(?:了解|分析|解释|总结)', self.message)
+        negative = re.search(r'(?:不要|不用|不必|不需要|不想|不|别|勿|暂不|先不)[^，,。；;\n]{0,12}(?:' + verbs + ')', self.message)
+        if uncertain or negative or not re.search(verbs, self.message):
+            raise HTTPException(422, '尚无明确的本次修改指令，请先澄清操作。')
+
+    def named(self, record):
+        def compact(value):
+            return re.sub(r'[\s《》“”「」\"\']+', '', value).casefold()
+        return any(len(str(record.get(key, '')).strip()) >= 2 and compact(str(record[key])) in compact(self.message) for key in ('title', 'course_title'))
+
+    async def work_edit(self, body):
+        self.check()
+        verbs = {'create': '新增|添加|创建|安排|保存|记下|提醒我|设置|制定', 'update': '修改|调整|改到|改为|改成|完成|取消|恢复|标记|推迟',
+                 'delete': '删除|移除|清除', 'set_assignment': '标记|完成|做完|开始|进行中|待办|恢复|进度|取消'}
+        self.intent(body.quote, verbs[body.action])
+        status = body.item.get('status')
+        status_words = {'done': '完成|做完', 'in_progress': '开始|进行中|在做', 'cancelled': '取消|不再', 'todo': '待办|未完成|恢复|重新'}
+        if status in status_words and not (body.action == 'create' and status == 'todo') and not re.search(status_words[status], self.message):
+            raise HTTPException(422, '目标状态与本次消息不一致，请明确要标记的进度。')
+        records = self.assignment_records if body.action == 'set_assignment' else self.work_records
+        record = records.get(body.record_id)
+        if body.action != 'create' and record is None:
+            raise HTTPException(422, '修改前请先查询 assignments 或 workspace，并使用本次读取的 ID。')
+        deictic = body.action != 'create' and len(records) == 1 and re.search(r'(?:这|该)(?:个|条|份|项)?(?:作业|提醒|计划|事务)', self.message)
+        if not self.named(body.item if body.action == 'create' else record) and not deictic:
+            raise HTTPException(422, '请在本次消息中明确要操作的作业、提醒或计划名称。')
+        signature = 'work:' + json.dumps(body.model_dump(exclude={'quote'}), ensure_ascii=False, sort_keys=True)
+        if signature in self.calendar_results:
+            return self.calendar_results[signature]
+        request_id = self.calendar_requests.setdefault(signature, uuid4().hex)
+        payload = WorkCommand(action=body.action, request_id=request_id, account_revision=self.owner, record_id=body.record_id,
+                              expected_revision=record.get('local_revision' if body.action == 'set_assignment' else 'revision', '') if record else None, item=body.item)
+        value = await self.work.command(payload)
+        self.check()
+        self.changes.append(value)
+        self.emit({'type': 'change', 'change': value})
+        result = {'items': [self.source('work-change:' + request_id, '学习事务修改回执', json.dumps(value, ensure_ascii=False))], 'change': value}
+        self.calendar_results[signature] = result
+        return result
+
+    async def schedule_edit(self, body):
+        self.check()
+        if body.quote.strip() != self.message.strip():
+            raise HTTPException(422, '请完整引用用户本次消息，不得截取局部文字作为操作授权。')
+        action = body.adjustment.get('action') if body.action == 'adjust_class' else body.action
+        verbs = {'create': '新增|添加|创建|安排|加入|排上|补上', 'update': '修改|调整|改到|改为|改成|改一下|挪到|换到',
+                 'delete': '删除|移除|取消', 'leave': '请假', 'cancel': '取消|停课', 'move': '调课|调整|改到|改为|改成|挪到|换到|修改', 'restore': '恢复|撤销'}
+        verb = verbs.get(action, r'(?!)')
+        message = self.message
+        self.intent(body.quote, verb)
+        record = self.schedule_records.get(body.record_id)
+        if body.action != 'create' and record is None:
+            raise HTTPException(422, '修改前请查询时间表，并使用本次实际读取的记录 ID。')
+        def compact(value):
+            return re.sub(r'[\s《》“”「」"\']+', '', value).casefold()
+        target = body.event if body.action == 'create' else record
+        anchors = [str(target.get(key, '')).strip() for key in ('title', 'course_title')]
+        named = any(len(anchor) >= 2 and compact(anchor) in compact(message) for anchor in anchors)
+        unique_reference = body.action != 'create' and len(self.schedule_records) == 1 and re.search(r'(?:这|该)(?:个|场|门|节|次|项)?(?:课|安排|考试|活动|日程|quiz)', message, re.I)
+        if not named and not unique_reference:
+            raise HTTPException(422, '操作目标不明确，请在本次消息中说明课程或安排的名称。')
+        if body.action == 'adjust_class':
+            if record.get('event_type') != 'class' or not record.get('lesson_id') or not record.get('original_date'):
+                raise HTTPException(422, '请选择教务课程的具体一次上课记录。')
+            if body.adjustment.get('scope') == 'following' and not re.search(r'以后|今后|之后|后续|每周|本学期|所有|从.+起', message):
+                raise HTTPException(422, '连续调整需要用户明确说明从本次起、后续或每周的范围。')
+        elif body.action != 'create' and record.get('source') != 'local':
+            raise HTTPException(422, '该来源记录不能直接编辑；教务课程请用课程调整。')
+        signature = json.dumps(body.model_dump(exclude={'quote'}), ensure_ascii=False, sort_keys=True)
+        if signature in self.calendar_results:
+            return self.calendar_results[signature]
+        request_id = self.calendar_requests.setdefault(signature, uuid4().hex)
+        payload = {'action': body.action, 'account_revision': self.owner, 'request_id': request_id, 'record_id': body.record_id,
+                   'expected_revision': record.get('revision', '') if record else None, 'event': body.event}
+        if body.action == 'adjust_class':
+            payload['adjustment'] = {**body.adjustment, 'lesson_id': record['lesson_id'], 'on_date': record['original_date']}
+        elif body.adjustment:
+            raise HTTPException(422, '个人安排操作不接受课程调整参数。')
+        response = await self.context.api('timetable', '/commands', method='POST', body=payload)
+        self.check()
+        if response.status_code != 200:
+            raise HTTPException(response.status_code, response.json().get('detail', '时间表修改未完成。'))
+        value = response.json()
+        if not value.get('applied'):
+            raise HTTPException(502, '时间表没有返回成功回执，请查询实际结果。')
+        self.changes.append(value)
+        self.emit({'type': 'change', 'change': value})
+        summary = {key: value[key] for key in ('applied', 'action', 'before', 'after', 'affected_count', 'week_start', 'conflicts', 'checked_weeks', 'local_only')}
+        result = {'items': [self.source('calendar-change:' + request_id, '时间表修改回执', json.dumps(summary, ensure_ascii=False))], 'change': value}
+        self.calendar_results[signature] = result
+        return result
 
     async def attend(self, body):
         self.check()
-        if body.quote not in self.message or not re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', body.quote) or re.search(r'不参加|不要|取消|再考虑|如果', body.quote):
+        # A model-selected excerpt cannot remove the user's negation or condition.
+        message = self.message.strip()
+        affirmative = r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)'
+        consents = [part for part in re.split(r'[，,。；;\n]', body.quote) for _ in re.finditer(affirmative, part)]
+        uncertain = re.search(r'(?:不|没|未|别|勿)[^，,。；;\n]{0,12}(?:参加|加入|添加|确认|决定)|不要|不用|不必|取消|考虑|如果|假如|假设|要是|的话|是否|能否|怎么|怎样|如何|什么|吗|[?？“”「」"\']', message)
+        if body.quote not in self.message or len(consents) != 1 or uncertain:
             raise HTTPException(422, '需要用户本次明确表达参加或加入日程的意愿。')
-        if not any(source.get('proposal_id') == body.proposal_id for source in self.references.values()):
+        proposals = {source['proposal_id'] for source in self.references.values() if source.get('proposal_id')}
+        if body.proposal_id not in proposals:
             raise HTTPException(422, '请先查询带有这条活动建议的通知。')
+        quoted = re.sub(r'\s+', '', consents[0])
+        def matches_target(target):
+            # Bind the title to the consent verb, not another mention in the same clause.
+            return re.search(r'参加《?' + target + r'》?(?=$|[！!]|并|和|以及)|(?:把|将)《?' + target + r'》?(?:加入|添加)(?:到|至)?(?:我的)?(?:时间表|日程)', quoted)
+        named = {source['proposal_id'] for source in self.references.values()
+                 if source.get('proposal_id') and source.get('title', '').strip() and matches_target(re.escape(re.sub(r'\s+', '', source['title'])))}
+        deictic = matches_target(r'(?:这|该)(?:个|场|项|次)?(?:活动|讲座|报告|会议|安排)')
+        if named != {body.proposal_id} and (named or len(proposals) != 1 or not deictic):
+            raise HTTPException(422, '请明确说出要参加的活动标题，或在对应通知中点击参加。')
         response = await self.context.api('campus-agent', '/proposals/' + body.proposal_id + '/accept', method='POST')
         self.check()
         if response.status_code != 200:
@@ -231,7 +378,7 @@ class Task:
             citations.append({**{key: value for key, value in source.items() if key != 'text'}, 'quote': source['text'][start:end]})
         if self.references and not body.insufficient_context and not citations:
             raise HTTPException(422, '请引用本次实际读取的资料，再提交回答。')
-        if not any(step['name'] != 'finish' for step in self.activity) and not body.insufficient_context:
+        if not any(step['name'] != 'finish' for step in self.activity) and not body.insufficient_context and body.basis != 'general':
             raise HTTPException(422, '请先用学习工具核对本次资料；无需资料时只提出澄清问题，并设置 insufficient_context=true。')
         self.answer = {'text': body.text, 'citations': citations, 'insufficient_context': body.insufficient_context}
         return {'accepted': True, 'citations_count': len(citations)}

@@ -1,4 +1,5 @@
 import importlib.util
+import asyncio
 import json
 import re
 import shutil
@@ -6,20 +7,23 @@ import sys
 import threading
 import types
 import uuid
+import time
 from contextlib import contextmanager
 from urllib.parse import unquote
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from concurrent.futures import Future
 from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
+from .errors import PublicError, catch_errors, error_response
+from .runtime import RuntimeStatus
 
 
 class Navigation(BaseModel):
@@ -50,6 +54,9 @@ class Entry:
     app: FastAPI | None = None
     requests: int = 0
     harness: dict | None = None
+    stopping: Future | None = None
+    calls: set = field(default_factory=set)
+    runtime: RuntimeStatus = field(default_factory=RuntimeStatus)
 
 
 class ModuleManager:
@@ -60,12 +67,16 @@ class ModuleManager:
         self.entries: dict[str, Entry] = {}
         self.lock = threading.RLock()
         self.lifecycle_lock = threading.RLock()
+        self.loop = None
+        self.stop_timeout = 5.0
+        self.api_timeout = 20.0
         sys.dont_write_bytecode = True
         self.root.mkdir(parents=True, exist_ok=True)
 
     def list(self):
         with self.lock:
-            modules = [dict(entry.info) for entry in self.entries.values()]
+            modules = [{**entry.info, 'runtime': {**entry.runtime.snapshot(), 'active_requests': entry.requests,
+                        'pending_calls': len(entry.calls)}} for entry in self.entries.values()]
             categories = {}
             # Explicit declarations win over compatibility fallbacks. Module ID breaks ties.
             for info in sorted(modules, key=lambda item: (item.get("navigation") is None, item["id"])):
@@ -77,12 +88,36 @@ class ModuleManager:
             return {"modules": modules, "categories": ordered}
 
     def _idle(self, entries):
-        if any(entry.requests for entry in entries):
+        if any(entry.requests or entry.calls for entry in entries):
             raise HTTPException(409, "模块仍有请求正在执行，请完成后重试。")
 
     def _stop(self, entry):
+        """Keep one stop attempt and its resources alive until it really finishes."""
         entry.app = None
-        entry.info.update(status="disabled", frontend_url=None, background_url=None)
+        entry.info.update(status="stopping", frontend_url=None, background_url=None)
+        if entry.stopping is None or entry.stopping.done() and entry.stopping.exception() is not None:
+            pending = entry.stopping = Future()
+
+            def release():
+                try:
+                    self._release(entry)
+                except BaseException as error:
+                    pending.set_exception(error)
+                else:
+                    pending.set_result(None)
+
+            threading.Thread(target=release, name='module-stop-' + entry.info['id'], daemon=True).start()
+        try:
+            entry.stopping.result(timeout=self.stop_timeout)
+        except TimeoutError:
+            entry.info.update(status="error", error="模块停止超时，已隔离；后台退出后可再次刷新。")
+            raise HTTPException(409, entry.info['error']) from None
+        except Exception:
+            entry.info.update(status="error", error="模块停止失败，已隔离；请检查 stop(context) 后重试。")
+            raise HTTPException(409, entry.info['error']) from None
+        entry.info.update(status="disabled")
+
+    def _release(self, entry):
         if entry.package and hasattr(entry.package, "stop"):
             entry.package.stop(entry.context)
         if entry.context:
@@ -100,34 +135,34 @@ class ModuleManager:
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
-                raise ValueError("模块目录名称或位置不符合规范。")
+                raise PublicError("模块目录名称或位置不符合规范。")
             manifest = Manifest.model_validate(json.loads((folder / "module.json").read_text(encoding="utf-8")))
             if manifest.id != folder.name:
-                raise ValueError("module.json 的 id 必须与目录名称一致。")
+                raise PublicError("module.json 的 id 必须与目录名称一致。")
             if manifest.id == "reload":
-                raise ValueError("reload 是框架保留的模块标识。")
+                raise PublicError("reload 是框架保留的模块标识。")
             if manifest.category == "settings":
-                raise ValueError("settings 是框架保留的设置分类。")
+                raise PublicError("settings 是框架保留的设置分类。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
             background = folder / 'web' / 'background.js'
             plugin = folder / "harness" / "package.json"
             for path in (frontend, background, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
-                    raise ValueError("模块入口必须位于自己的目录内。")
+                    raise PublicError("模块入口必须位于自己的目录内。")
             info["has_frontend"] = frontend.is_file()
             if plugin.is_file():
                 package = json.loads(plugin.read_text(encoding="utf-8"))
                 if not isinstance(package.get("name"), str) or not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", package["name"]):
-                    raise ValueError("Harness package.json 需要合法的 npm 包名。")
+                    raise PublicError("Harness package.json 需要合法的 npm 包名。")
                 bundle = package.get("dsh", {}).get("bundle", {}).get("patch")
                 target = (plugin.parent / (bundle or package.get("main", "index.js"))).resolve()
                 if not target.is_relative_to(plugin.parent.resolve()) or not target.is_file():
-                    raise ValueError("Harness 插件入口必须位于自己的 harness 目录内。")
+                    raise PublicError("Harness 插件入口必须位于自己的 harness 目录内。")
                 entry.harness = {"name": package["name"], "folder": plugin.parent.resolve(), "bundle": bool(bundle)}
             info["harness"] = entry.harness is not None
             if not frontend.is_file() and not background.is_file() and not backend.is_file() and not entry.harness:
-                raise ValueError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
+                raise PublicError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
             info["enabled"] = self.store.read("modules", {}).get(manifest.id, True)
             if not info["enabled"]:
                 info["status"] = "disabled"
@@ -135,7 +170,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -145,9 +180,10 @@ class ModuleManager:
                 exec(compile(backend.read_text(encoding="utf-8"), str(backend), "exec"), entry.package.__dict__)
                 router = entry.package.create_router(entry.context)
                 if not isinstance(router, APIRouter):
-                    raise ValueError("create_router(context) 必须返回 APIRouter。")
+                    raise PublicError("create_router(context) 必须返回 APIRouter。")
                 entry.app = FastAPI(title=manifest.name, version=manifest.version, docs_url=None, redoc_url=None, exception_handlers=self.exception_handlers)
                 entry.app.include_router(router)
+                entry.app.middleware('http')(catch_errors)
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
             info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
@@ -158,20 +194,36 @@ class ModuleManager:
             except Exception as stop_error:
                 info.update(status="error", error=f"模块停止失败（{type(stop_error).__name__}），请检查 stop(context)。")
                 return entry
-            info.update(status="error", error=str(error) if type(error) is ValueError else f"模块加载失败（{type(error).__name__}）。")
+            info.update(status="error", error=str(error) if isinstance(error, PublicError) else f"模块加载失败（{type(error).__name__}），请检查模块后重新加载。")
         return entry
 
     def reload(self):
         with self.lifecycle_lock:
-            self.close()
-            entries = {}
+            entries, warnings = {}, []
+            with self.lock:
+                previous = list(self.entries.values())
+            for entry in previous:
+                with self.lock:
+                    busy = bool(entry.requests or entry.calls)
+                    if not busy:
+                        entry.app = None
+                        entry.info['status'] = 'stopping'
+                if busy:
+                    entries[entry.info['id']] = entry
+                    warnings.append(entry.info['name'] + '仍有任务运行，本次保留原实例。')
+                    continue
+                try:
+                    self._stop(entry)
+                except HTTPException:
+                    entries[entry.info['id']] = entry
+                    warnings.append(entry.info['name'] + '停止失败或超时，其他模块继续刷新。')
             for folder in sorted(self.root.iterdir()):
-                if folder.is_dir() and (folder / "module.json").is_file():
+                if folder.name not in entries and folder.is_dir() and (folder / "module.json").is_file():
                     entry = self._load(folder)
                     entries[entry.info["id"]] = entry
             with self.lock:
                 self.entries = entries
-            return self.list()
+            return {**self.list(), 'warnings': warnings}
 
     def set_enabled(self, module_id, enabled):
         with self.lifecycle_lock:
@@ -182,11 +234,7 @@ class ModuleManager:
                 self._idle([entry])
                 entry.app = None
                 entry.info["status"] = "stopping"
-            try:
-                self._stop(entry)
-            except Exception:
-                entry.info.update(status="error", error="模块停止失败，请检查 stop(context)。")
-                raise HTTPException(409, "模块停止失败，请检查 stop(context) 后重试。") from None
+            self._stop(entry)
             values = self.store.read("modules", {})
             values[module_id] = enabled
             self.store.write("modules", values)
@@ -207,8 +255,7 @@ class ModuleManager:
             for entry in entries:
                 try:
                     self._stop(entry)
-                except Exception:
-                    entry.info.update(status="error", error="模块停止失败，请检查 stop(context)。")
+                except HTTPException:
                     errors.append(entry.info["id"])
             if errors:
                 raise HTTPException(409, "模块停止失败：" + ", ".join(errors))
@@ -262,13 +309,41 @@ class ModuleManager:
             for entry in entries:
                 self._end_request(entry)
 
-    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None):
-        """Call a module's public HTTP API with lifecycle tracking."""
+    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None, timeout=None):
+        """Bound the caller's wait without abandoning a running module's resources."""
         parts = unquote(path.split("?", 1)[0]).split("/")
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", module_id) or not path.startswith("/") or path.startswith("//") or any(part in {".", ".."} for part in parts) or "\\" in path or "#" in path:
             raise ValueError("模块读取需要合法模块 ID 和模块内相对路径。")
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self, raise_app_exceptions=False), base_url="http://modules.local") as client:
-            return await client.request(method, "/" + module_id + path, json=body)
+        async def request():
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self, raise_app_exceptions=False), base_url="http://modules.local") as client:
+                return await client.request(method, "/" + module_id + path, json=body)
+
+        def unavailable(status, message):
+            return httpx.Response(status, json={'detail': message}, request=httpx.Request(method, 'http://modules.local/' + module_id + path))
+
+        with self.lock:
+            entry = self.entries.get(module_id)
+            if self.loop is None or self.loop.is_closed():
+                return unavailable(503, '模块服务正在停止，请稍后重试。')
+            if not entry or not entry.app or entry.info['status'] != 'ready':
+                return unavailable(404, '模块未启用或没有后端入口。')
+            if len(entry.calls) >= 8:
+                return unavailable(503, '模块正在处理其他请求，请稍后重试。')
+            pending = asyncio.run_coroutine_threadsafe(request(), self.loop)
+            entry.calls.add(pending)
+
+            def finished(future):
+                with self.lock:
+                    entry.calls.discard(future)
+
+            pending.add_done_callback(finished)
+        try:
+            # Shield keeps the ASGI request counted until its synchronous work ends.
+            waiting = asyncio.wrap_future(pending)
+            waiting.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+            return await asyncio.wait_for(asyncio.shield(waiting), self.api_timeout if timeout is None else timeout)
+        except TimeoutError:
+            return unavailable(504, '模块响应超时，其他功能可以继续使用；请稍后检查结果。')
 
     def authorize_write(self, request):
         parts = request.url.path.split("/")
@@ -286,10 +361,19 @@ class ModuleManager:
         module_id = path.lstrip("/").split("/", 1)[0]
         entry = await run_in_threadpool(self._begin_request, module_id)
         if not entry:
-            await JSONResponse({"detail": "模块未启用或没有后端入口。"}, status_code=404)(scope, receive, send)
+            await error_response(Request(scope), 404, '模块未启用或没有后端入口。')(scope, receive, send)
             return
+        started, status = time.monotonic(), 500
+        nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id, 'state': {}}
+
+        async def recorded_send(message):
+            nonlocal status
+            if message['type'] == 'http.response.start':
+                status = message['status']
+            await send(message)
+
         try:
-            nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id}
-            await entry.app(nested, receive, send)
+            await entry.app(nested, receive, recorded_send)
         finally:
+            entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'))
             await run_in_threadpool(self._end_request, entry)

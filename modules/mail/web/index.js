@@ -29,7 +29,7 @@ export async function mount(container, context) {
       const c = item.classification;
       reader.innerHTML = `<header class="mail-reader-header"><h3>${e(item.title)}</h3><p>${e(item.sender)}</p><p class="field-hint">${e(time(item.received_at))} · ${link(item.url,'在原邮箱查看',e)}</p><div class="campus-toolbar"><button type="button" class="button button-secondary" data-review ${busy ? 'disabled' : ''}>AI 复核这封邮件</button><button type="button" class="text-button" data-label>调整分类</button></div></header><details class="mail-decision" ${c.summary ? 'open' : ''}><summary>${e(state.buckets[c.bucket])} · ${e(c.category)}${c.needs_check ? ' · 需核对' : ''}</summary>${c.summary ? `<p>${e(c.summary)}</p>` : ''}<p class="field-hint">${e(c.reason)}</p>${(c.evidence || []).map(source => '<blockquote>' + e(source.quote) + '</blockquote>').join('')}</details><article class="mail-body">${detail.body_html}</article><p class="field-hint mail-footer">附件和图片原件可在原邮箱查看。外部图片以说明文字显示。</p>`;
       const review = reader.querySelector('[data-review]');
-      review.onclick = context.ui.safeAction(review, async () => {await context.api('/review',{method:'POST',body:{message_id:identity,force:true}});await refresh();await read();});
+      review.onclick = context.ui.safeAction(review, async () => {await context.api('/review',{method:'POST',body:{message_id:identity,force:true},timeoutMs:600000});await refresh();await read();});
       reader.querySelector('[data-label]').onclick = () => {
         const form = document.createElement('form');form.className = 'campus-form';
         form.innerHTML = `<label>显示位置<select name="bucket">${Object.entries(state.buckets).map(([id,title]) => `<option value="${id}" ${c.bucket === id ? 'selected' : ''}>${e(title)}</option>`).join('')}</select></label><label>分类名称<input name="label" required maxlength="32" value="${e(c.category)}"></label><p class="field-hint">手动分类优先于自动复核。</p><button class="button button-primary">保存分类</button>`;
@@ -45,7 +45,7 @@ export async function mount(container, context) {
       const ids = filtered().filter(item => item.classification.by === 'rule').slice(0,5).map(item => item.id);
       if (!ids.length) {context.ui.toast('当前邮件已复核；可打开邮件单独重新复核。');return;}
       busy = true;
-      try {for (let i = 0;i < ids.length;i++) {body.querySelector('[data-progress]').textContent = `正在复核 ${i + 1} / ${ids.length}`;await context.api('/review',{method:'POST',body:{message_id:ids[i]}});if(context.signal.aborted)return;await refresh();}await read();}
+      try {for (let i = 0;i < ids.length;i++) {body.querySelector('[data-progress]').textContent = `正在复核 ${i + 1} / ${ids.length}`;await context.api('/review',{method:'POST',body:{message_id:ids[i]},timeoutMs:600000});if(context.signal.aborted)return;await refresh();}await read();}
       finally {busy = false;body.querySelector('[data-progress]').textContent = '';}
     });
     body.querySelector('[data-preferences]').onclick = () => {

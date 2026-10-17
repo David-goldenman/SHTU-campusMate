@@ -10,7 +10,7 @@ from backend.services.campus.data import digest
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
-TERM = re.compile(r"20\d{2}(?:-20\d{2}学年)?\S*?[春夏暑秋]季?学期")
+TERM = re.compile(r"20\d{2}(?:[-–]20\d{2})?(?:学年|年)?\s*[春夏暑秋]季?(?:学期)?")
 
 
 def checked(value):
@@ -156,7 +156,7 @@ def fetch(remote, previous):
                 columns = list(remote.pages(BASE + f"/learn/api/public/v2/courses/{cid}/gradebook/columns"))
             except HTTPException:
                 columns = []
-                result["issues"].append(item["title"] + " 的成绩暂时不可读，提交状态保留未知。")
+                result["issues"].append(item["title"] + " 的成绩暂时不可读。")
             try:
                 submitted = activity(remote.html(BASE + f"/webapps/bb-mygrades-BBLEARN/myGrades?course_id={cid}&stream_name=mygrades"))
             except HTTPException:
@@ -169,7 +169,7 @@ def fetch(remote, previous):
                 column = by_content.get(node["id"], {})
                 grade = grades.get(column.get("id"), {})
                 display = grade.get("displayGrade") if isinstance(grade.get("displayGrade"), dict) else {}
-                is_submitted = submitted.get(column.get("id"))
+                is_submitted = submitted.get(column.get("id")) is True
                 if display.get("score") is not None:
                     is_submitted = True
                 state, open_now = availability(node.get("availability"))

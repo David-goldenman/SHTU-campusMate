@@ -74,6 +74,20 @@ class RequirementsCheck(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "依赖条件已变化"):
             check(["tzdata>=2025.2; unknown_marker"], {})
 
+    def test_httpx_socks_extra_checks_base_and_socksio(self):
+        installed = {"httpx": distribution("0.28.1"), "socksio": distribution("1.0.0")}
+        check(["httpx[socks]>=0.28"], installed)
+        with self.assertRaisesRegex(RuntimeError, "socksio"):
+            check(["httpx[socks]>=0.28"], {"httpx": installed["httpx"]})
+        with self.assertRaisesRegex(RuntimeError, "socksio"):
+            check(["httpx[socks]>=0.28"], {**installed, "socksio": distribution("2.0.0")})
+        with self.assertRaisesRegex(RuntimeError, "httpx>=0.28"):
+            check(["httpx[socks]>=0.28"], {**installed, "httpx": distribution("0.27.0")})
+
+    def test_unknown_extras_are_not_silently_accepted(self):
+        with self.assertRaisesRegex(RuntimeError, "依赖声明已变化"):
+            check(["httpx[unknown]>=0.28"], {"httpx": distribution("0.28.1")})
+
     def test_missing_import_is_not_hidden(self):
         with self.assertRaisesRegex(RuntimeError, "无法找到模块"):
             check([], {}, module_available=False)

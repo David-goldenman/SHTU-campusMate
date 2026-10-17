@@ -1,7 +1,7 @@
 {
   "id": "courses",
   "name": "课程中心",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "category": "courses",
   "api_version": 1,
   "navigation": {

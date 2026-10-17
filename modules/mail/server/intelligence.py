@@ -79,9 +79,25 @@ def contains(word, text):
     return bool(re.search(r'(?<![A-Za-z0-9])' + re.escape(word) + r'(?![A-Za-z0-9])', text, re.I)) if word.isascii() else word.casefold() in text.casefold()
 
 
+def shape_credit(body):
+    shape = r'(?:形策|形势(?:与|和)?政策)'
+    sentences = [part for part in re.split(r'[。！!；;\n]', body) if re.search(shape, part)]
+    # Conditions and questions can qualify recognition across a comma.
+    if any(re.search(r'如果|假如|若|是否|能否|吗|[?？]|以.{0,12}为准', sentence) for sentence in sentences):
+        return False
+    # Unrelated registration instructions must not negate an affirmative credit clause.
+    statements = [part for sentence in sentences for part in re.split(r'[，,]', sentence)
+                  if re.search(shape + r'|计入|纳入|认定|说法|尚|暂|拟|可能|也许|预计|待定|(?:未|待).{0,4}(?:确认|确定|核实|核定|公布)', part)]
+    # A mention of attendance is not an affirmative recognition statement.
+    # Conflicting or provisional statements stay subject to user confirmation.
+    if any(re.search(r'不|未|无法|无效|否|待|尚|暂|拟|可能|也许|预计|如果|假如|若|吗|[?？]|以.{0,12}为准', part) for part in statements):
+        return False
+    return any(re.search(r'(?:计入|纳入|认定为)[^，,。；;\n]{0,24}' + shape, part) for part in statements)
+
+
 def preliminary(item, preferences):
     text = item['title'] + '\n' + item.get('body_text', '')
-    required = bool(re.search(r'(?:计入.{0,30}(?:形策|形势.{0,3}政策)|形策.{0,30}(?:考勤|签到|认证))', text, re.S))
+    required = shape_credit(item.get('body_text', ''))
     topic, bucket, protected, reason = 'campus', 'digest', False, '保留校园服务摘要。'
     if required:
         topic = 'shape'

@@ -1,4 +1,4 @@
-# 教育 System Prompt · QJQ
+# 课程学习助手
 
 归属今日讨论中的「教育 system prompt 优化 QJQ」。从 QJQ 迁入五种教育模式的 System Prompt、回答 Schema 与逐字引用校验，挂载在**AI助手**。
 

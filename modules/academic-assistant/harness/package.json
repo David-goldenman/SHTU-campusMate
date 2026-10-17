@@ -1,7 +1,7 @@
 {
   "name": "campus-academic-assistant",
-  "version": "0.2.0",
-  "description": "通过校园 API 提供带来源的学习规划、作业与选课辅助",
+  "version": "0.3.3",
+  "description": "校园资料问答、本地日程编辑与作业进度、提醒和学习计划管理",
   "type": "module",
   "main": "index.js",
   "peerDependencies": {
