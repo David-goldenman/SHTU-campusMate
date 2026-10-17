@@ -64,7 +64,10 @@ def filtered_state(provider: str, state: dict) -> dict:
 
 def http_client(state: dict | None = None) -> httpx.Client:
     state = state or {}
-    client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40)
+    # Campus services use local DNS and the OS route (including an active campus VPN).
+    # Keep environment proxies for external providers and retain normal TLS verification.
+    client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40,
+                          mounts={"all://*shanghaitech.edu.cn": None})
     for cookie in state.get("cookies", []):
         expiry = cookie.get("expires")
         expiry = int(expiry) if expiry and expiry > 0 else None
@@ -213,7 +216,7 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
         if result.get("code") in {"FA_UNAUTHORIZED", "FA_INVALID_SESSION", "FA_INVALID_TEMP_SESSION", "FA_SECURITY"}:
             raise LoginRequired("学校邮箱会话已到期，请重新验证。")
         if result.get("code") != "S_OK":
-            raise RuntimeError("学校邮箱未确认登录状态，请重新验证。")
+            raise LoginRequired("学校邮箱未确认登录状态，请重新验证。")
         profile = result.get("var") or {}
         if isinstance(profile, dict):
             subject = profile.get("uid") or profile.get("email") or profile.get("account")

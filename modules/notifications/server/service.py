@@ -176,6 +176,8 @@ class Notifications:
     def start(self):
         self.thread = threading.Thread(target=self._loop, name="campus-notifications", daemon=True)
         self.thread.start()
+        if getattr(self.context, 'runtime', None):
+            self.context.runtime.watch('通知检查', self.thread)
 
     def _loop(self):
         while not self.stopping.is_set():

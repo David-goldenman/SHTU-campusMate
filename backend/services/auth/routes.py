@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from .protocols import PROVIDERS
+from .network import NetworkDiagnostics
 
 
 class Credentials(BaseModel):
@@ -20,6 +21,15 @@ class DeviceConsent(BaseModel):
 
 def create_router(service):
     router = APIRouter(prefix="/auth", tags=["共享认证"])
+    network = NetworkDiagnostics()
+
+    @router.get("/network")
+    def network_status():
+        return network.snapshot()
+
+    @router.post("/network/check")
+    async def check_network():
+        return await network.check()
 
     def checked(provider):
         if provider not in PROVIDERS:

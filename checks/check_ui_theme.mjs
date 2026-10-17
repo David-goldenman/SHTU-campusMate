@@ -26,6 +26,7 @@ function fixture(modules,categories) {
     if(path==='/settings')return response({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
     if(path==='/auth/providers')return response({providers:[]});
     if(path==='/ai/settings')return response({model:'deepseek-flash',enabled:false,key_saved:false});
+    if(path==='/data/backups')return response({backups:[]});
     if(path==='/modules/academic-assistant/chat')return response({messages:[]});
     if(path==='/modules/academic-assistant/conversations')return response({items:[],active_id:null});
     if(path==='/modules/academic-assistant/profile')return response({profile:{},academic:{}});

@@ -9,6 +9,7 @@ from pathlib import Path
 from filelock import FileLock
 
 from .paths import DATA, PROJECT
+from .errors import PublicError
 
 
 def windows_path(path: Path) -> str:
@@ -20,7 +21,7 @@ def windows_path(path: Path) -> str:
 def windows_tool(name: str) -> str:
     executable = shutil.which(name if os.name == "nt" else name + ".exe")
     if not executable:
-        raise RuntimeError(f"需要 Windows {name}，请使用 Windows 或启用了 Windows 互操作的 WSL。")
+        raise PublicError(f"需要 Windows {name}，请使用 Windows 或启用了 Windows 互操作的 WSL。")
     return executable
 
 
@@ -32,7 +33,7 @@ def protect(text: str, action: str) -> str:
         input=text, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=20,
     )
     if result.returncode:
-        raise RuntimeError("Windows 用户密钥无法处理此凭据，请在原 Windows 账号下运行或重新配置。")
+        raise PublicError("Windows 用户密钥无法处理此凭据，请在原 Windows 账号下运行或重新配置。")
     return result.stdout.strip("\ufeff\r\n")
 
 

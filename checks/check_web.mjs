@@ -28,6 +28,7 @@ function fixture(initial, categories) {
     state.calls.push({path,method,target:body.target});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
+    if (path === '/data/backups') return json({backups:[]});
     if (path === '/ai/catalog') return json({providers:[{id:'deepseek',name:'DeepSeek',models:['deepseek-flash','deepseek-v4-pro']},{id:'openai',name:'openai',models:['gpt-4']}],protocols:['openai-completions','openai-responses','anthropic-messages']});
     if (path === '/ai/settings') {
       if (method === 'PUT') {

@@ -6,7 +6,9 @@
 
 服务仅绑定 `127.0.0.1`，校验 Host 与 Origin。先调用 `GET /api/v1/bootstrap` 获取本次服务的 `csrf_token`，后续 POST、PUT、PATCH 和 DELETE 都在请求头带 `X-Framework-Token: <csrf_token>`。服务重启后重新获取。浏览器共享 `api()` 及模块注入的 API 客户端自动处理该请求头。
 
-JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON；失败通常为 `{ "detail": "说明" }`，字段校验失败为 `{ "detail": [{ "loc": [...], "msg": "说明", "type": "类型" }] }`。字段校验响应保留定位信息。HTTP 400 表示参数或本地环境不符合服务要求，401 表示需要登录，403 表示本地访问校验失败，404 表示资源未启用或不存在，409 表示需要二次验证、AI 未启用、模块忙或停止失败，422 表示请求字段不符合定义，502 表示外部服务失败。模块可以用自己的可公开错误信息补充这些状态。
+JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON；框架错误处理器返回 `{detail,code,action,request_id}`，`detail` 保持原有字符串或校验错误数组结构（`loc/msg/type`）。`action` 给出下一步操作，`request_id` 与响应头 `X-Request-ID` 一致；诊断日志只记编号、状态、错误代码与异常类型，不记录异常原文、URL、请求体或私人响应。共享前端保留 Error 的 `status/code/requestId/action`，展示字段位置、操作提示和编号。模块应通过 `HTTPException` 提供可公开说明；未知异常使用通用 500，不能直接回显异常文本。流式响应开始后的错误继续沿用模块自己的事件协议。
+
+HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 的 400 契约，但只公开明确标记的安全说明），401 表示需要登录，403 表示本地访问校验失败，404 表示资源未启用或不存在，409 表示需要二次验证、AI 未启用、模块忙、备份不可用或停止失败，422 表示字段校验失败，500 表示内部或本地存储错误，502 表示来源连接失败，503 表示忙碌，504 表示等待超时。超时后应先检查操作结果，避免重复提交。`code` 提供更具体的分类，如 `verification_required/storage_error/storage_busy/file_error`。
 
 ## 框架与设置
 
@@ -16,13 +18,21 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | GET | `/health` | `{application:"campus-framework",version,launch_id}`；启动器校验本次服务已可访问 |
 | GET | `/settings` | `{port, active_port, restart_required, storage:{directory,encryption}}` |
 | PUT | `/settings` | 请求 `{port:16666}`，返回完整设置；修改后重启生效 |
-| POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope}` |
+| POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope,backup:BackupInfo\|null}` |
+| GET | `/data/backups` | `{backups:[BackupInfo]}`，新备份在前；损坏项 `valid:false`，仍可删除 |
+| POST | `/data/backups` | 停止模块后创建快照，再重新加载；返回 `{backup:BackupInfo}` |
+| POST | `/data/backups/{id}/restore` | `{confirmation:"RESTORE"}` → `{restored:id,backup:BackupInfo}`，backup 为恢复前的数据 |
+| DELETE | `/data/backups/{id}` | `{confirmation:"DELETE_BACKUP"}` → `{deleted:id}`，只删除该备份 |
 
 端口范围为 1024–65535，浏览器限制端口在系统边界拒绝。默认保存端口 16666，`--port` 只覆盖当次运行端口。
 
 `launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.private/runtime/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
 
 清除 `credentials` 时停止模块及登录窗口，清除 Vault 中所有共享和模块秘密、认证状态，并关闭 AI，再挂载模块；普通模块数据保留。清除 `modules` 时停止模块、清除全部模块状态、秘密和文件，再挂载模块；共享登录、AI 与框架设置保留。`all` 执行两类清除并恢复默认设置，当前监听端口持续到服务重启。模块代码与清单始终由开发者维护，数据清除操作只处理本地数据。
+
+`modules/all` 清除前自动备份，备份失败则不清除。备份仅含 SQLite 的 `module:*` 行和 `.private/modules/` 文件，不包含 core 状态、Vault、登录浏览器或运行时目录。快照存于 `.private/backups/<id>/`，保留至用户单独删除；`all` 清除也保留备份。`BackupInfo` 含 `id,created_at,reason,size_bytes,file_count`，列表另含 `valid`；reason 为 `manual/before_clear/before_restore`。备份包含私人资料，沿用私有目录的 Git 忽略和本机访问范围。
+
+创建、恢复、清除要求模块请求结束并成功执行 stop，否则返回 409。恢复先校验格式、模块命名空间和文件清单，拒绝路径穿越、符号链接与 Windows junction；再备份当前数据。模块行在 SQLite 事务内替换，文件替换失败或数据库写入失败时回滚文件。操作结束或失败均重新加载模块。恢复保留当前账号、凭据、AI 配置和启停选择；模块仍按当前账号版本读取记录。只有本地备份，没有外部上传或定时任务。突然断电无法保证数据库和文件跨介质原子性，可在服务可用后用自动保留的恢复前备份重新恢复。
 
 ## 模块管理
 
@@ -37,6 +47,8 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 `ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`、`background_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
+`runtime` 为本次模块实例的内存状态：`loaded_at,active_requests,pending_calls,last_request:{at,status,duration_ms}|null,last_success_at,last_error,workers`。最近错误保留至重新加载，即使后来请求成功也不会抹去；若来自统一错误处理器，还带 `code/request_id`。状态页手动读取，不用高频轮询；`ready` 只表示加载成功。worker 为 `{name,kind:thread|task,status:running|stopped|idle|cancelled|error}`；线程存活不代表一次业务检查成功，Future 的 idle 只表示正常结束，来源同步结果仍以业务 snapshot 为准。刷新与重启重置状态，不落盘保存历史。
+
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
 ## 共享认证
@@ -46,6 +58,8 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/auth/providers` | `{providers:[ProviderStatus]}` |
+| GET | `/auth/network` | 最近的校园网络检测；首次 `{checked_at:null,services:[]}`，不发起外部请求 |
+| POST | `/auth/network/check` | 无参数；匿名检测五个固定校园入口，返回 DNS、直连、代理对照和处理建议；详见 AUTH.md |
 | GET | `/auth/<provider>/status` | 单个 `ProviderStatus`；读取已保存状态 |
 | PUT | `/auth/<provider>/credentials` | `{username,password}` → `ProviderStatus` |
 | POST | `/auth/<provider>/login` | 可选 `{target}`，登录或验证会话，返回状态 |
