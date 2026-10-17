@@ -1,6 +1,7 @@
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
 import * as settings from './settings.js';
 import {icon as navIcon} from './icons.js';
+import {cleanupAll, withTimeout} from './lifecycle.js';
 
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
@@ -8,7 +9,7 @@ const scrim = document.querySelector('#menu-scrim');
 document.querySelector('.skip-link').addEventListener('click',event => { event.preventDefault(); main.focus(); });
 let state;
 let pageScope;
-let backgroundScope, backgroundKey = '';
+const backgroundScopes = new Map();
 let revision = 0;
 const selectedViews = new Map();
 
@@ -41,7 +42,7 @@ async function dispose() {
   pageScope = null;
   if (!previous) return;
   previous.controller.abort();
-  const results = await Promise.allSettled(previous.cleanups.map(cleanup => Promise.resolve().then(cleanup)));
+  const results = await cleanupAll(previous.cleanups);
   if (results.some(result => result.status === 'rejected')) toast('一个模块的清理过程发生错误，请检查模块实现。');
   document.querySelector('#dialog').close();
 }
@@ -55,10 +56,10 @@ function services(signal) {
     }),
     ai:Object.freeze({
       settings:() => request('/ai/settings'),
-      generate:body => request('/ai/generate',{method:'POST',body}),
-      chat:body => request('/ai/chat',{method:'POST',body}),
+      generate:body => request('/ai/generate',{method:'POST',body,timeoutMs:600000}),
+      chat:body => request('/ai/chat',{method:'POST',body,timeoutMs:600000}),
       plugins:() => request('/ai/plugins'),
-      run:body => request('/ai/run',{method:'POST',body}),
+      run:body => request('/ai/run',{method:'POST',body,timeoutMs:600000}),
     }),
   });
 }
@@ -82,24 +83,27 @@ async function mountModule(module, container, scope, background = false) {
   const abort = () => lifetime.abort();
   scope.controller.signal.addEventListener('abort',abort,{once:true});
   if (scope.controller.signal.aborted) abort();
+  let mounting;
   try {
     const url = new URL(background ? module.background_url : module.frontend_url,location.origin);
     const prefix = '/module-assets/' + encodeURIComponent(module.id) + '/';
     if (url.origin !== location.origin || !url.pathname.startsWith(prefix)) throw new Error('模块入口需要位于本机模块资源目录。');
-    const entry = await import(url.href);
+    const entry = await withTimeout(import(url.href),30000,abort);
     if (scope.controller.signal.aborted) return;
     if (typeof entry.mount !== 'function') throw new Error('模块入口需要导出 mount(container, context)。');
     body.replaceChildren();
-    const cleanup = await entry.mount(body,{
+    mounting = Promise.resolve().then(()=>entry.mount(body,{
       api:moduleApi(module.id,lifetime.signal), ui, navigate, module:{...module},
       focus:active => {card.classList.toggle('module-focused',active);container.classList.toggle('module-focus',!!container.querySelector('.module-focused'));},
       signal:lifetime.signal, services:services(lifetime.signal),
-    });
+    }));
+    const cleanup = await withTimeout(mounting,35000,abort);
     if (cleanup !== undefined && typeof cleanup !== 'function') throw new Error('模块 mount 需要返回清理函数或不返回值。');
-    if (scope.controller.signal.aborted) { if (cleanup) await cleanup(); }
+    if (scope.controller.signal.aborted) { if (cleanup) await cleanupAll([cleanup]); }
     else if (cleanup) scope.cleanups.push(cleanup);
   } catch (error) {
     abort();
+    if(mounting)void mounting.then(cleanup=>typeof cleanup==='function' ? cleanupAll([cleanup]) : undefined).catch(()=>{});
     scope.controller.signal.removeEventListener('abort',abort);
     if (scope.controller.signal.aborted) return;
     if (background) {card.remove();toast(module.name + '暂时无法打开：' + error.message);return;}
@@ -110,22 +114,25 @@ async function mountModule(module, container, scope, background = false) {
   }
 }
 
-async function stopBackground() {
-  const scope=backgroundScope;backgroundScope=null;backgroundKey='';
-  if (!scope) return;
-  scope.controller.abort();
-  for (const cleanup of scope.cleanups) await cleanup();
-  scope.root.remove();
+async function stopBackground(id) {
+  const selected=[...backgroundScopes].filter(([key])=>id===undefined||key===id);
+  for(const [key,scope] of selected){backgroundScopes.delete(key);scope.controller.abort();}
+  const results=await cleanupAll(selected.flatMap(([,scope])=>scope.cleanups));
+  for(const [,scope] of selected)scope.root.remove();
+  const failed=results.some(result=>result.status==='rejected');
+  if(failed)toast('一个后台模块清理失败或超时，其他模块继续运行。');
+  return failed;
 }
 
 async function syncBackground() {
   const modules=state.modules.filter(item=>item.enabled&&item.status==='ready'&&item.background_url);
-  const key=modules.map(item=>item.background_url).join('|');
-  if (key===backgroundKey) return;
-  await stopBackground();backgroundKey=key;
-  const root=document.createElement('div');document.body.append(root);
-  const scope={controller:new AbortController(),cleanups:[],root};backgroundScope=scope;
-  await Promise.all(modules.map(module=>mountModule(module,root,scope,true)));
+  await Promise.all([...backgroundScopes].filter(([id,scope])=>!modules.some(module=>module.id===id&&module.background_url===scope.url)).map(([id])=>stopBackground(id)));
+  await Promise.all(modules.filter(module=>!backgroundScopes.has(module.id)).map(module=>{
+    const root=document.createElement('div');document.body.append(root);
+    const scope={controller:new AbortController(),cleanups:[],root,url:module.background_url};
+    backgroundScopes.set(module.id,scope);
+    return mountModule(module,root,scope,true);
+  }));
 }
 
 async function render(refreshMetadata = false) {
@@ -215,20 +222,21 @@ async function render(refreshMetadata = false) {
 async function reloadModules() {
   ++revision;
   await dispose();
-  await stopBackground();
+  const cleanupFailed=await stopBackground();
   main.innerHTML = '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>正在刷新模块…</div>';
-  try { Object.assign(state,await api('/modules/reload',{method:'POST'})); }
+  let warnings=cleanupFailed ? ['一个后台组件清理异常，已继续刷新其他模块。'] : [];
+  try {const value=await api('/modules/reload',{method:'POST'});Object.assign(state,value);warnings.push(...(value.warnings||[]));}
   finally { await render(); }
-  toast('模块列表已更新。');
+  toast(warnings.length ? warnings.join(' ') : '模块列表已更新。');
 }
 
 async function setEnabled(id, enabled) {
   ++revision;
   await dispose();
-  await stopBackground();
+  const cleanupFailed=await stopBackground(id);
   try { Object.assign(state,await api('/modules/' + encodeURIComponent(id),{method:'PUT',body:{enabled}})); }
-  finally { await render(); }
-  toast(enabled ? '模块已启用。' : '模块已停用。');
+  finally { await refresh(); }
+  toast(cleanupFailed ? '模块状态已更新，但后台组件清理异常；其他模块继续运行。' : enabled ? '模块已启用。' : '模块已停用。');
 }
 
 async function refresh() {

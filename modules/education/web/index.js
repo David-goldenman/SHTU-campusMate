@@ -54,7 +54,7 @@ export async function mount(container, context) {
     message('正在生成并校验引用…');
     find('[data-result]').replaceChildren();
     try {
-      const value = await context.api('/answer', {method: 'POST', body});
+      const value = await context.api('/answer', {method: 'POST', body, timeoutMs:600000});
       if (context.signal.aborted) return;
       const answer = value.answer;
       find('[data-result]').innerHTML = `<h3>学习回答</h3><p class="education-text">${e(answer.answer)}</p>

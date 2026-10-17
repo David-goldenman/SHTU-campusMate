@@ -1,4 +1,5 @@
 import importlib.util
+import asyncio
 import json
 import re
 import shutil
@@ -8,7 +9,8 @@ import types
 import uuid
 from contextlib import contextmanager
 from urllib.parse import unquote
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from concurrent.futures import Future
 from pathlib import Path
 from typing import Literal
 
@@ -50,6 +52,8 @@ class Entry:
     app: FastAPI | None = None
     requests: int = 0
     harness: dict | None = None
+    stopping: Future | None = None
+    calls: set = field(default_factory=set)
 
 
 class ModuleManager:
@@ -60,6 +64,9 @@ class ModuleManager:
         self.entries: dict[str, Entry] = {}
         self.lock = threading.RLock()
         self.lifecycle_lock = threading.RLock()
+        self.loop = None
+        self.stop_timeout = 5.0
+        self.api_timeout = 20.0
         sys.dont_write_bytecode = True
         self.root.mkdir(parents=True, exist_ok=True)
 
@@ -77,12 +84,36 @@ class ModuleManager:
             return {"modules": modules, "categories": ordered}
 
     def _idle(self, entries):
-        if any(entry.requests for entry in entries):
+        if any(entry.requests or entry.calls for entry in entries):
             raise HTTPException(409, "模块仍有请求正在执行，请完成后重试。")
 
     def _stop(self, entry):
+        """Keep one stop attempt and its resources alive until it really finishes."""
         entry.app = None
-        entry.info.update(status="disabled", frontend_url=None, background_url=None)
+        entry.info.update(status="stopping", frontend_url=None, background_url=None)
+        if entry.stopping is None or entry.stopping.done() and entry.stopping.exception() is not None:
+            pending = entry.stopping = Future()
+
+            def release():
+                try:
+                    self._release(entry)
+                except BaseException as error:
+                    pending.set_exception(error)
+                else:
+                    pending.set_result(None)
+
+            threading.Thread(target=release, name='module-stop-' + entry.info['id'], daemon=True).start()
+        try:
+            entry.stopping.result(timeout=self.stop_timeout)
+        except TimeoutError:
+            entry.info.update(status="error", error="模块停止超时，已隔离；后台退出后可再次刷新。")
+            raise HTTPException(409, entry.info['error']) from None
+        except Exception:
+            entry.info.update(status="error", error="模块停止失败，已隔离；请检查 stop(context) 后重试。")
+            raise HTTPException(409, entry.info['error']) from None
+        entry.info.update(status="disabled")
+
+    def _release(self, entry):
         if entry.package and hasattr(entry.package, "stop"):
             entry.package.stop(entry.context)
         if entry.context:
@@ -163,15 +194,31 @@ class ModuleManager:
 
     def reload(self):
         with self.lifecycle_lock:
-            self.close()
-            entries = {}
+            entries, warnings = {}, []
+            with self.lock:
+                previous = list(self.entries.values())
+            for entry in previous:
+                with self.lock:
+                    busy = bool(entry.requests or entry.calls)
+                    if not busy:
+                        entry.app = None
+                        entry.info['status'] = 'stopping'
+                if busy:
+                    entries[entry.info['id']] = entry
+                    warnings.append(entry.info['name'] + '仍有任务运行，本次保留原实例。')
+                    continue
+                try:
+                    self._stop(entry)
+                except HTTPException:
+                    entries[entry.info['id']] = entry
+                    warnings.append(entry.info['name'] + '停止失败或超时，其他模块继续刷新。')
             for folder in sorted(self.root.iterdir()):
-                if folder.is_dir() and (folder / "module.json").is_file():
+                if folder.name not in entries and folder.is_dir() and (folder / "module.json").is_file():
                     entry = self._load(folder)
                     entries[entry.info["id"]] = entry
             with self.lock:
                 self.entries = entries
-            return self.list()
+            return {**self.list(), 'warnings': warnings}
 
     def set_enabled(self, module_id, enabled):
         with self.lifecycle_lock:
@@ -182,11 +229,7 @@ class ModuleManager:
                 self._idle([entry])
                 entry.app = None
                 entry.info["status"] = "stopping"
-            try:
-                self._stop(entry)
-            except Exception:
-                entry.info.update(status="error", error="模块停止失败，请检查 stop(context)。")
-                raise HTTPException(409, "模块停止失败，请检查 stop(context) 后重试。") from None
+            self._stop(entry)
             values = self.store.read("modules", {})
             values[module_id] = enabled
             self.store.write("modules", values)
@@ -207,8 +250,7 @@ class ModuleManager:
             for entry in entries:
                 try:
                     self._stop(entry)
-                except Exception:
-                    entry.info.update(status="error", error="模块停止失败，请检查 stop(context)。")
+                except HTTPException:
                     errors.append(entry.info["id"])
             if errors:
                 raise HTTPException(409, "模块停止失败：" + ", ".join(errors))
@@ -262,13 +304,41 @@ class ModuleManager:
             for entry in entries:
                 self._end_request(entry)
 
-    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None):
-        """Call a module's public HTTP API with lifecycle tracking."""
+    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None, timeout=None):
+        """Bound the caller's wait without abandoning a running module's resources."""
         parts = unquote(path.split("?", 1)[0]).split("/")
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", module_id) or not path.startswith("/") or path.startswith("//") or any(part in {".", ".."} for part in parts) or "\\" in path or "#" in path:
             raise ValueError("模块读取需要合法模块 ID 和模块内相对路径。")
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self, raise_app_exceptions=False), base_url="http://modules.local") as client:
-            return await client.request(method, "/" + module_id + path, json=body)
+        async def request():
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self, raise_app_exceptions=False), base_url="http://modules.local") as client:
+                return await client.request(method, "/" + module_id + path, json=body)
+
+        def unavailable(status, message):
+            return httpx.Response(status, json={'detail': message}, request=httpx.Request(method, 'http://modules.local/' + module_id + path))
+
+        with self.lock:
+            entry = self.entries.get(module_id)
+            if self.loop is None or self.loop.is_closed():
+                return unavailable(503, '模块服务正在停止，请稍后重试。')
+            if not entry or not entry.app or entry.info['status'] != 'ready':
+                return unavailable(404, '模块未启用或没有后端入口。')
+            if len(entry.calls) >= 8:
+                return unavailable(503, '模块正在处理其他请求，请稍后重试。')
+            pending = asyncio.run_coroutine_threadsafe(request(), self.loop)
+            entry.calls.add(pending)
+
+            def finished(future):
+                with self.lock:
+                    entry.calls.discard(future)
+
+            pending.add_done_callback(finished)
+        try:
+            # Shield keeps the ASGI request counted until its synchronous work ends.
+            waiting = asyncio.wrap_future(pending)
+            waiting.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+            return await asyncio.wait_for(asyncio.shield(waiting), self.api_timeout if timeout is None else timeout)
+        except TimeoutError:
+            return unavailable(504, '模块响应超时，其他功能可以继续使用；请稍后检查结果。')
 
     def authorize_write(self, request):
         parts = request.url.path.split("/")

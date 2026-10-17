@@ -45,7 +45,7 @@ export async function mount(container,context) {
     try {
       const mode = form.elements.task.value;
       const payload = mode === 'chat' ? {...body,message} : mode === 'run' ? {...body,prompt:message,plugins:form.elements.plugin.value ? [form.elements.plugin.value] : []} : {...body,prompt:message,task:mode};
-      const result = await context.api(mode === 'chat' ? '/chat' : mode === 'run' ? '/run' : '/generate',{method:'POST',body:payload});
+      const result = await context.api(mode === 'chat' ? '/chat' : mode === 'run' ? '/run' : '/generate',{method:'POST',body:payload,timeoutMs:600000});
       if (mode === 'chat') {
         const history = await context.api('/chat?' + new URLSearchParams(course.value ? {course_id:course.value} : {}));
         container.querySelector('[data-history]').innerHTML = history.messages.map(show).join('');
