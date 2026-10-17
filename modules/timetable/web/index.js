@@ -1,5 +1,5 @@
 import {link, time} from '/assets/campus.js';
-import {applyLessonPositions, compareEvents, eventGroup, isLesson, lessonLayout, periodsFor} from './planner.js';
+import {applyLessonPositions, compareEvents, eventGroup, isCancelledClass, isLesson, lessonLayout, matchesFilter, periodsFor} from './planner.js';
 
 const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',tutorial:'习题课',study:'学习',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
 const personalKinds = ['quiz','exam','tutorial','study','presentation','activity','lecture'];
@@ -13,7 +13,7 @@ export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('week-planner');
-  let current = dayOf(Date.now()), snapshot, timer, request = 0, filter = 'all';
+  let current = dayOf(Date.now()), snapshot, timer, request = 0, filter = 'all', showCancelled = false;
   const cleanup = () => {clearTimeout(timer);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
 
@@ -58,7 +58,8 @@ export async function mount(container, context) {
   function draw() {
     const today = dayOf(Date.now()), tomorrow = shift(today,1), cal = snapshot.calendar;
     const dayClass = day => day.date === today ? 'is-today' : day.date === tomorrow ? 'is-tomorrow' : '';
-    const selected = item => filter === 'all' || (filter === 'study' ? ['class','deadline','quiz','tutorial','study','presentation','exam'].includes(item.event_type) : ['activity','lecture'].includes(item.event_type));
+    const selected = item => matchesFilter(item,filter,showCancelled);
+    const cancelledCount = cal.days.flatMap(day => day.events).filter(isCancelledClass).length;
     const title = `${cal.week_start.slice(5).replace('-','月')}日 — ${cal.week_end.slice(5).replace('-','月')}日`;
     const week = cal.teaching_week > 0 && cal.teaching_week <= (snapshot.data.metadata.week_count || 18) ? '第 ' + cal.teaching_week + ' 教学周' : cal.week_one ? '教学周以外' : '尚未设置教学周';
     const header = cal.days.map((day,i) => `<th scope="col" class="${dayClass(day)}"><span>周${'一二三四五六日'[i]}</span><strong>${day.date.slice(5).replace('-',' / ')}</strong>${day.date === today ? '<em>今天</em>' : day.date === tomorrow ? '<em>明天</em>' : ''}</th>`).join('');
@@ -69,6 +70,15 @@ export async function mount(container, context) {
     container.querySelector('[data-date]').onchange = event => {if (event.target.value) {current = event.target.value;void refresh().catch(error => context.ui.toast(error.message));}};
     container.querySelector('[data-filter]').value = filter;
     container.querySelector('[data-filter]').onchange = event => {filter = event.target.value;draw();};
+    if (cancelledCount) {
+      const toggle = document.createElement('label');
+      toggle.className = 'planner-cancelled-toggle';
+      toggle.innerHTML = `<input type="checkbox" data-show-cancelled>显示已取消课程（${cancelledCount}）`;
+      const input = toggle.querySelector('input');
+      input.checked = showCancelled;
+      input.onchange = () => {showCancelled = input.checked;draw();container.querySelector('[data-show-cancelled]').focus();};
+      container.querySelector('.planner-toolbar').append(toggle);
+    }
     container.querySelector('[data-sync]').onclick = act(container.querySelector('[data-sync]'),async () => {await context.api('/schedule/sync',{method:'POST'});await refresh();});
     container.querySelector('[data-add]').onclick = () => edit();
     container.querySelector('[data-settings]').onclick = semesterSettings;

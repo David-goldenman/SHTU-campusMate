@@ -6,6 +6,8 @@
 .week-planner [data-date] { width:150px; }
 .week-planner .planner-filter { display:flex; gap:10px; align-items:center; }
 .week-planner .planner-filter select { width:auto; }
+.week-planner .planner-cancelled-toggle { display:flex; gap:8px; align-items:center; font-size:14px; color:var(--muted); cursor:pointer; }
+.week-planner .planner-cancelled-toggle input { width:auto; margin:0; }
 .week-planner .planner-legend { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:16px; font-size:13px; color:var(--muted); }
 .week-planner .planner-legend>span::before { content:''; display:inline-block; width:7px; height:7px; margin-right:7px; border-radius:50%; background:var(--nord9); }
 .week-planner .legend-deadline::before { background:var(--nord11)!important; }
