@@ -7,16 +7,25 @@ from fastapi import HTTPException
 
 from backend.services.campus import SourceError, course, identity, plain, timestamp
 from backend.services.campus.data import digest
+from .submission import activity, decide, score_number, submission_history
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
-TERM = re.compile(r"20\d{2}(?:[-–]20\d{2}学年)?\s*(?:[春夏暑秋]季?(?:学期)?|(?:fall|autumn|spring|summer))", re.I)
+TERM = re.compile(r"20\d{2}(?:[-–]20\d{2}学年|\s*[-–]\s*20\d{2})?(?:\s*学年|\s*年)?\s*(?:[春夏暑秋]季?(?:学期)?|(?:fall|autumn|spring|summer))", re.I)
 
 
 def checked(value):
     if not isinstance(value, str) or not re.fullmatch(r"_[1-9]\d*_1", value):
         raise SourceError("Blackboard 返回了无法识别的资源标识。")
     return value
+
+
+def grade_values(column, grade):
+    display = grade.get('displayGrade') if isinstance(grade.get('displayGrade'), dict) else {}
+    possible = column.get('score') if isinstance(column.get('score'), dict) else {}
+    grading = column.get('grading') if isinstance(column.get('grading'), dict) else {}
+    return {'score': score_number(display.get('score')), 'max_score': score_number(possible.get('possible')),
+            'due_at': timestamp(grading.get('due'))}
 
 
 def availability(value, now=None):
@@ -89,18 +98,6 @@ def contents(remote, course_id, issues):
     return result
 
 
-def activity(html):
-    tree = BeautifulSoup(html, "html.parser")
-    if tree.select_one("#grades_wrapper") is None:
-        raise SourceError("Blackboard 成绩页面结构已变化。")
-    result = {}
-    for row in tree.select("#grades_wrapper .sortable_item_row[id]"):
-        classes = row.get("class", [])
-        text = row.get_text(" ", strip=True).casefold()
-        result["_" + row["id"] + "_1"] = True if "graded_item_row" in classes or "submitted_item_row" in classes else False if any(value in text for value in ("no submission", "not submitted", "未提交", "未尝试")) else None
-    return result
-
-
 def announcements(html, course):
     """Parse one course's announcement page.
 
@@ -149,6 +146,8 @@ def materials(nodes, course_id):
 
 def fetch(remote, previous):
     result = {"courses": [], "assignments": [], "materials": [], "announcements": [], "issues": [], "metadata": {"scope": "visible_uncompleted_courses"}}
+    previous_assignments = {item['id']: item for item in previous.get('assignments', [])}
+    checked_at = datetime.now(timezone.utc).isoformat()
     try:
         states = portal(remote.html(BASE + "/webapps/portal/execute/tabs/tabAction?tab_tab_group_id=_1_1"))
     except HTTPException:
@@ -193,27 +192,41 @@ def fetch(remote, previous):
             grades, submitted = {}, {}
             try:
                 grades = {value.get("columnId"): value for value in remote.pages(BASE + f"/learn/api/public/v2/courses/{cid}/gradebook/users/me")}
+            except HTTPException:
+                result["issues"].append(item["title"] + " 的成绩暂时不可读。")
+            try:
                 columns = list(remote.pages(BASE + f"/learn/api/public/v2/courses/{cid}/gradebook/columns"))
             except HTTPException:
                 columns = []
-                result["issues"].append(item["title"] + " 的成绩暂时不可读，提交状态保留未知。")
+                result["issues"].append(item["title"] + " 的成绩列暂时不可读。")
             try:
                 submitted = activity(remote.html(BASE + f"/webapps/bb-mygrades-BBLEARN/myGrades?course_id={cid}&stream_name=mygrades"))
             except HTTPException:
                 result["issues"].append(item["title"] + " 的提交活动页面暂时不可读。")
             by_content = {column.get("contentId"): column for column in columns}
-            item["grades"] = [{"title": column.get("name"), "score": (grades.get(column.get("id"), {}).get("displayGrade") or {}).get("score"), "max_score": (column.get("score") or {}).get("possible")} for column in columns]
+            item['grades'] = []
+            for column in columns:
+                numbers = grade_values(column, grades.get(column.get('id'), {}))
+                item['grades'].append({'title': column.get('name'), 'score': numbers['score'], 'max_score': numbers['max_score']})
             for node in nodes:
                 if node["kind"] not in {"assignment", "test"}:
                     continue
                 column = by_content.get(node["id"], {})
                 grade = grades.get(column.get("id"), {})
-                display = grade.get("displayGrade") if isinstance(grade.get("displayGrade"), dict) else {}
-                is_submitted = submitted.get(column.get("id")) is True
-                if display.get("score") is not None:
-                    is_submitted = True
+                canonical = identity("blackboard", cid + ":" + node["id"])
+                history_url = BASE + "/webapps/assignment/uploadAssignment?" + urlencode({"course_id": cid, "content_id": node["id"], "mode": "view"})
+                load_history = (lambda: remote.html(history_url)) if node['kind'] == 'assignment' else None
+                judgement = decide(grade, submitted.get(column.get('id')), load_history, previous_assignments.get(canonical, {}), checked_at)
+                if judgement['submission_status'] == 'unknown' or judgement['submission_stale']:
+                    result['issues'].append(node['title'] + ' 的提交情况本次未能核实，请查看记录说明。')
+                numbers = grade_values(column, grade)
+                column_due = numbers['due_at']
                 state, open_now = availability(node.get("availability"))
-                result["assignments"].append({"id": identity("blackboard", cid + ":" + node["id"]), "source": "blackboard", "course_id": item["id"], "source_id": node["id"], "title": node["title"], "body_text": node["body_text"], "url": item["url"], "submitted": is_submitted, "score": display.get("score"), "max_score": (column.get("score") or {}).get("possible"), "due_at": timestamp((column.get("grading") or {}).get("due")), "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
+                result["assignments"].append({"id": canonical, "source": "blackboard", "course_id": item["id"], "source_id": node["id"], "title": node["title"], "body_text": node["body_text"], "url": history_url if load_history else item["url"],
+                    **judgement, "score": numbers['score'] if numbers['score'] is not None else judgement.get('score'),
+                    "max_score": numbers['max_score'] if numbers['max_score'] is not None else judgement.get('max_score'),
+                    "due_at": column_due or judgement.get('due_at'), 'due_at_evidence': 'gradebook' if column_due else judgement.get('due_at_evidence'),
+                    "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
             previous_announcements = [old for old in previous.get("announcements", []) if old.get("course_id") == item["id"]]
             try:
                 fresh = announcements(remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid})), item)

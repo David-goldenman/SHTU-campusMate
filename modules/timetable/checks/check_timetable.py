@@ -109,6 +109,12 @@ assert [week['teaching_week'] for week in grid['weeks']] == [4, 5, 6, 7]
 assert len(grid['weeks'][1]['days']) == 7 and grid['weeks'][1]['days'][3]['date'] == '2026-10-15'
 merged = [event for day in grid['weeks'][1]['days'] for event in day['events'] if event['id'] == 'blackboard:current'][0]
 assert (merged['homework'], merged['platform'], merged['late'], merged['course_title']) == (True, 'Blackboard', True, '合成课程')
+# A room change across weeks must not duplicate the card inside one week.
+split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
+    {**item, 'id': 'first-room', 'weekday': 2, 'weeks': [1, 2], 'location': 'A'},
+    {**item, 'id': 'second-room', 'weekday': 2, 'weeks': [3], 'location': 'B'}]}
+assert [event['location'] for event in module.calendar(split, date(2026, 9, 14), '2026-09-14')['days'][1]['events']] == ['A']
+assert [event['location'] for event in module.calendar(split, date(2026, 9, 28), '2026-09-14')['days'][1]['events']] == ['B']
 for invalid in [html.replace(mask, "010"), "<html>maintenance</html>"]:
     try:
         parse(invalid, "2026 Fall")
@@ -146,6 +152,12 @@ async def check_schedule():
                 schedule = (await client.get("/schedule")).json()
                 assert len(schedule["data"]["timetable"]) == 2
                 assert schedule["homework"]["items"] == [] and schedule["homework"]["pending"] == schedule["homework"]["late"] == 0
+                fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
+                assert fallback['week_start'] == '2026-09-14' and fallback['teaching_week'] is None
+                assert fallback['week_one'] is None and fallback['week_one_source'] is None
+                assert not any(row['event_type'] == 'class' for day in fallback['days'] for row in day['events'])
+                assert (await client.get('/calendar-settings')).json()['source'] is None
+                assert not fallback['conflicts']['complete'] and schedule['status'] == 'partial'
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
                 assert fallback['week_start'] == '2026-09-14' and fallback['teaching_week'] is None
                 assert fallback['week_one'] is None and fallback['week_one_source'] is None

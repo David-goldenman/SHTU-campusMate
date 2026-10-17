@@ -2,9 +2,9 @@ from urllib.parse import urljoin
 
 from fastapi import HTTPException, Query
 
-from backend.services.campus import Source, SourceError, rows
+from backend.services.campus import Source, SourceError, rows, semester
 from backend.services.campus.files import download
-from .reader import BASE, checked, fetch
+from .reader import BASE, TERM, checked, fetch
 
 _source = None
 
@@ -12,17 +12,21 @@ _source = None
 class BlackboardSource(Source):
     def snapshot(self):
         value = super().snapshot()
-        # Blackboard rows without a submission record are not submitted; cached
-        # nulls follow the same rule as newly synced records.
-        for item in value["data"]["assignments"]:
-            if item.get("submitted") is None:
-                item["submitted"] = False
+        # Existing cached nulls follow the same meaning as newly synced records.
+        for item in value['data']['assignments']:
+            if (item.get('submitted') is None and item.get('submission_evidence') != 'unavailable'
+                    and item.get('submission_status') not in {'unknown', 'exempt'} and item.get('exempt') is not True):
+                item['submitted'] = False
+        for item in value['data']['courses']:
+            term = TERM.search(item.get('title', ''))
+            if not item.get('term') and term:
+                item.update(term=term[0], semester=semester(term[0]))
         return value
 
 
 def create_router(context):
     global _source
-    _source = BlackboardSource(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard")
+    _source = BlackboardSource(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard", network_target="blackboard")
     router = _source.router()
 
     @router.get("/file")

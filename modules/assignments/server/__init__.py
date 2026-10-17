@@ -8,6 +8,18 @@ from pydantic import BaseModel, Field
 from backend.services.campus import SECTIONS, assignment_section, timestamp
 from backend.services.campus.analysis import account_revision
 
+SUBMISSION_STATES = ('not_submitted', 'draft', 'submitted', 'needs_grading', 'graded', 'exempt', 'unknown')
+
+
+def submission_state(item):
+    if item.get('exempt') is True:
+        return 'exempt'
+    if item.get('submission_status') in SUBMISSION_STATES:
+        return item['submission_status']
+    if item.get('submitted') is True:
+        return 'graded' if item.get('score') is not None else 'submitted'
+    return 'not_submitted' if item.get('submitted') is False else 'unknown'
+
 
 def _release(item):
     value = timestamp(item.get("release_at") or item.get("created_at") or item.get("due_at"))
@@ -32,10 +44,21 @@ def arrange(data, now=None, order=None):
             continue
         group = groups.get(item.get("course_id"), {})
         category = assignment_section(item, at)
+        state = submission_state(item)
+        source = data.get("metadata", {}).get("source_metadata", {}).get(item["source"], {})
+        source_stale = source.get("status") in {"error", "login_required", "verification_required", "not_connected"}
         # Pending is the summary list shown by the dashboard: every current
-        # assignment that still accepts work, including late submissions.
-        pending = bool(group.get("current")) and category in {"pending", "late"}
-        values.append({**item, "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"), "current": bool(group.get("current")), "category": category, "pending": pending, "overdue": category == "late"})
+        # assignment that still accepts work, including late submissions and
+        # open work whose submission state could not be confirmed.  An
+        # explicit "unavailable" history or an exempt record is not actionable.
+        pending = (bool(group.get("current")) and category in {"pending", "late"}
+                   and state != "exempt" and item.get("submission_evidence") != "unavailable")
+        values.append({**item, "submission_status": state, "source_status": source.get("status"),
+                       "source_updated_at": source.get("updated_at"), "source_stale": source_stale,
+                       "needs_review": state == "unknown" or bool(item.get("stale") or item.get("submission_stale") or source_stale),
+                       "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"),
+                       "current": bool(group.get("current")), "category": category, "pending": pending,
+                       "overdue": category == "late"})
     return apply_order(values, order)
 
 
@@ -47,6 +70,16 @@ class OrderUpdate(BaseModel):
 
 def counts(values):
     return {name: sum(item["category"] == name for item in values) for name in SECTIONS}
+
+
+def summary(assignments):
+    def count(items):
+        return {'total': len(items), 'unsubmitted': sum(item.get('submitted') is False and item['submission_status'] in {'not_submitted', 'draft'} for item in items),
+                'pending': sum(item['pending'] for item in items)}
+    return {**count(assignments), 'submission_states': {state: sum(item['submission_status'] == state for item in assignments) for state in SUBMISSION_STATES},
+            'needs_review': sum(item['needs_review'] for item in assignments),
+            'by_source': {source: count([item for item in assignments if item['source'] == source])
+                                               for source in sorted({item['source'] for item in assignments})}}
 
 
 def create_router(context):
@@ -76,7 +109,8 @@ def create_router(context):
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取作业。")
         return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending,
-                "counts": counts(assignments), "updated_at": value.get("updated_at"), "order": order, "account_revision": owner}
+                "summary": summary(assignments), "counts": counts(assignments), "updated_at": value.get("updated_at"),
+                "order": order, "account_revision": owner}
 
     @router.put("/order")
     async def save_order(body: OrderUpdate):

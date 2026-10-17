@@ -2,9 +2,11 @@
 import json
 import logging
 import os
+import signal
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from deepseek_harness import DeepSeekHarness
@@ -12,14 +14,53 @@ from deepseek_harness.errors import HarnessError
 from deepseek_harness_runtime import resolve_bundled_launch_args
 from fastapi import HTTPException
 
+
+def prepare(command, *, cwd, env, timeout, check_cancelled):
+    """Poll only our preparation subprocess, so Stop also works before model startup."""
+    check_cancelled()
+    process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=os.name != 'nt', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            check_cancelled()
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(command, timeout)
+            try:
+                process.communicate(timeout=min(.1, max(.001, deadline - time.monotonic())))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        if process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, command)
+    finally:
+        if process.poll() is None:
+            if os.name == 'nt':
+                try:
+                    subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True, timeout=5,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                if process.poll() is None:
+                    process.kill()
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.communicate(timeout=5)
+
+
 class Harness:
     def __init__(self, modules):
         self.modules = modules
+        self.run_timeout = 600.0
 
     def plugins(self):
         return {"plugins": [item for item in self.modules.list()["modules"] if item.get("harness")]}
 
     def run(self, prompt, context, plugins, model, api_key, *, plugin_env=None, on_event=None, cancel_event=None):
+        deadline = time.monotonic() + self.run_timeout
         if any(not key.startswith("CAMPUS_PLUGIN_") or not isinstance(value, str) for key, value in (plugin_env or {}).items()):
             raise ValueError("插件环境只接受 CAMPUS_PLUGIN_ 前缀的字符串配置。")
         runtime_root = self.modules.data / 'runtime'
@@ -62,16 +103,18 @@ class Harness:
                 def check_cancelled():
                     if cancel_event is not None and cancel_event.is_set():
                         raise HTTPException(409, '本次回答已停止。')
+                    if time.monotonic() >= deadline:
+                        raise HTTPException(504, 'AI 任务超过等待时限，已停止；请缩小任务范围后重试。')
 
                 check_cancelled()
                 command = resolve_bundled_launch_args()
-                subprocess.run([*command, "--profile", "sdk-minimal", "--dump-default-config"], cwd=workspace, env=env, capture_output=True, check=True, timeout=60)
+                prepare([*command, "--profile", "sdk-minimal", "--dump-default-config"], cwd=workspace, env=env, timeout=60, check_cancelled=check_cancelled)
                 check_cancelled()
                 folders = [entry.harness['folder'] for entry in entries]
                 if on_event:
                     folders.append(Path(__file__).with_name('stream'))
-                subprocess.run([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
-                               cwd=workspace, env=env, capture_output=True, check=True, timeout=120)
+                prepare([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
+                        cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
                 check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),
                                      model=model, api_key=api_key, base_url="https://api.deepseek.com", reasoning_effort="low", max_tokens=6000, request_timeout_seconds=90) as runtime:
@@ -79,7 +122,9 @@ class Harness:
 
                     def watch():
                         while not done.wait(0.1):
-                            if cancel_event.is_set():
+                            try:
+                                check_cancelled()
+                            except HTTPException:
                                 runtime.close()
                                 return
 
@@ -87,15 +132,13 @@ class Harness:
                         if notification.method == 'campus.stream':
                             on_event(notification.payload['frame'])
 
-                    watcher = threading.Thread(target=watch, daemon=True) if cancel_event is not None else None
-                    if watcher:
-                        watcher.start()
+                    watcher = threading.Thread(target=watch, daemon=True)
+                    watcher.start()
                     try:
                         result = runtime.run(json.dumps({"prompt": prompt, "context": context}, ensure_ascii=False), on_notification=notify if on_event else None)
                     finally:
                         done.set()
-                        if watcher:
-                            watcher.join()
+                        watcher.join()
                 check_cancelled()
             except (HarnessError, OSError, TimeoutError, subprocess.SubprocessError):
                 check_cancelled()

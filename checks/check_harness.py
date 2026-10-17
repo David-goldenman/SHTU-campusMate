@@ -149,11 +149,14 @@ async def check(directory):
                     try:
                         assert await asyncio.to_thread(started.wait, 120), "Native runtime did not reach the synthetic model"
                         assert (await client.put("/api/v1/modules/planner", json={"enabled": False})).status_code == 409
-                        assert (await client.post("/api/v1/modules/reload")).status_code == 409
+                        active = app.state.modules.entries['planner']
+                        refresh = await client.post("/api/v1/modules/reload")
+                        assert refresh.status_code == 200 and refresh.json()['warnings']
+                        assert app.state.modules.entries['planner'] is active and active.requests == 1
                         assert (await client.post("/api/v1/data/clear", json={"scope": "modules", "confirmation": "CLEAR"})).status_code == 409
                     finally:
                         release.set()
-                    response = await pending
+                        response = await pending
                     assert response.status_code == 200, response.text
                     result = response.json()
                     assert result["content"] == "已按截止时间整理"
@@ -199,6 +202,8 @@ async def check(directory):
                     assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
                     assert all(not tool['is_error'] for tool in result['tools']), result
                     assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish', 'study_capabilities', 'study_schedule_edit', 'study_work_edit'}
+                    finish_schema = next(tool['function']['parameters'] for tool in requests[-1][0]['tools'] if tool['function']['name'] == 'study_finish')
+                    assert 'text' not in finish_schema['properties'], 'The model must write its body in the final assistant message'
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
                     assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)

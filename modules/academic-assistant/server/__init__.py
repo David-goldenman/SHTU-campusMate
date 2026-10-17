@@ -177,7 +177,9 @@ def create_router(context):
                     raise HTTPException(409, '本次回答已停止。')
                 if task.answer is None:
                     raise HTTPException(502, '学习助手尚未完成回答与原文核对，请重试。')
-                text = task.answer['text'] or result['content']
+                # The final assistant message is the body already shown by streaming.
+                # A legacy finish.text summary must not replace it when completion arrives.
+                text = result['content'] or task.answer['text'] or ''
                 if not text.strip() or len(text) > 24000:
                     raise HTTPException(502, '回答内容不完整，请重试。')
                 created = datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()

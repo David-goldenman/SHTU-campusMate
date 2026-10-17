@@ -45,7 +45,7 @@ def create_router(context):
                 pass  # A calendar failure leaves course synchronization usable.
         return data
 
-    source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable")
+    source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable", network_target="timetable")
     school = _calendar = SchoolCalendar(context, source)
     router = source.router()
 
@@ -193,6 +193,7 @@ def create_router(context):
         plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
         reminders = homework_window(values)
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
+                "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
                 'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': reminders,
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
@@ -214,7 +215,9 @@ def start(context):
                 _calendar.refresh(metadata)
             except HTTPException:
                 pass
-        _source.executor.submit(update)
+        pending = _source.executor.submit(update)
+        if getattr(context, 'runtime', None):
+            context.runtime.watch('校历更新', pending)
 
 
 def stop(context):
