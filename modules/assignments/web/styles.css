@@ -1,0 +1,16 @@
+.assignment-center .assignment-section { margin-top: 30px; }
+.assignment-center .assignment-section:first-child { margin-top: 4px; }
+.assignment-center .assignment-section-head { display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:8px; }
+.assignment-center .assignment-section-head h3 { margin:0; font-size:19px; }
+.assignment-center .assignment-count { min-width:28px; padding:2px 9px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; text-align:center; }
+.assignment-center .assignment-section[data-section="pending"] .assignment-count { border-color:var(--nord10); color:var(--nord10); }
+.assignment-center .assignment-section[data-section="late"] .assignment-count { border-color:var(--nord11); color:var(--nord11); }
+.assignment-center .assignment-section[data-section="graded"] .assignment-count { border-color:var(--nord14); color:var(--nord14); }
+.assignment-center .assignment-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.assignment-center .assignment-card-head h4 { min-width:0; }
+.assignment-center .assignment-badge { flex:none; padding:3px 10px; border-radius:999px; background:color-mix(in srgb,var(--nord14) 16%,var(--paper)); color:var(--nord14); font-size:12px; font-weight:600; }
+.assignment-center .assignment-grade { display:flex; align-items:baseline; gap:4px; margin:10px 0; color:var(--muted); }
+.assignment-center .assignment-grade strong { color:var(--nord14); font-size:26px; line-height:1; font-variant-numeric:tabular-nums; }
+.assignment-center .assignment-grade span { font-size:14px; }
+.assignment-center .assignment-late { margin-left:8px; color:var(--nord11); }
+.assignment-center .assignment-empty { margin:0; padding:14px; border-radius:8px; background:var(--surface); }

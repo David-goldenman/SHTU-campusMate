@@ -12,6 +12,7 @@ from backend.services.campus.source import snapshots
 from .reader import fetch
 from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
+from .homework import homework_window
 from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
@@ -192,7 +193,7 @@ def create_router(context):
         plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
-                'calendar': {**plan, 'week_one_source': dates['source']},
+                'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': homework_window(values),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)

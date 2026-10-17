@@ -65,11 +65,22 @@ function fixture(initial, categories) {
       const course = {id:'class',title:'合成课程',source:'timetable',event_type:'class',at:days[1].date+'T08:15:00+08:00',ends_at:days[1].date+'T09:55:00+08:00',period_start:1,period_end:2,teacher:'合成教师',location:'测试教室'};
       for (const day of days) day.events = events.filter(item=>item.at.slice(0,10)===day.date);
       days[1].events.push(course);
-      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days}});
+      const homework = {week_start:days[0].date,start:days[0].date,end:days[6].date,pending:1,late:1,items:[
+        {id:'homework-pending',title:'合成待交作业',course_title:'合成课程',due_at:today+'T20:00:00+08:00',offset:0,late:false},
+        {id:'homework-late',title:'合成迟交作业',course_title:'合成课程',due_at:today+'T18:00:00+08:00',offset:0,late:true}]};
+      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework});
     }
     if (path === '/modules/timetable/calendar-settings') return json({week_one:'2026-09-14',source:'school'});
     if (path === '/modules/timetable/events' && method === 'POST') {
       const item = {...body,id:'local:test',source:'local',at:body.starts_at};state.localEvents.push(item);return json(item,201);
+    }
+    if (path === '/modules/timetable/commands' && method === 'POST') {
+      if (body.action === 'create') {
+        const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);
+        return json({applied:true,after:item});
+      }
+      if (body.action === 'delete') state.localEvents = [];
+      return json({applied:true});
     }
     if (path === '/modules/timetable/events/local%3Atest' && method === 'DELETE') {state.localEvents=[];return json({deleted:true});}
     state.unexpected.push(path);
@@ -134,8 +145,9 @@ try {
   assert(await evaluate(`document.querySelector('.sidebar').getBoundingClientRect().right<=0`),'Mobile sidebar starts closed');
   await writeFile(resolve('.codex/tmp/web-check-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await evaluate(`location.hash='timetable'; waitFor(()=>document.querySelector('[data-calendar]'))`);
-  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent};})()`);
+  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'), homework=body.querySelector('.planner-homework');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,homeworkWeeks:homework.querySelectorAll('.homework-week').length,homeworkItems:homework.querySelectorAll('.homework-item').length};})()`);
   assert.match(timetable.content,/Quiz 1/);assert.match(timetable.content,/合成期末考试/);assert.match(timetable.content,/合成课程/);assert.match(timetable.content,/时间待公布/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
+  assert.match(timetable.content,/近四周待交作业/);assert.match(timetable.content,/待完成 1 · 迟交 1/);assert.match(timetable.content,/合成迟交作业/);assert.equal(timetable.homeworkWeeks,4);assert.equal(timetable.homeworkItems,2);
   await evaluate(`(async()=>{document.querySelector('[data-add]').click();const form=document.querySelector('.planner-event-form');form.elements.title.value='合成讲座';form.elements.starts_at.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date())+'T16:00';form.requestSubmit();await waitFor(()=>!document.querySelector('#dialog').open);await waitFor(()=>document.querySelector('.week-planner').innerText.includes('合成讲座'));})()`);
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await writeFile(resolve('.codex/tmp/timetable-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));

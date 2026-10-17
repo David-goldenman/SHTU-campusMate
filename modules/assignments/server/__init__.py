@@ -3,7 +3,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException
 
-from backend.services.campus import timestamp
+from backend.services.campus import SECTIONS, assignment_section, timestamp
 
 
 def arrange(data, now=None):
@@ -14,13 +14,19 @@ def arrange(data, now=None):
         if item["source"] not in {"gradescope", "blackboard"}:
             continue
         group = groups.get(item.get("course_id"), {})
-        due = timestamp(item.get("due_at"))
-        pending = bool(group.get("current")) and item.get("actionable") is True and item.get("submitted") is False
-        values.append({**item, "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"), "current": bool(group.get("current")), "pending": pending, "overdue": bool(pending and due and datetime.fromisoformat(due) < at)})
+        category = assignment_section(item, at)
+        # Pending is the summary list shown by the dashboard: every current
+        # assignment that still accepts work, including late submissions.
+        pending = bool(group.get("current")) and category in {"pending", "late"}
+        values.append({**item, "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"), "current": bool(group.get("current")), "category": category, "pending": pending, "overdue": category == "late"})
     def order(item):
         value = timestamp(item.get("release_at") or item.get("created_at") or item.get("due_at"))
         return datetime.fromisoformat(value).timestamp() if value else 0
     return sorted(values, key=order, reverse=True)
+
+
+def counts(values):
+    return {name: sum(item["category"] == name for item in values) for name in SECTIONS}
 
 
 def create_router(context):
@@ -35,7 +41,7 @@ def create_router(context):
         data = value["data"]
         assignments = arrange(data)
         pending = sorted((item for item in assignments if item["pending"]), key=lambda item: datetime.fromisoformat(timestamp(item.get("due_at"))).timestamp() if timestamp(item.get("due_at")) else float("inf"))
-        return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending, "updated_at": value.get("updated_at")}
+        return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending, "counts": counts(assignments), "updated_at": value.get("updated_at")}
 
     @router.post("/sync", status_code=202)
     async def sync():

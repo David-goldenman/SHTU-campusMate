@@ -1,6 +1,6 @@
 # 时间表
 
-`timetable` 页面采用每周七天课程表，纵轴为教务节次，课程跨越其实际节数；同一节次的重叠课程并列显示。钟点可用时显示在节次旁，旧缓存只有节次时仍立即正确排列，不编造钟点，也不把课程放进“其他”。定时安排、截止事项、全天与时间待定事项在独立周表分行显示，各行按实际时间排序。移动端显示逐日安排，课程按节次排列，其他事项按类型和时间排列。页面标注今天与明天，课程卡片展示节次、可用钟点和地点；点击查看详情。时间表整合教务课程、Blackboard／Gradescope 的作业与 Quiz 截止、教务考试，以及用户添加的 Quiz、展示、活动和讲座。来源中的 Quiz 时间仍按其截止时刻解释；用户可为实际开始时刻另建安排。
+`timetable` 页面采用每周七天课程表，纵轴为教务节次，课程跨越其实际节数；同一节次的重叠课程并列显示。钟点可用时显示在节次旁，旧缓存只有节次时仍立即正确排列，不编造钟点，也不把课程放进“其他”。定时安排、截止事项、全天与时间待定事项在独立周表分行显示，各行按实际时间排序。移动端显示逐日安排，课程按节次排列，其他事项按类型和时间排列。页面标注今天与明天，课程卡片展示节次、可用钟点和地点；点击查看详情。时间表整合教务课程、Blackboard／Gradescope 的作业与 Quiz 截止、教务考试，以及用户添加的 Quiz、展示、活动和讲座。页面在周表上方按上周、本周、下周、下下周列出未确认已提交且来源仍开放（含已迟交）的 Blackboard／Gradescope 作业；其他已提交、已批改、已关闭或开放状态未知的项目不进入该提醒区。来源中的 Quiz 时间仍按其截止时刻解释；用户可为实际开始时刻另建安排。
 
 前缀为 `/api/v1/modules/timetable`。
 
@@ -9,7 +9,7 @@
 | 接口 | 用途 |
 | --- | --- |
 | `GET /snapshot`、`POST /sync` | 原始课程与上课活动；同步返回 202 |
-| `GET /schedule?week_start=YYYY-MM-DD` | 全部有日期的事项与指定周的日历，默认北京时间本周 |
+| `GET /schedule?week_start=YYYY-MM-DD` | 全部有日期的事项、指定周的日历与近四周待交作业，默认北京时间本周 |
 | `POST /schedule/sync` | 启动课表、Blackboard、Gradescope 与教务同步 |
 | `GET /calendar-settings` | 当前学期采用的日期、来源、学校链接与检查时间 |
 | `PUT /calendar-settings` | `{week_one:"YYYY-MM-DD"}`，保存本学期第 1 教学周的周一 |
@@ -21,7 +21,7 @@
 | `POST /commands` | 带账号版本、幂等操作 ID 和预期记录版本的新增、修改、删除与课程调整 |
 | `GET /changes` | 当前学校账号最近 50 条成功操作回执 |
 
-`/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
+`/schedule` 返回 `{status,updated_at,data,sources,calendar,homework}`。`homework` 固定以北京时间当前教学周为基准，覆盖上周、本周、下周与下下周：`{week_start,start,end,items,pending,late}`，每项含 `id/title/url/source/course_title/due_at/category/week_start/offset/late`；只收录这两个来源中未确认已提交、来源开放且截止时间落在窗口内的作业，`offset=-1..2` 对应四周。窗口不随查询的 `week_start` 改变，便于始终看到近四周待办。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
 个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
 

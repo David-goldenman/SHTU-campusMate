@@ -1,8 +1,10 @@
 import asyncio
 import copy
+import os
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -64,7 +66,11 @@ assert recovered[0]['at'] == '2026-10-20T10:15:00+08:00' and recovered[0]['ends_
 assert recovered[1]['at'] is None, 'Missing period clocks must not use another lesson clock'
 legacy['metadata']['periods'] = []
 assert module.calendar(legacy, date(2026, 10, 19), '2026-10-19')['periods'] == legacy_week['periods']
-subprocess.run([shutil.which('node') or shutil.which('node.exe'), str(Path(__file__).with_name('check_planner.mjs'))], check=True)
+node = shutil.which('node') or shutil.which('node.exe')
+planner = str(Path(__file__).with_name('check_planner.mjs'))
+if os.name != 'nt' and node and node.casefold().endswith('.exe') and shutil.which('wslpath'):
+    planner = subprocess.run(['wslpath', '-w', planner], check=True, capture_output=True, text=True).stdout.strip()
+subprocess.run([node, planner], check=True)
 dated = {'metadata': {'periods': [{'period': 5, 'start': '13:00', 'end': '13:45'}, {'period': 6, 'start': '13:50', 'end': '14:35'}]},
          'timetable': [{**item, 'weekday': 3, 'weeks': [7]}], 'events': []}
 open_day = module.calendar(dated, date(2026, 10, 26), '2026-09-14')['days'][2]
@@ -78,6 +84,21 @@ split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
     {**item, 'id': 'second-room', 'weekday': 2, 'weeks': [3], 'location': 'B'}]}
 assert [event['location'] for event in module.calendar(split, date(2026, 9, 14), '2026-09-14')['days'][1]['events']] == ['A']
 assert [event['location'] for event in module.calendar(split, date(2026, 9, 28), '2026-09-14')['days'][1]['events']] == ['B']
+homework = module.homework_window({
+    'blackboard': {'data': {'courses': [{'id': 'blackboard:course', 'title': '合成课程'}], 'assignments': [
+        {'id': 'blackboard:late', 'title': '上周迟交', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-08T23:59:00+08:00'},
+        {'id': 'blackboard:current', 'title': '本周迟交', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-15T23:59:00+08:00'},
+        {'id': 'blackboard:pending', 'title': '下周待交', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-22T23:59:00+08:00'},
+        {'id': 'blackboard:ended', 'title': '已结束', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'closed', 'due_at': '2026-10-15T23:59:00+08:00'},
+        {'id': 'blackboard:future', 'title': '窗口外', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-11-20T23:59:00+08:00'}]}},
+    'gradescope': {'data': {'courses': [], 'assignments': [
+        {'id': 'gradescope:pending', 'title': '下下周待交', 'course_id': 'gradescope:other', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-30T23:59:00Z'}]}},
+}, datetime(2026, 10, 16, tzinfo=module.ZONE))
+assert (homework['week_start'], homework['start'], homework['end']) == ('2026-10-12', '2026-10-05', '2026-11-01')
+assert [item['id'] for item in homework['items']] == ['blackboard:late', 'blackboard:current', 'blackboard:pending', 'gradescope:pending']
+assert [item['offset'] for item in homework['items']] == [-1, 0, 1, 2]
+assert [item['late'] for item in homework['items']] == [True, True, False, False]
+assert homework['items'][0]['course_title'] == '合成课程' and (homework['pending'], homework['late']) == (2, 2)
 for invalid in [html.replace(mask, "010"), "<html>maintenance</html>"]:
     try:
         parse(invalid, "2026 Fall")
@@ -114,6 +135,7 @@ async def check_schedule():
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://fixture") as client:
                 schedule = (await client.get("/schedule")).json()
                 assert len(schedule["data"]["timetable"]) == 2
+                assert schedule["homework"]["items"] == [] and schedule["homework"]["pending"] == schedule["homework"]["late"] == 0
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
                 assert fallback['week_start'] == '2026-09-14' and fallback['teaching_week'] is None
                 assert fallback['week_one'] is None and fallback['week_one_source'] is None
