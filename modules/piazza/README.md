@@ -1,4 +1,4 @@
-# Piazza · WYT
+# Piazza
 
 ## 校园数据集成
 

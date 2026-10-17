@@ -26,6 +26,8 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
+`name` 是页面标题、模块管理和导航中使用的展示名称，只描述功能，不附成员姓名或个人缩写。
+
 `id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 使用同样的 ID 格式，`settings` 由框架保留。业务分类由模块自行声明，无需修改框架白名单。可选 `navigation:{label,icon,description,order,layout}` 决定侧栏文本、图标、描述及顺序（order 为 0–10000；layout 为 `stack`、`tabs` 或 `primary`，默认 `stack`）；相同分类的模块须声明一致内容。旧清单未声明时以分类 ID、▧、空描述、order=100 兼容。冲突时显式声明优先，其后按模块 ID 排序选择第一项；分类按 order、分类 ID 排序。框架设置始终在最后。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`web/background.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
