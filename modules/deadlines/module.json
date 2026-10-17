@@ -5,9 +5,10 @@
   "category": "assistant",
   "api_version": 1,
   "navigation": {
-    "label": "AI助手",
+    "label": "AI 工具",
     "icon": "✧",
-    "description": "选择缓存资料，进行课程问答、总结和报告。",
-    "order": 80
+    "description": "资料问答与插件任务。",
+    "order": 80,
+    "layout": "tabs"
   }
 }

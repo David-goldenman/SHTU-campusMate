@@ -1,0 +1,35 @@
+.campus-overview .overview-stats { display:grid; grid-template-columns:repeat(4,1fr); padding:4px 0 22px; border-bottom:1px solid var(--border); }
+.campus-overview .overview-stats a { display:flex; flex-direction:column; padding-left:24px; border-left:1px solid var(--border); color:var(--text); }
+.campus-overview .overview-stats a:first-child { border-left:0; padding-left:0; }
+.campus-overview .overview-stats strong { font-size:30px; line-height:1.4; color:var(--link); font-variant-numeric:tabular-nums; }
+.campus-overview .overview-stats span { font-size:14px; color:var(--muted); }
+.campus-overview .overview-columns { display:grid; grid-template-columns:1fr 1fr; gap:32px; padding-top:18px; }
+.campus-overview .overview-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-bottom:10px; }
+.campus-overview .overview-heading a { font-size:13px; }
+.campus-overview .overview-item { padding:12px 0; border-bottom:1px solid var(--border); }
+.campus-overview .overview-item:last-child { border-bottom:0; }
+.campus-overview .overview-item h4 { font-size:15px; font-weight:600; margin:0 0 6px; }
+.campus-overview .overview-item p { color:var(--muted); font-size:13px; }
+.campus-overview .overview-item p span { display:block; }
+.campus-overview .overview-day { padding:6px 0; }
+.campus-overview .overview-day h4 { margin:0 0 8px; font-size:14px; }
+.campus-overview .overview-day h4 span { color:var(--muted); font-weight:400; padding-left:6px; }
+.campus-overview .overview-day p { display:flex; gap:10px; align-items:baseline; font-size:14px; padding:4px 0; }
+.campus-overview .field-hint { margin:6px 0; }
+.campus-overview .overview-day p>span { min-width:40px; color:var(--muted); font-size:12px; }
+.campus-overview .overview-day small { color:var(--muted); font-size:12px; margin-left:auto; }
+.campus-overview .overview-sources { margin-top:18px; font-size:13px; color:var(--muted); }
+.campus-overview .overview-sources summary { cursor:pointer; padding:8px 0; }
+.campus-overview .overview-sources>p { font-size:13px; }
+@media (max-width:760px) { .campus-overview .overview-columns { grid-template-columns:1fr; gap:18px; } .campus-overview .overview-stats a { padding-left:12px; } .campus-overview .overview-stats strong { font-size:26px; } }
+.overview-card>.module-card-heading { display:none; }
+.overview-card .module-mount { padding:12px 22px; }
+.campus-overview .overview-stats { padding:4px 0 10px; }
+.campus-overview .overview-stats a { flex-direction:row; align-items:baseline; gap:12px; }
+.campus-overview .overview-stats strong { font-size:25px; }
+.campus-overview .overview-details>summary { min-height:44px; padding:8px 0; cursor:pointer; font-size:13px; color:var(--link); }
+@media (max-width:600px) {
+  .overview-card .module-mount { padding:10px 14px; }
+  .campus-overview .overview-stats a { flex-direction:column; gap:0; padding-left:12px; }
+  .campus-overview .overview-stats span { font-size:12px; }
+}

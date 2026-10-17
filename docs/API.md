@@ -20,7 +20,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 端口范围为 1024–65535，浏览器限制端口在系统边界拒绝。默认保存端口 16666，`--port` 只覆盖当次运行端口。
 
-`launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.codex/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
+`launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.private/runtime/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
 
 清除 `credentials` 时停止模块及登录窗口，清除 Vault 中所有共享和模块秘密、认证状态，并关闭 AI，再挂载模块；普通模块数据保留。清除 `modules` 时停止模块、清除全部模块状态、秘密和文件，再挂载模块；共享登录、AI 与框架设置保留。`all` 执行两类清除并恢复默认设置，当前监听端口持续到服务重启。模块代码与清单始终由开发者维护，数据清除操作只处理本地数据。
 
@@ -33,9 +33,9 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 | PUT | `/modules/<id>` | `{enabled:true\|false}`，返回 `{modules:[ModuleInfo],categories:[Category]}` |
 | 任意 | `/modules/<id>/<route>` | 模块自己的公开后端接口，由该模块文档说明 |
 
-`Category` 包含 `id,label,icon,description,order`，从已安装模块的导航声明生成，最后附加框架设置。清单、启停和刷新均返回同一分类列表；页面只显示存在已启用前端模块的业务分类。
+`Category` 包含 `id,label,icon,description,order,layout`，从已安装模块的导航声明生成，最后附加框架设置。清单、启停和刷新均返回同一分类列表；页面只显示存在已启用前端模块的业务分类。
 
-`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
+`ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`、`background_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
@@ -63,7 +63,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 ## 时间表
 
-`GET /modules/timetable/schedule` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试；`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。原始上课数据继续通过 `/modules/timetable/snapshot`、`/modules/timetable/sync` 提供；事件字段与时间含义见 [时间表接口](../modules/timetable/README.md)。
+`GET /modules/timetable/schedule?week_start=YYYY-MM-DD` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试和个人安排，返回 `calendar{week_start,week_end,week_one,teaching_week,days:[{date,events}]}`；省略日期时使用北京时间本周。`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。`/calendar-settings` 的 GET/PUT/DELETE 读取、手动设置或恢复学期起始日期，`POST /calendar/refresh` 更新学校校历；手动值按账号与学期保存，自动更新保持同学期手动值。`/events` 提供本机 Quiz、展示、活动、讲座的增删改查。原始上课数据继续通过 `/snapshot`、`/sync` 提供；具体字段见 [时间表接口](../modules/timetable/README.md)。
 
 ## 共享 AI
 
@@ -99,18 +99,43 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 
 ## 首页学习助手与课程查询
 
+会话索引：`GET /modules/academic-assistant/conversations → {items,active_id}`；`POST` 同路径新建（201）；`POST /conversations/{id}/select → {conversation,messages}`；`PUT /conversations/{id} {title?,archived?}`；`DELETE` 同路径删除。以上均位于模块命名空间内，按账号隔离；归档对话可读取，发送返回 409，恢复后继续。已有单段记录首次读取时迁入索引。完整字段与持久化见模块 README。
+
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
-| GET | `/modules/academic-assistant/chat` | `{messages}`，当前账号组合的本机历史 |
-| POST | `/modules/academic-assistant/chat` | `{message}` → `{role,text,citations,navigation,tools,model,created_at}` |
-| DELETE | `/modules/academic-assistant/chat` | 清空当前对话，保留学习档案 |
-| GET | `/modules/academic-assistant/profile` | `{profile,academic,courses_count}` |
+| GET | `/modules/academic-assistant/chat` | `{messages,conversation_id}`，当前账号组合选中的本机对话 |
+| POST | `/modules/academic-assistant/chat` | `{message,conversation_id?}` → `{role,text,citations,navigation,tools,model,created_at,conversation_id}` |
+| POST | `/modules/academic-assistant/chat/stream` | `{message,conversation_id?}` → NDJSON：`activity`、`reset`、`delta`、`complete` 或 `error` |
+| DELETE | `/modules/academic-assistant/chat` | 删除当前对话，保留学习档案 |
+| GET | `/modules/academic-assistant/profile` | `{profile,academic}` |
 | PUT | `/modules/academic-assistant/profile` | `{major,cohort_year,direction,weekly_hours,notes}`，需要已验证 IDS |
 | DELETE | `/modules/academic-assistant/profile` | 清除当前 IDS 的学习偏好与助手学业记录 |
 | GET | `/modules/academic-assistant/activity` | `{active,steps:[{name,label,status}]}`，状态为 `running/done/error` |
+| GET | `/modules/academic-assistant/presets` | `{items:[{label,prompt}]}`，插件提供的常用学习问题 |
 | GET | `/modules/eams/course-search?q=&page=1` | 学校课程目录 `{items,page,page_size,total,scope,notice}` |
 | GET | `/modules/eams/course-info?syllabus_id=` | 教学大纲 `{id,title,text,url,scope,truncated}` |
 
-学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、历史成绩、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、已有课程记录、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+
+流式聊天的 `delta.text` 为正文增量，`complete.message` 与普通聊天结果一致，只有该事件表示成功。流开始后的失败以 `error:{status,detail}` 返回；中断、停止和失败均不保存半段聊天。引用先经工具核对，最终消息保留页码与原文；完整事件字段及生命周期见 [学习助手](../modules/academic-assistant/README.md)。
 
 课程查询复用 IDS 的教务会话，实时读取课程名称／代码及教学大纲；`scope` 分别为 `course_catalog` 和 `course_syllabus`。这两个接口提供课程目录与课程要求，学期实际开课和可选资格仍需核对学校公布的选课安排。培养方案快照新增原始 `requirements` 和 `notes`，见 [教务模块](../modules/eams/README.md)。
+
+## 邮件复核与后台协作
+
+| 方法 | 模块内路径 | 请求与结果 |
+| --- | --- | --- |
+| GET | `mail/intelligence` | 当前邮件与分类、筛选偏好、显示位置和兴趣类别 |
+| GET/PUT | `mail/preferences` | GET 返回偏好与枚举；PUT 接收完整偏好 |
+| POST | `mail/review` | `{message_id,force?}`，原生 Harness 逐封复核 |
+| GET | `mail/review-context?message_id=` | 本次原文、偏好、分类 schema 与资料指纹 |
+| POST | `mail/review-results` | `{message_id,fingerprint,decision}`，校验原文与资料版本 |
+| GET | `campus-agent/status` | 后台状态、待处理数量、通知及活动建议 |
+| PUT | `campus-agent/settings` | `{enabled}`，关闭时取消当前检查 |
+| POST | `campus-agent/check` | 合并一轮最近资料检查，202 |
+| GET | `campus-agent/proposals` | 当前账号的建议与参加状态 |
+| POST | `campus-agent/proposals/{id}/accept`、`/dismiss` | 明确参加或不参加；接受后幂等写入时间表 |
+| POST | `notifications/imports` | 带账号版本、稳定 ID、资料版本和来源的通知 |
+| POST | `timetable/events/import` | 安排字段 + `{origin_id,account_revision}`，重复导入保留手动编辑 |
+
+表中路径均以 `/modules/` 为前缀。跨模块通知与日程导入要求 `account_revision` 为当前共享账号版本，不一致返回 409。网页仍使用 CSRF 保护，原生工具只在自己的固定工具路径使用任务令牌。通知中心提供 `/agent/status`、`/agent/settings`、`/agent/check` 和 `/proposals/{id}/accept|dismiss` 代理接口。详细 schema、字数限制、状态与资料范围分别见 [邮箱](../modules/mail/README.md)、[后台助手](../modules/campus-agent/README.md)、[通知](../modules/notifications/README.md) 与 [时间表](../modules/timetable/README.md)。

@@ -119,16 +119,21 @@ class AuthService:
             raise ValueError("请填写账号。")
         with self.locks[provider]:
             self._baseline_identity(provider)
-            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
-            identity = self.vault.get("auth:identity:" + provider)
-            identity.pop("subject", None)
-            self.vault.save("auth:identity:" + provider, identity)
-            self.browser.close(provider)
+            previous = self.vault.get('auth:credentials:' + provider)
+            changed = previous.get('username', '').casefold() != username.casefold()
+            if changed:
+                self.store.write("auth:revision:" + provider, secrets.token_hex(12))
+                identity = self.vault.get("auth:identity:" + provider)
+                identity.pop("subject", None)
+                self.vault.save("auth:identity:" + provider, identity)
+                self.browser.forget(provider)
+                self.vault.delete("auth:session:" + provider)
+                if provider == "ids":
+                    self.store.write("auth:device_enabled", False)
+                self._record(provider, "login_required", message="账号已保存，请连接或完成浏览器验证。")
+            else:
+                self.browser.close(provider)
             self.vault.save("auth:credentials:" + provider, {"username": username, "password": password})
-            self.vault.delete("auth:session:" + provider)
-            if provider == "ids":
-                self.store.write("auth:device_enabled", False)
-            self._record(provider, "login_required", message="账号已保存，请连接或完成浏览器验证。")
         return self.get_status(provider)
 
     def _login(self, provider, target, client, state):
@@ -147,14 +152,19 @@ class AuthService:
         protocols.login(client, provider, credentials["username"], credentials["password"], target)
         return protocols.validate(client, provider, target, state)
 
-    def login(self, provider: str, target: str | None = None):
+    def login(self, provider: str, target: str | None = None, *, force=False):
         target = protocols.checked_target(provider, target)
         with self.locks[provider]:
             self._baseline_identity(provider)
             state = self.vault.get("auth:session:" + provider)
             with protocols.http_client(state) as client:
                 try:
-                    subject = self._login(provider, target, client, state)
+                    try:
+                        if not state or force:
+                            raise LoginRequired("尚未保存会话。")
+                        subject = protocols.validate(client, provider, target, state)
+                    except LoginRequired:
+                        subject = self._login(provider, target, client, state)
                 except LoginRequired as error:
                     self._failure(provider, target, error)
                     raise
@@ -320,7 +330,8 @@ class AuthService:
         """Explicit recovery also clears a previous automatic-login pause."""
         target = protocols.checked_target(provider, target)
         with self.locks[provider]:
-            self._record(provider, "login_required", target, blocked=False)
+            saved = self.store.read('auth:state:' + provider, {})
+            self.store.write('auth:state:' + provider, {**saved, 'blocked': False})
             with self.authenticated_client(provider, target=target):
                 pass
         return self.get_status(provider)
@@ -336,7 +347,7 @@ class AuthService:
             except LoginRequired:
                 if attempt or self.store.read("auth:state:" + provider, {}).get("blocked"):
                     raise
-                self.login(provider, target)
+                self.login(provider, target, force=True)
 
     def session_parameters(self, provider: str):
         protocols.checked_target(provider)
@@ -352,7 +363,7 @@ class AuthService:
         if provider == "ids":
             self._cancel_device_setup()
         with self.locks[provider]:
-            self.browser.close(provider)
+            self.browser.forget(provider)
             self.vault.delete("auth:credentials:" + provider)
             self.vault.delete("auth:session:" + provider)
             self.vault.delete("auth:identity:" + provider)

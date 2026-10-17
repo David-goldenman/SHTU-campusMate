@@ -3,12 +3,15 @@ import threading
 from typing import Literal
 
 from fastapi import HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 from backend.services.campus import Remote, Source, SourceError, rows
 from .reader import inbox, read_message
+from .intelligence import BUCKETS, INTERESTS, Intelligence, Preferences, Submission, Decision
 
 _source = None
+_intelligence = None
 DEFAULT_RULES = [
     {"id": "study", "field": "title", "contains": "课程,作业,考试,homework,assignment", "label": "教学与课程", "enabled": True},
     {"id": "notice", "field": "title", "contains": "通知,讲座,报名,notice,seminar", "label": "校园通知", "enabled": True},
@@ -32,6 +35,16 @@ class Label(BaseModel):
     label: str = Field(min_length=1, max_length=32)
     reason: str = Field(default="", max_length=1000)
     by: Literal["manual", "agent"] = "manual"
+    bucket: Literal['focus', 'recommend', 'digest', 'filter'] | None = None
+
+
+class Review(BaseModel):
+    message_id: str = Field(min_length=1, max_length=300)
+    force: bool = False
+
+
+class ReviewResult(BaseModel):
+    decision: Decision
 
 
 class Selection(BaseModel):
@@ -70,11 +83,15 @@ def agent_valid(context, request):
 
 
 def authorize_write(context, request):
+    if request.url.path == '/api/v1/modules/mail/tools/review' and _intelligence is not None:
+        token = request.headers.get('authorization', '').removeprefix('Bearer ')
+        job = _intelligence.jobs.get(token)
+        return bool(job and job['owner'] == _source.owner())
     return request.url.path == "/api/v1/modules/mail/labels" and agent_valid(context, request)
 
 
 def create_router(context):
-    global _source
+    global _source, _intelligence
     lock = threading.RLock()
 
     def refresh_inbox(remote, previous):
@@ -100,10 +117,12 @@ def create_router(context):
             raise HTTPException(404, "邮件不在当前账号的缓存中，请先同步。")
         return item
 
-    @router.get("/message")
-    def message(message_id: str = Query(min_length=1, max_length=300)):
+    def read_cached(message_id):
         item = selected(message_id)
         owner = _source.owner()
+        cached = scoped(context, 'bodies', {}).get(message_id)
+        if cached:
+            return cached
         with context.auth.authenticated_client("coremail") as client:
             detail = read_message(Remote(client, _source.cancelled, _source.hosts), context.auth.session_parameters("coremail"), item["source_id"])
         if owner != _source.owner():
@@ -119,6 +138,53 @@ def create_router(context):
                         cached["body_text"] = detail["body_text"]
                 context.store.write("snapshot", snapshot)
         return detail
+
+    intelligence = _intelligence = Intelligence(context, _source, selected, read_cached)
+
+    @router.get('/message')
+    def message(message_id: str = Query(min_length=1, max_length=300)):
+        return read_cached(message_id)
+
+    @router.get('/preferences')
+    def preferences():
+        return {'preferences': intelligence.preferences(), 'buckets': BUCKETS, 'interests': INTERESTS}
+
+    @router.put('/preferences')
+    def set_preferences(body: Preferences):
+        with intelligence.lock:
+            context.store.write(intelligence.key('preferences'), body.model_dump())
+        return preferences()
+
+    @router.get('/intelligence')
+    def intelligence_records():
+        return {'messages': intelligence.records(), **preferences()}
+
+    @router.get('/review-context')
+    def review_context(message_id: str = Query(min_length=1, max_length=300)):
+        owner = _source.owner()
+        read_cached(message_id)
+        if owner != _source.owner():
+            raise HTTPException(409, '邮箱账号已更新，请重试。')
+        return intelligence.prepared(message_id)
+
+    @router.post('/review-results')
+    def review_results(body: Submission):
+        return intelligence.submit(body)
+
+    @router.post('/review')
+    async def review(body: Review, request: Request):
+        origin = request.url.scheme + '://' + request.url.netloc + '/api/v1/modules/mail'
+        return await run_in_threadpool(intelligence.review, body.message_id, origin, body.force)
+
+    @router.post('/tools/review')
+    def tool_review(body: ReviewResult, request: Request):
+        token = request.headers.get('authorization', '').removeprefix('Bearer ')
+        job = intelligence.jobs.get(token)
+        if not job or job['owner'] != _source.owner():
+            raise HTTPException(401, '邮件复核任务已结束或账号已变化。')
+        result = intelligence.submit(Submission(message_id=job['message_id'], fingerprint=job['fingerprint'], decision=body.decision))
+        job['result'] = result
+        return result
 
     @router.get("/rules")
     def rules():
@@ -147,7 +213,7 @@ def create_router(context):
             values = scoped(context, "labels", {})
             if (agent or body.by == "agent") and values.get(body.message_id, {}).get("by") == "manual":
                 raise HTTPException(409, "邮件已由用户分类，请保留手动选择。")
-            values[body.message_id] = {"label": body.label, "reason": body.reason, "by": "agent" if agent else body.by}
+            values[body.message_id] = {"label": body.label, "reason": body.reason, "by": "agent" if agent else body.by, **({'bucket': body.bucket} if body.bucket else {})}
             save(context, "labels", values, owner)
         return {"saved": True}
 
@@ -209,5 +275,7 @@ def create_router(context):
 
 
 def stop(context):
+    if _intelligence is not None:
+        _intelligence.stopping.set()
     if _source is not None:
         _source.close()

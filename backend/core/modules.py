@@ -28,6 +28,7 @@ class Navigation(BaseModel):
     icon: str = Field(default="▧", min_length=1, max_length=8)
     description: str = Field(default="", max_length=240)
     order: int = Field(default=100, ge=0, le=10000)
+    layout: Literal['stack', 'tabs', 'primary'] = 'stack'
 
 
 class Manifest(BaseModel):
@@ -81,7 +82,7 @@ class ModuleManager:
 
     def _stop(self, entry):
         entry.app = None
-        entry.info.update(status="disabled", frontend_url=None)
+        entry.info.update(status="disabled", frontend_url=None, background_url=None)
         if entry.package and hasattr(entry.package, "stop"):
             entry.package.stop(entry.context)
         if entry.context:
@@ -95,7 +96,7 @@ class ModuleManager:
             entry.package = None
 
     def _load(self, folder):
-        info = {"id": folder.name, "name": folder.name, "version": "", "category": None, "enabled": False, "status": "error", "has_frontend": False, "frontend_url": None}
+        info = {"id": folder.name, "name": folder.name, "version": "", "category": None, "enabled": False, "status": "error", "has_frontend": False, "frontend_url": None, "background_url": None}
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
@@ -109,8 +110,9 @@ class ModuleManager:
                 raise ValueError("settings 是框架保留的设置分类。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
+            background = folder / 'web' / 'background.js'
             plugin = folder / "harness" / "package.json"
-            for path in (frontend, backend, plugin):
+            for path in (frontend, background, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
                     raise ValueError("模块入口必须位于自己的目录内。")
             info["has_frontend"] = frontend.is_file()
@@ -124,8 +126,8 @@ class ModuleManager:
                     raise ValueError("Harness 插件入口必须位于自己的 harness 目录内。")
                 entry.harness = {"name": package["name"], "folder": plugin.parent.resolve(), "bundle": bool(bundle)}
             info["harness"] = entry.harness is not None
-            if not frontend.is_file() and not backend.is_file() and not entry.harness:
-                raise ValueError("模块需要 web/index.js、server/__init__.py 或 harness/package.json 入口。")
+            if not frontend.is_file() and not background.is_file() and not backend.is_file() and not entry.harness:
+                raise ValueError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
             info["enabled"] = self.store.read("modules", {}).get(manifest.id, True)
             if not info["enabled"]:
                 info["status"] = "disabled"
@@ -133,7 +135,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -149,6 +151,7 @@ class ModuleManager:
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
             info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
+            info['background_url'] = f'/module-assets/{manifest.id}/{revision}/web/background.js?v={revision}' if background.is_file() else None
         except Exception as error:
             try:
                 self._stop(entry)

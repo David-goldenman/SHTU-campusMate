@@ -3,6 +3,7 @@ import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js'
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
 const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',timetable:'教务系统'};
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
+let selectedTab = 'accounts';
 
 function recoveryHint(provider) {
   return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '绑定本机设备或保存密码后，可在过期时自动恢复登录。' : provider.id === 'coremail' ? '邮箱会话失效时，请重新打开官方登录窗口。' : '仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
@@ -16,7 +17,7 @@ function providerCard(provider) {
   const id = escape(provider.id);
   const target = provider.targets?.length ? '<label>登录服务<select data-auth-target>' + provider.targets.map(id => '<option value="' + escape(id) + '" ' + (provider.target === id ? 'selected' : '') + '>' + escape(targetNames[id] || id) + '</option>').join('') + '</select></label>' : '';
   const credentials = provider.id === 'coremail' ? '' : `<details class="auth-alternative"><summary>账号密码登录</summary><form class="credential-form" data-credentials="${id}"><p class="field-hint">提交后加密保存账号密码，并立即登录。需要验证码时，请使用官方窗口继续验证。</p><label for="auth-${id}-username">账号</label><input id="auth-${id}-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(provider.username)}" required><label for="auth-${id}-password">密码</label><div class="password-field"><input id="auth-${id}-password" name="password" type="password" autocomplete="current-password" maxlength="4096" aria-describedby="auth-${id}-password-hint"><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button></div><p class="field-hint" id="auth-${id}-password-hint" data-password-hint></p><button class="button button-primary" type="submit">登录</button></form></details>`;
-  return `<article class="provider-card" data-provider="${id}"><header><h3>${escape(provider.name)}</h3><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span></header><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><div class="provider-actions"><button class="button button-secondary" data-auth-action="browser" type="button">1. 打开官方登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">2. 登录完成，连接账号</button><button class="text-button" data-auth-action="refresh" type="button">检查连接与恢复</button></div>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></article>`;
+  return `<article class="provider-card" data-provider="${id}"><header><h3>${escape(provider.name)}</h3><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span></header><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>使用官方窗口连接</summary><div class="provider-actions"><button class="button button-secondary" data-auth-action="browser" type="button">1. 打开官方登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">2. 登录完成，连接账号</button></div><p class="field-hint">在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。</p></details><button class="button button-secondary" data-auth-action="refresh" type="button">检查连接</button>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></article>`;
 }
 
 function moduleManager(modules, labels) {
@@ -39,8 +40,43 @@ export async function mount(container, context) {
     moduleManager(context.modules,context.labels) +
     '<div class="settings-columns"><section class="panel settings-section"><h2>本地服务</h2><p class="field-hint">端口修改会在下次启动工作台时生效。</p><form id="port-form"><label>服务端口<input name="port" type="number" min="1024" max="65535" value="' + settings.port + '" required></label><p class="field-hint">当前运行端口：' + settings.active_port + '</p><button class="button button-primary" type="submit">保存端口</button></form>' + (settings.restart_required ? '<p class="notice">端口已更新，下次启动使用 ' + settings.port + '。</p>' : '') + '</section>' +
     '<section class="panel settings-section"><h2>本地数据</h2><p class="field-hint">保存位置 <code>' + escape(settings.storage.directory) + '</code><br>加密方式 ' + escape(settings.storage.encryption) + '</p><form id="data-form"><label>清除范围<select name="scope"><option value="credentials">账号、登录状态和 API Key</option><option value="modules">模块本地数据</option><option value="all">全部本地数据</option></select></label><p class="field-hint" id="clear-description"></p><button class="button button-danger" type="submit">清除所选数据</button></form></section></div>' +
-    '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>可在官方窗口登录，或展开账号密码登录。学校 IDS 还支持绑定本机设备。登录资料加密保存在本机，同一账号续期保留缓存，切换账号自动隔离。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
+    '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>已保存的连接会在读取时复用。首次连接请使用官方窗口，或展开账号密码登录。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
     '<section class="panel settings-section"><h2>统一 AI 服务</h2><p class="field-hint">各模块共用这个服务。API Key 加密保存在本机。</p><form id="ai-form" class="ai-form"><label>DeepSeek API Key<input name="api_key" type="password" autocomplete="off" placeholder="' + (ai.key_saved ? '已保存，填写可更新' : '填写 API Key') + '"></label><label>模型<select name="model">' + ['deepseek-flash','deepseek-v4-pro'].map(model => '<option value="' + model + '" ' + (ai.model === model ? 'selected' : '') + '>' + model + '</option>').join('') + '</select></label><label class="checkbox-label"><input name="enabled" type="checkbox" ' + (ai.enabled ? 'checked' : '') + '>启用统一 AI 服务</label><div class="form-actions"><button class="button button-primary" type="submit">保存 AI 设置</button>' + (ai.key_saved ? '<button class="text-button danger-text" id="delete-ai-key" type="button">删除 API Key</button>' : '') + '</div></form></section>';
+
+  const groups = [
+    ['accounts','账号连接',container.querySelector('.provider-grid').closest('section')],
+    ['ai','AI 服务',container.querySelector('#ai-form').closest('section')],
+    ['modules','功能模块',container.querySelector('#settings-reload').closest('section')],
+    ['local','本地设置',container.querySelector('.settings-columns')],
+  ];
+  const tabs = document.createElement('div');
+  tabs.className = 'settings-tabs';
+  tabs.setAttribute('role','tablist');
+  tabs.setAttribute('aria-label','设置分类');
+  tabs.innerHTML = groups.map(([id,label]) => `<button id="settings-tab-${id}" role="tab" aria-controls="settings-pane-${id}" data-settings-tab="${id}" type="button">${label}</button>`).join('');
+  container.prepend(tabs);
+  for (const [id,,node] of groups) {
+    const panel = document.createElement('div');
+    panel.id = 'settings-pane-' + id;
+    panel.setAttribute('role','tabpanel');
+    panel.setAttribute('aria-labelledby','settings-tab-' + id);
+    panel.append(node);container.append(panel);
+  }
+  function selectTab(id) {
+    selectedTab = id;
+    history.replaceState(null,'','#settings?tab=' + id);
+    tabs.querySelectorAll('button').forEach(button => {const selected = button.dataset.settingsTab === id;button.setAttribute('aria-selected',String(selected));button.tabIndex = selected ? 0 : -1;});
+    groups.forEach(([key]) => {container.querySelector('#settings-pane-' + key).hidden = key !== id;});
+  }
+  tabs.querySelectorAll('button').forEach((button,index) => {
+    button.onclick = () => selectTab(button.dataset.settingsTab);
+    button.onkeydown = event => {
+      const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];
+      if (offset) {event.preventDefault();const target = tabs.children[(index + offset + groups.length) % groups.length];target.click();target.focus();}
+    };
+  });
+  const requestedTab = new URLSearchParams(location.hash.split('?')[1]).get('tab');
+  selectTab(groups.some(([id]) => id === requestedTab) ? requestedTab : selectedTab);
 
   container.querySelector('#settings-reload').onclick = safeAction(container.querySelector('#settings-reload'),context.reload);
   container.querySelectorAll('[data-module-toggle]').forEach(toggle => {
@@ -75,6 +111,8 @@ export async function mount(container, context) {
       badge.className = 'status-badge auth-' + provider.status;
       card.querySelector('[data-recovery-hint]').textContent = recoveryHint(provider);
       card.querySelector('[data-auth-summary]').textContent = (provider.has_session ? '登录状态已在本机加密保存' : '尚未连接') + (provider.identity_verified ? ' · 账号已确认' : '');
+      card.querySelector('[data-browser-options]').open = provider.status !== 'ready';
+      card.querySelector('[data-auth-action=refresh]').hidden = !provider.has_session;
       passwordRequirement();
       if (provider.id === 'ids') card.querySelector('.auth-device').outerHTML = deviceCard(provider);
       clearTimeout(deviceTimer);
@@ -100,7 +138,7 @@ export async function mount(container, context) {
           const result = await action();
           if (context.signal.aborted) return;
           update(result);
-          feedback.textContent = success || result.message || (result.status === 'ready' ? '连接成功，登录状态已加密保存在本机。' : result.device?.setup?.message || '操作已完成。');
+          feedback.textContent = result.status === 'ready' ? '' : success || result.message || result.device?.setup?.message || '操作已完成。';
         } catch (error) {
           if (context.signal.aborted) return;
           feedback.textContent = error.message;

@@ -18,7 +18,9 @@ def profile_owner(context):
 
 def read_profile(context):
     owner = profile_owner(context)
-    return {"profile": context.store.read("profile:" + owner, Profile().model_dump()), "academic": context.store.read("academic:" + owner, {})}
+    saved = context.store.read('academic:' + owner, {})
+    academic = {key: saved[key] for key in ('plan_title', 'study_plan', 'updated_at') if key in saved}
+    return {"profile": context.store.read("profile:" + owner, Profile().model_dump()), "academic": academic}
 
 
 class Task:
@@ -27,6 +29,7 @@ class Task:
         self.owner, self.school_owner = account_revision(context), profile_owner(context)
         self.references, self.activity, self.navigation = {}, [], None
         self.answer = None
+        self.emit = lambda event: None
 
     def check(self):
         if account_revision(self.context) != self.owner:
@@ -53,7 +56,7 @@ class Task:
         result = []
         for item in items[body.offset:body.offset + body.limit]:
             text = '\n'.join(key + ': ' + (value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)) for key, value in item.items())
-            result.append(self.source(item['id'], item.get('title', item['id']), text, item.get('url', ''), record_id=item['id'], download_url=item.get('download_url')))
+            result.append(self.source(item['id'], item.get('title', item['id']), text, item.get('url', ''), record_id=item['id'], download_url=item.get('download_url'), proposal_id=item.get('proposal_id')))
         return {"items": result, "total": len(items), "offset": body.offset, "next_offset": body.offset + len(result)}
 
     def academic(self, **values):
@@ -66,7 +69,7 @@ class Task:
         if area == 'profile':
             value = read_profile(self.context)
             academic = value['academic']
-            summary = {'profile': value['profile'], 'academic': {key: academic[key] for key in ('gpa', 'plan_title', 'updated_at') if key in academic}, 'courses_count': len(academic.get('courses', []))}
+            summary = {'profile': value['profile'], 'academic': {key: academic[key] for key in ('plan_title', 'updated_at') if key in academic}}
             return {"items": [self.source('study:profile', '我的学习档案', json.dumps(summary, ensure_ascii=False))]}
         if area == 'assignments':
             value = await self.api('assignments')
@@ -75,15 +78,15 @@ class Task:
             value = await self.api('courses')
             items = value['data']['courses']
         elif area == 'timetable':
-            value = await self.api('timetable', '/schedule')
-            items = value['data']['timetable'] + value['data']['events']
-        elif area in {'grades', 'degree_plan'}:
+            path = '/schedule' + ('?week_start=' + body.week_start.isoformat() if body.week_start else '')
+            value = await self.api('timetable', path)
+            classes = [item for day in value['calendar']['days'] for item in day['events'] if item['event_type'] == 'class']
+            items = classes + value['data']['events']
+        elif area in {'course_history', 'degree_plan'}:
             value = await self.api('eams')
             data = value['data']
-            if area == 'grades':
+            if area == 'course_history':
                 items = data['courses']
-                self.academic(courses=items, gpa=data['metadata'].get('gpa', {}))
-                items = [{'id': 'eams:gpa', 'title': '历史成绩与绩点汇总', 'gpa': data['metadata'].get('gpa', {}), 'url': 'https://eams.shanghaitech.edu.cn/eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR'}, *items]
             else:
                 plan = data['metadata'].get('study_plan', {})
                 if not plan:
@@ -98,6 +101,19 @@ class Task:
             value = await self.api('mail')
             items = value['data']['messages']
         return {**self.rows(items, body), 'issues': value.get('data', {}).get('issues', []), 'updated_at': value.get('updated_at'), 'status': value.get('status')}
+
+    async def attend(self, body):
+        self.check()
+        if body.quote not in self.message or not re.search(r'我(?:决定|想|要|会|打算|确认)?(?:去)?参加|参加这|(?:把|将).{0,60}(?:加入|添加).{0,10}(?:时间表|日程)', body.quote) or re.search(r'不参加|不要|取消|再考虑|如果', body.quote):
+            raise HTTPException(422, '需要用户本次明确表达参加或加入日程的意愿。')
+        if not any(source.get('proposal_id') == body.proposal_id for source in self.references.values()):
+            raise HTTPException(422, '请先查询带有这条活动建议的通知。')
+        response = await self.context.api('campus-agent', '/proposals/' + body.proposal_id + '/accept', method='POST')
+        self.check()
+        if response.status_code != 200:
+            raise HTTPException(response.status_code, response.json().get('detail', '日程暂时无法更新。'))
+        value = response.json()
+        return {'items': [self.source('attendance:' + body.proposal_id, '已加入时间表', json.dumps(value, ensure_ascii=False))]}
 
     async def search(self, body):
         if body.collection == 'lessons' and body.q:

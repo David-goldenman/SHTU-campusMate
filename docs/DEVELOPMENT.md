@@ -36,8 +36,12 @@ Python 遵循现有四空格缩进、类型与命名方式；浏览器代码采�
 3. 新增 AI 工具或工作流时，为该能力分配独立模块 ID，在 `harness/` 提供标准 npm 包、原生 Cordis 工具或 bundle。模块后端通过公开 API 选择资料，使用 `context.ai.run(..., plugins=[模块ID])`；基础文本处理使用共享 `chat`、`generate`。需要模型按需读取资料时，参考 `academic-assistant` 的任务令牌与本机工具路由，通过后端内部 `plugin_env` 配置插件；在页面与 README 说明资料及外部发送范围。
 4. 校验模型结果、引用和账号版本，再由模块后端保存状态或执行对外写入。普通状态使用 `context.store`，秘密使用 `context.secrets`，持久文件使用 `context.data_dir`；前端继续使用注入的 API、组件和卸载信号。引用只接受本次实际读取的来源与连续原文；学习偏好依据用户明确提供的信息保存，学校要求保留来源，不从方案版本推断入学年份。
 5. 在设置中刷新、启用、停用插件；检查页面切换与再次启用。新增工具验证一条真实运行时链路和必要的参数边界，使用合成资料与模拟模型。修改公共接口时同步修改调用方和对应文档。
-6. 在 WSL 运行 `bash ./check.sh`；有界面改动时检查实际操作。模块 README 记录所需服务、输入输出、数据与外部访问范围、清理方式和检查入口。
+6. 在 Windows 运行 `./check.ps1`，或在 WSL 运行 `bash ./check.sh`；有界面改动时检查实际操作。模块 README 记录所需服务、输入输出、数据与外部访问范围、清理方式和检查入口。
 7. 同步主分支并解决冲突，确认 PR 差异只包含本任务；提交已验证的最终代码和文档，创建 PR。合并并拉取主分支后，重启本地网页确认模块就绪。
+
+跨模块后台功能沿用上述流程：先声明事件来源、账号范围、资料变化判定、工具副作用与用户确认方式，再通过 `campus-agent` 的原生插件接入。只读能力由模块 OpenAPI 提供；写入使用明确的业务 API，不提供任意 POST、命令或文件权限。邮件语义分类由 `mail` 校验完整偏好、资料指纹与原文证据；通知通过 `notifications/imports` 汇入；日程通过 `timetable/events/import` 按稳定来源标识导入。新增自动写入必须说明依据和完成状态，并检查重复执行及手动修改保留。
+
+首页会话管理、课程聚合、邮箱分栏与通知操作的改动，除本模块 Python 检查外，分别运行 `node modules/academic-assistant/checks/check_web.mjs`、`node checks/check_campus_workspace.mjs` 和 `node checks/check_ui_theme.mjs`。浏览器检查使用合成响应；截图保存在开发目录。版本升级时同时检查旧聊天迁移和重启恢复，避免用重置用户资料解决数据格式变化。
 
 AI 接入方式按功能选择：
 
@@ -52,7 +56,7 @@ AI 接入方式按功能选择：
 
 ## 环境、数据与桌面集成
 
-Python 开发使用 WSL（由启动器自动检测，或通过 --distro / CAMPUS_WSL_DISTRO 指定）、uv 和当前项目 `.codex/venv`，开发检查、截图和合成夹具保存在 `.codex/`。应用通过启动脚本在 `.private/runtime/venv` 创建独立运行环境，运行缓存、登录验证目录和 Harness 工作区由程序在 `.private/runtime/` 管理。模块文件下载暂存在模块 `context.data_dir/tmp/downloads/`，传输结束删除。用户持久资料放在 `.private/`，账号、会话和 API Key 使用 Vault 加密。私有目录和开发目录遵循 `.gitignore`，分享项目时按代码文件清单交接。
+Python 开发使用 uv；Windows 环境为 `.codex/windows-venv`，WSL 环境为 `.codex/venv`。应用默认 Windows 原生启动，也可通过 --distro / CAMPUS_WSL_DISTRO 选择 WSL。开发检查、截图和合成夹具保存在 `.codex/`；应用 Windows 环境为 `.private/runtime/windows/venv`，WSL 环境为 `.private/runtime/venv`。运行缓存、固定登录资料与 Harness 工作区在 `.private/runtime/` 管理。模块文件下载暂存在 `context.data_dir/tmp/downloads/`，传输结束删除。用户持久资料放在 `.private/`，账号、会话和 API Key 使用 Vault 加密，浏览器站点数据由 Edge 管理。私有目录和开发目录遵循 `.gitignore`。
 
 依赖安装与检查使用 `uv sync --locked`。
 

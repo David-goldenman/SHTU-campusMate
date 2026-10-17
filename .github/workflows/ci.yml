@@ -25,7 +25,7 @@ jobs:
       run:
         shell: pwsh
     env:
-      UV_PROJECT_ENVIRONMENT: .codex/venv
+      UV_PROJECT_ENVIRONMENT: .codex/windows-venv
       UV_CACHE_DIR: ${{ github.workspace }}/.codex/cache/uv
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
