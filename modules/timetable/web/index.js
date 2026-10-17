@@ -51,7 +51,7 @@ export async function mount(container, context) {
         return `<td class="overview-day${day.date === today ? ' is-today' : ''}" data-overview-date="${e(day.date)}">${items.map(overviewCard).join('') || '<span class="overview-empty">—</span>'}</td>`;
       }).join('')}</tr>`;
     }).join('');
-    return `<section class="planner-overview" aria-labelledby="overview-title"><div class="overview-heading"><div><h3 id="overview-title" class="planner-section-title">近四周作业日程</h3><p class="field-hint">固定显示当前教学周前后四周的作业截止，不随上方周切换按钮变化 · 待完成 ${value.pending ?? ''} · 迟交 ${value.late ?? ''}</p></div><span class="overview-platforms">作业平台：Blackboard · Gradescope</span></div><div class="overview-scroll" tabindex="0" aria-label="近四周作业日程，行为教学周、列为星期"><table class="four-week-grid" data-overview><thead><tr><th scope="col">教学周</th>${head}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
+    return `<section class="planner-overview" aria-labelledby="overview-title"><div class="overview-heading"><div><h3 id="overview-title" class="planner-section-title">近四周作业日程</h3><p class="field-hint">固定显示当前教学周前后四周的作业截止，不随上方周切换按钮变化 · 待完成 ${value.pending ?? ''} · 迟交 ${value.late ?? ''}</p></div><span class="overview-platforms">作业平台：Blackboard · Gradescope · E 云课堂</span></div><div class="overview-scroll" tabindex="0" aria-label="近四周作业日程，行为教学周、列为星期"><table class="four-week-grid" data-overview><thead><tr><th scope="col">教学周</th>${head}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
   }
   const groups = [['timed','定时安排'],['deadline','截止事项'],['untimed','全天与时间待定']];
   function weekView(cal, selected, dayClass, title, header) {

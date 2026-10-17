@@ -114,7 +114,7 @@ class Task:
         if area == 'assignments' and value.get('summary') is not None:
             sources = value.get('data', {}).get('metadata', {}).get('source_metadata', {})
             summary = {**value['summary'], 'sources': {name: {key: sources[name].get(key) for key in ('status', 'updated_at')}
-                       for name in ('blackboard', 'gradescope') if name in sources}}
+                       for name in ('blackboard', 'gradescope', 'ecourse') if name in sources}}
             result['summary'] = self.source('study:assignment-summary', '当前账号全部缓存作业统计', json.dumps(summary, ensure_ascii=False))
         visible = {row['record_id'] for row in result['items']}
         if area in {'workspace', 'assignments'}:

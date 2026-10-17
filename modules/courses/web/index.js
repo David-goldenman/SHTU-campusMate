@@ -1,6 +1,6 @@
 import {sourcePanel, records, link, time, submissionLabel} from '/assets/campus.js';
 
-const platforms={timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'录播'};
+const platforms={timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'录播',ecourse:'E 云课堂'};
 const kinds={assignments:'作业',materials:'资料',announcements:'公告',posts:'讨论',lessons:'录播',timetable:'上课安排',grades:'成绩'};
 
 export async function mount(container,context) {

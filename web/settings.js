@@ -2,7 +2,7 @@ import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js'
 import {networkPanel, bindNetwork} from './network.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
-const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',timetable:'教务系统'};
+const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',ecourse:'E 云课堂',timetable:'教务系统'};
 const moduleStatuses = {ready:'已加载',disabled:'已停用',error:'异常',stopping:'正在停止'};
 let selectedTab = 'accounts';
 

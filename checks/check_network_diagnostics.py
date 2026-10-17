@@ -128,13 +128,14 @@ async def checks():
         diagnostics = network.NetworkDiagnostics()
         assert diagnostics.snapshot()["checked_at"] is None
         first, second = await asyncio.gather(diagnostics.check(), diagnostics.check())
-        assert first == second and probe_mock.await_count == 10
-        assert first["reachable_count"] == 5 and first["vpn_status"] == first["campus_location"] == "unknown"
+        assert first == second and probe_mock.await_count == 12
+        assert first["reachable_count"] == 6 and first["vpn_status"] == first["campus_location"] == "unknown"
+        assert any(item["id"] == "ecourse" for item in first["services"])
         assert all(item["diagnosis"]["code"] == "proxy" for item in first["services"])
         assert "secret" not in json.dumps(first) and "proxy.example" not in json.dumps(first)
         diagnostics.completed -= 10
         await diagnostics.check()
-        assert probe_mock.await_count == 20
+        assert probe_mock.await_count == 24
 
 
 asyncio.run(checks())
