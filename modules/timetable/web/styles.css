@@ -31,6 +31,15 @@
 .week-planner th.is-tomorrow { box-shadow:inset 0 3px var(--nord14); }
 .week-planner .calendar-event { display:block; width:100%; min-height:64px; padding:9px 8px; margin:0 0 6px; border:1px solid transparent; border-left:3px solid var(--nord9); border-radius:5px; background:color-mix(in srgb,var(--nord9) 14%,var(--paper)); color:var(--text); text-align:left; line-height:1.5; overflow-wrap:anywhere; }
 .week-planner .calendar-event:last-child { margin-bottom:0; }
+.week-planner .calendar-event[data-department] { background:var(--record-tint); border-left:4px solid var(--record-accent); border-radius:8px; padding:10px; }
+.week-planner .calendar-event[data-department]:hover { border-color:var(--record-accent); box-shadow:0 2px 8px #2e344015; }
+.week-planner .calendar-event[data-department] strong,.week-planner .calendar-event .calendar-department { color:var(--record-ink); }
+.week-planner .calendar-event .calendar-department { font-size:10px; font-weight:600; letter-spacing:.02em; }
+.week-planner .course-sport-icon { display:inline-block; width:15px; height:17px; margin-right:6px; vertical-align:-2px; opacity:.75; }
+.week-planner .department-legend { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 15px; margin:0 0 18px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:12px; }
+.week-planner .department-legend strong { color:var(--muted); font-size:11px; font-weight:500; }
+.week-planner .department-legend span { display:inline-flex; align-items:center; gap:6px; color:var(--text); }
+.week-planner .department-legend span::before { content:''; width:9px; height:9px; background:var(--record-accent); border-radius:3px; }
 .week-planner .calendar-event:hover { border-color:var(--nord10); }
 .week-planner .calendar-event strong { display:block; font-size:13px; font-weight:600; margin:3px 0; }
 .week-planner .calendar-event span { display:block; font-size:12px; color:var(--muted); }
@@ -55,8 +64,40 @@
 .planner-form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .calendar-mobile { display:none; }
 .week-planner .planner-section-title { font-size:17px; margin:20px 0 10px; }
+.week-planner .planner-overview { margin:6px 0 22px; padding:16px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+.week-planner .overview-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; flex-wrap:wrap; }
+.week-planner .overview-heading .planner-section-title { margin:0 0 4px; }
+.week-planner .overview-heading .field-hint { margin:0; font-size:12px; }
+.week-planner .overview-platforms { color:var(--muted); font-size:11px; white-space:nowrap; }
+.week-planner .overview-scroll { overflow:auto; margin-top:14px; border:1px solid var(--border); border-radius:8px; }
+.week-planner .four-week-grid { width:100%; min-width:980px; table-layout:fixed; border-collapse:collapse; }
+.week-planner .four-week-grid th,.week-planner .four-week-grid td { border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+.week-planner .four-week-grid thead th { padding:10px 6px; background:var(--paper); text-align:center; font-size:12px; font-weight:600; }
+.week-planner .four-week-grid thead th:first-child { width:96px; text-align:left; color:var(--muted); font-weight:500; }
+.week-planner .four-week-grid tbody th { width:96px; padding:10px 8px; vertical-align:top; text-align:left; background:color-mix(in srgb,var(--surface) 65%,var(--paper)); }
+.week-planner .four-week-grid tbody th span { display:block; font-size:13px; font-weight:600; }
+.week-planner .four-week-grid tbody th strong { display:block; margin-top:2px; font-size:10px; font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }
+.week-planner .four-week-grid tbody th small { display:block; margin-top:2px; font-size:10px; color:var(--nord10); }
+.week-planner .four-week-grid .overview-week.is-current { box-shadow:inset 3px 0 var(--nord10); background:color-mix(in srgb,var(--nord10) 8%,var(--paper)); }
+.week-planner .four-week-grid tbody td { height:112px; padding:5px; vertical-align:top; }
+.week-planner .four-week-grid tr:last-child>* { border-bottom:0; }
+.week-planner .four-week-grid tr>*:last-child { border-right:0; }
+.week-planner .four-week-grid .overview-day.is-today { background:color-mix(in srgb,var(--nord8) 14%,var(--paper)); box-shadow:inset 0 0 0 1px var(--nord8); }
+.week-planner .overview-item { display:block; width:100%; margin:0 0 5px; padding:5px 6px; border:1px solid transparent; border-left:3px solid var(--nord9); border-radius:5px; background:color-mix(in srgb,var(--nord9) 12%,var(--paper)); color:var(--text); text-align:left; line-height:1.35; overflow-wrap:anywhere; }
+.week-planner .overview-item:last-child { margin-bottom:0; }
+.week-planner .overview-item:hover { border-color:var(--nord10); }
+.week-planner .overview-item strong { display:block; font-size:12px; font-weight:600; }
+.week-planner .overview-item span { display:block; font-size:10px; color:var(--muted); }
+.week-planner .overview-item .overview-platform { display:inline-block; margin:0 0 2px; padding:0 4px; border:1px solid color-mix(in srgb,var(--nord10) 45%,var(--border)); border-radius:3px; color:var(--nord10); font-size:9px; font-weight:600; }
+.week-planner .overview-item .overview-place { color:color-mix(in srgb,var(--text) 72%,var(--muted)); }
+.week-planner .overview-item.is-late { border-left-color:var(--nord11); background:color-mix(in srgb,var(--nord11) 10%,var(--paper)); }
+.week-planner .overview-item .overview-late { display:inline-block; margin-left:5px; padding:0 5px; border-radius:999px; background:color-mix(in srgb,var(--nord11) 18%,var(--paper)); color:var(--nord11); font-size:9px; font-style:normal; font-weight:600; }
+.week-planner .overview-empty { color:var(--muted); font-size:12px; }
+.week-planner .planner-week-detail { margin:18px 0; }
+.week-planner .planner-week-detail>summary { padding:10px 0; cursor:pointer; font-size:14px; font-weight:600; color:var(--nord10); }
+.week-planner .planner-week-detail>summary:hover { text-decoration:underline; }
 .week-planner .planner-empty { padding:20px; background:var(--surface); color:var(--muted); border-radius:8px; }
-.week-planner .lesson-table { min-width:1000px; }
+.week-planner .lesson-table { min-width:880px; }
 .week-planner .lesson-table tbody th,.week-planner .lesson-table tbody td { padding:0; }
 .week-planner .lesson-periods,.week-planner .lesson-day { display:grid; grid-template-rows:repeat(var(--period-count),56px); }
 .week-planner .lesson-day { grid-template-columns:repeat(var(--lesson-lanes),minmax(0,1fr)); background:repeating-linear-gradient(to bottom,transparent 0,transparent 55px,var(--border) 55px,var(--border) 56px); }
@@ -71,6 +112,10 @@
 .week-planner .lesson-block .calendar-event span { font-size:11px; line-height:1.35; }
 @media (min-width:761px) and (max-width:1150px) { .week-planner .calendar-table { min-width:830px; } }
 @media (max-width:760px) {
+  .week-planner .planner-overview { padding:12px; }
+  .week-planner .overview-platforms { display:none; }
+  .week-planner .four-week-grid { min-width:900px; }
+  .week-planner .four-week-grid tbody td { height:96px; }
   .week-planner .calendar-desktop { display:none; }
   .week-planner .calendar-mobile { display:grid; gap:12px; }
   .week-planner .calendar-mobile section { padding:14px; border:1px solid var(--border); border-radius:8px; }

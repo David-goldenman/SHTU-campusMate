@@ -32,7 +32,7 @@ def main():
     for path in python_checks:
         run([sys.executable, str(path)], path.relative_to(PROJECT))
 
-    for name in ("check_frontend.mjs", "check_device_guide.mjs"):
+    for name in ("check_frontend.mjs", "check_device_guide.mjs", "check_browser_network.mjs"):
         run([node, str(Path("checks") / name)], name)
     run([windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
          "-File", windows_path(PROJECT / "checks" / "check_launcher.ps1")], "Windows launcher")
@@ -41,7 +41,7 @@ def main():
                      for path in (PROJECT / folder).rglob("*") if path.suffix in {".js", ".mjs"})
     for path in sources:
         run([node, "--check", str(path.relative_to(PROJECT))], "JavaScript syntax: " + str(path.relative_to(PROJECT)))
-    print(f"\nPASS: {len(python_checks)} Python checks, 2 JavaScript checks, Windows launcher and {len(sources)} JavaScript syntax checks", flush=True)
+    print(f"\nPASS: {len(python_checks)} Python checks, 3 JavaScript checks, Windows launcher and {len(sources)} JavaScript syntax checks", flush=True)
 
 
 if __name__ == "__main__":

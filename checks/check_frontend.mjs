@@ -3,23 +3,38 @@ import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
-import {deadlineInfo, deadlineMarkup} from '../web/deadlines.js';
+import {renderNetwork} from '../web/network.js';
+import {submissionLabel} from '../web/campus.js';
+import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
 
-const deadlineNow = Date.parse('2026-10-17T20:00:00+08:00');
-const todayDeadline = deadlineInfo('2026-10-17T15:59:00Z',deadlineNow);
-assert.equal(todayDeadline.clock,'23:59');
-assert.equal(todayDeadline.date,'今天 · 10月17日');
-assert.equal(todayDeadline.urgency,'urgent');
-assert.equal(todayDeadline.relative,'剩余 3 小时 59 分钟');
-assert.equal(deadlineInfo('2026-10-18T18:00:00+08:00',deadlineNow).date,'明天 · 10月18日');
-assert.equal(deadlineInfo('2026-10-17T19:00:00+08:00',deadlineNow).relative,'已逾期 1 小时');
-assert.equal(deadlineInfo('2026-10-18T20:00:00+08:00',deadlineNow).urgency,'urgent');
-assert.equal(deadlineInfo('2026-10-19T08:00:00+08:00',deadlineNow).urgency,'upcoming');
-assert.equal(deadlineInfo('2027-01-01T08:00:00+08:00',deadlineNow).date,'2027年1月1日');
-for (const value of [null,'','invalid','2026-10-18']) assert.equal(deadlineInfo(value,deadlineNow).timestamp,null);
-assert.equal(deadlineInfo('2026-10-18',deadlineNow).clock,'时刻待定','Date-only deadlines never invent midnight');
-assert(!deadlineMarkup('2026-10-01T08:00:00+08:00',escape,{now:deadlineNow,emphasize:false}).includes('已逾期'),'Completed records can show neutral exact dates');
-console.log('deadlines: Beijing day labels, precise countdowns, urgency boundaries, unknown time and neutral completed records');
+assert.equal(submissionLabel({submitted:null}), '提交状态待核实');
+assert.equal(submissionLabel({submitted:false,exempt:true}), '已豁免');
+assert.equal(submissionLabel({submitted:true,submission_status:'needs_grading'}), '已提交，待评分');
+assert.match(submissionLabel({submitted:true,submission_stale:true}), /已提交.*缓存.*待核实/);
+assert.equal(submissionLabel({submitted:null,submission_status:'__proto__'}), '提交状态待核实');
+
+const inlineReport={name:'<img onerror=x>',checked_at:'2026-10-17T09:30:00Z',diagnosis:{code:'campus_route',confidence:'suspected',title:'校园路径',message:'无法确定 VPN 状态',actions:['<script>']}};
+assert(syncNetworkReports([inlineReport]).includes('&lt;img'));
+assert(!syncNetworkReports([inlineReport]).includes('<script>'));
+const inlineHost={hidden:true,innerHTML:'',addEventListener(){},replaceChildren(){this.innerHTML='';}};
+const inlineLife=new AbortController(), pending=[];
+const inline=bindSyncNetwork(inlineHost,{signal:inlineLife.signal,services:{auth:{explainNetwork:failures=>new Promise(resolve=>pending.push({failures,resolve}))}}});
+inline.update([{id:'first'}]);inline.update([{id:'first'}]);assert.equal(pending.length,1);
+inline.update([{id:'second'}]);assert.equal(pending.length,2);
+pending[0].resolve({reports:[inlineReport]});await Promise.resolve();assert(inlineHost.innerHTML.includes('正在自动'));
+pending[1].resolve({reports:[inlineReport]});await Promise.resolve();assert(inlineHost.innerHTML.includes('重新检测网络'));
+inline.update([]);assert(inlineHost.hidden&&!inlineHost.innerHTML);
+inline.update([{id:'third'}]);inlineLife.abort();const beforeAbort=inlineHost.innerHTML;
+pending[2].resolve({reports:[inlineReport]});await Promise.resolve();assert.equal(inlineHost.innerHTML,beforeAbort);
+console.log('sync diagnostics UI: automatic single request, escaped evidence, stale replies, successful recovery and unmount cancellation passed');
+
+const networkMarkup=renderNetwork({summary:'0 / 1 个入口响应',scope:'仅检测入口',proxy_configured:true,services:[{
+  name:'<script>untrusted</script>',host:'school.example',port:443,dns:{status:'ok',addresses:['10.15.1.1']},
+  direct:{reachable:false,status:'timeout',elapsed_ms:12},proxy:null,
+  diagnosis:{code:'campus_route',confidence:'suspected',title:'疑似校园网络或 VPN 路径问题',message:'无法确认 VPN 状态',actions:['校外先连接校园 VPN']},
+}]});
+assert(!networkMarkup.includes('<script>') && networkMarkup.includes('&lt;script&gt;'));
+assert(networkMarkup.includes('暂不可达')&&networkMarkup.includes('可能原因依据')&&networkMarkup.includes('无法确认 VPN 状态'));
 
 for (const [keys, sends, prevents] of [
   [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
@@ -118,3 +133,5 @@ console.log('frontend resilience: cleanup failures/hangs isolated, safe non-JSON
 globalThis.fetch=async()=>Response.json({detail:[{loc:['body','port'],msg:'Must be a valid port',type:'value_error'}],code:'invalid_fields',request_id:'synthetic-id',action:'检查字段后重试。'},{status:422});
 await assert.rejects(()=>api('/test'),error=>error.status===422&&error.code==='invalid_fields'&&error.requestId==='synthetic-id'&&error.message.includes('port：Must be a valid port')&&error.message.includes('检查字段后重试。'));
 console.log('frontend errors: field locations, action and support ID retained');
+globalThis.fetch=async()=>Response.json({detail:{message:'ELRC 网络请求失败，已保留缓存。',network_failure:{id:'synthetic',target:'elrc'}}},{status:502});
+await assert.rejects(()=>api('/test'),error=>error.message.includes('ELRC 网络请求失败')&&error.details.network_failure.target==='elrc');

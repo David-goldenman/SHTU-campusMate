@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -13,6 +14,8 @@ from deepseek_harness import DeepSeekHarness
 from deepseek_harness.errors import HarnessError
 from deepseek_harness_runtime import resolve_bundled_launch_args
 from fastapi import HTTPException
+
+from .catalog import runtime_route
 
 
 def prepare(command, *, cwd, env, timeout, check_cancelled):
@@ -51,6 +54,33 @@ def prepare(command, *, cwd, env, timeout, check_cancelled):
             process.communicate(timeout=5)
 
 
+def pnpm_path(runtime_root):
+    """Provide a Corepack-backed pnpm shim when the executable is not installed.
+
+    The official Harness CLI installs plugin packages with ``pnpm``. Node.js
+    ships Corepack, but its shims are often not enabled on Windows; creating a
+    local shim keeps plugin tasks working without administrator rights or a
+    separate global pnpm installation.
+    """
+    path = os.environ.get("PATH", "")
+    if shutil.which("pnpm", path=path):
+        return path
+    corepack = shutil.which("corepack", path=path)
+    if not corepack:
+        return path
+    tools = runtime_root / "tools"
+    tools.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        shim, content = tools / "pnpm.cmd", f'@echo off\r\ncall "{corepack}" pnpm %*\r\n'
+    else:
+        shim, content = tools / "pnpm", f'#!/bin/sh\nexec "{corepack}" pnpm "$@"\n'
+    if not shim.is_file() or shim.read_bytes() != content.encode("utf-8"):
+        shim.write_bytes(content.encode("utf-8"))
+    if os.name != "nt":
+        shim.chmod(0o755)
+    return str(tools) + os.pathsep + path
+
+
 class Harness:
     def __init__(self, modules):
         self.modules = modules
@@ -59,7 +89,7 @@ class Harness:
     def plugins(self):
         return {"plugins": [item for item in self.modules.list()["modules"] if item.get("harness")]}
 
-    def run(self, prompt, context, plugins, model, api_key, *, plugin_env=None, on_event=None, cancel_event=None):
+    def run(self, prompt, context, plugins, model, api_key, *, connection=None, plugin_env=None, on_event=None, cancel_event=None):
         deadline = time.monotonic() + self.run_timeout
         if any(not key.startswith("CAMPUS_PLUGIN_") or not isinstance(value, str) for key, value in (plugin_env or {}).items()):
             raise ValueError("插件环境只接受 CAMPUS_PLUGIN_ 前缀的字符串配置。")
@@ -79,16 +109,23 @@ class Harness:
                 if rules.is_file():
                     instructions.append(rules.read_text(encoding='utf-8'))
             (workspace / 'AGENTS.md').write_text('\n\n'.join(instructions), encoding='utf-8')
-            env = {**os.environ, "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
+            env = {**os.environ, "PATH": pnpm_path(runtime_root), "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
                    "XDG_CACHE_HOME": str(runtime_root / 'cache'), "COREPACK_HOME": str(runtime_root / 'corepack'),
+                   "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
                    "npm_config_store_dir": str(runtime_root / 'pnpm-store'), "npm_config_cache": str(runtime_root / 'npm-cache'),
                    "npm_config_auto_install_peers": "false", "npm_config_update_notifier": "false", **(plugin_env or {})}
+            if not shutil.which("pnpm", path=env["PATH"]):
+                raise HTTPException(503, "AI 插件安装需要 pnpm；请安装 pnpm，或使用带 Corepack 的 Node.js 22+。")
             bypass = env.get("no_proxy", env.get("NO_PROXY", "")) + ",127.0.0.1,localhost"
             env.update(NO_PROXY=bypass, no_proxy=bypass)
+            config = connection or {'provider': 'deepseek', 'base_url': 'https://api.deepseek.com'}
+            route, adapter_rows = runtime_route(config)
+            env['CAMPUS_AI_API_KEY'] = api_key
             rows = [{"id": row, "disabled": True} for row in ("persistent-bash", "persistent-pwsh", "tool-fs", "tool-working-directory", "session-log-deepseek")]
             rows.append({"id": "system-prompt", "config": {"includeHarnessIdentity": False, "includeRuntimeContext": False,
                          "personaPrefix": '\n\n'.join(instructions)}})
             rows.append({'id': 'sandbox-policy', 'config': {'mode': 'workspace-write', 'workspaceRoot': str(workspace)}})
+            rows.extend(adapter_rows)
             if any((entry.harness['folder'] / 'skills').is_dir() for entry in entries):
                 rows.append({'insert': [{'id': 'campus-skills', 'name': '@deepseek-ai/dsh-skill'},
                                         {'id': 'campus-tool-skill', 'name': '@deepseek-ai/dsh-tool-skill'}]})
@@ -117,7 +154,10 @@ class Harness:
                         cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
                 check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),
-                                     model=model, api_key=api_key, base_url="https://api.deepseek.com", reasoning_effort="low", max_tokens=6000, request_timeout_seconds=90) as runtime:
+                                     provider=route, model=model, api_key=api_key if route == 'deepseek-official' else None,
+                                     base_url=config.get('base_url') if route == 'deepseek-official' else None,
+                                     reasoning_effort='low' if route == 'deepseek-official' else None,
+                                     max_tokens=6000, request_timeout_seconds=90) as runtime:
                     done = threading.Event()
 
                     def watch():
@@ -142,7 +182,7 @@ class Harness:
                 check_cancelled()
             except (HarnessError, OSError, TimeoutError, subprocess.SubprocessError):
                 check_cancelled()
-                raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、配置和 DeepSeek 服务后重试。") from None
+                raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、模型配置和服务连接后重试。") from None
             if result.finish_reason != "completed":
                 logging.getLogger(__name__).warning('Harness task ended: reason=%s; tool_calls=%s', result.finish_reason,
                     [event.get('data', {}).get('name') for event in result.events if event.get('type') == 'tool/call'])

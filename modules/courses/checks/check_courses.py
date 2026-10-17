@@ -76,6 +76,12 @@ async def check():
             assert selected.status_code == 200 and selected.json()['items'] == []
             assert (await client.post('/context',json={'course_id':'missing'})).status_code == 404
             assert (await client.post('/context',json={'context_ids':['unknown']})).status_code == 422
+            sources['timetable']['network_failure'] = {'id':'synthetic-failure','target':'timetable','kind':'timeout','at':'2026-10-17T00:00:00Z'}
+            failed = (await client.get('/snapshot')).json()
+            assert failed['status'] == 'partial' and failed['network_failures'][0]['target'] == 'timetable'
+            sources['timetable'].pop('network_failure')
+            recovered = (await client.get('/snapshot')).json()
+            assert recovered['status'] == 'ready' and recovered['network_failures'] == []
             async def changed_account(module,path='/snapshot',**kwargs):
                 context.auth.revision += '-changed'
                 return await api(module,path,**kwargs)

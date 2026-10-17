@@ -171,7 +171,8 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                 if body.scope in {"credentials", "all"}:
                     auth.clear_all()
                     vault.clear()
-                    store.write("ai:settings", {"enabled": False, "model": ai.settings()["model"]})
+                    current_ai = ai.settings()
+                    store.write('ai:settings', {'enabled': False, 'provider': current_ai['provider'], 'model': current_ai['model']})
                 if body.scope == "all":
                     store.clear()
             finally:

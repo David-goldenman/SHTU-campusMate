@@ -7,6 +7,7 @@ from backend.services.campus.source import snapshots
 from backend.services.campus.analysis import account_revision
 from .context import build_context
 from .catalog import SOURCES, combine, current_semester, query
+from .appearance import PALETTE, colors, decorate
 
 
 class Selection(BaseModel):
@@ -31,12 +32,31 @@ def create_router(context):
     async def snapshot():
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SOURCES)
+        response = await context.api("eams")
+        plan = {}
+        if response.status_code == 200:
+            try:
+                candidate = response.json().get("data", {}).get("metadata", {}).get("study_plan", {})
+                plan = candidate if isinstance(candidate, dict) else {}
+            except (ValueError, AttributeError):
+                pass  # Optional plan metadata must not hide readable courses.
         if owner != account_revision(context):
             raise HTTPException(409, "账号已更新，请刷新课程资料。")
         data = combine(values, context.store.read("groups", []), current_semester(values))
+        decorate(data["courses"], plan)
         if unavailable:
             data["issues"].append("以下来源模块未启用或暂时不可用：" + "、".join(unavailable))
-        return {"status": "syncing" if any(value.get("status") == "syncing" for value in values.values()) else "ready" if values else "not_connected", "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable}
+        status = ("syncing" if any(value.get("status") == "syncing" for value in values.values()) else
+                  "partial" if any(value.get("network_failure") for value in values.values()) else
+                  "ready" if values else "not_connected")
+        return {"status": status, "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable,
+                "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")]}
+
+    @router.get("/appearance")
+    async def appearance():
+        value = await snapshot()
+        return {"courses": [{key: item[key] for key in ("id", "course_ids", "code", "term", "department", "department_source", "appearance")}
+                            for item in value["data"]["courses"]], "palette": [colors(row) for row in PALETTE]}
 
     @router.post("/context")
     async def selected_context(body: Selection):

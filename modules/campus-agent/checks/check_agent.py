@@ -16,6 +16,8 @@ with ExitStack() as stack:
     contexts = {identity: stack.enter_context(sandbox(identity)) for identity in packages}
     apps = {}
     async def api(module, path='/snapshot', **kwargs):
+        if module not in apps:
+            return httpx.Response(404, json={'detail': 'Optional module unavailable'})
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=apps[module]),base_url='http://modules.local') as client:
             return await client.request(kwargs.get('method','GET'),path,json=kwargs.get('body'))
     for identity, context in contexts.items():

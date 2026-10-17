@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.padding import PKCS7
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36"
 IDS = "https://ids.shanghaitech.edu.cn/authserver"
 SERVICES = {
+    "ecourse": "https://ecourse.shanghaitech.edu.cn/user/index",
     "blackboard": "https://elearning.shanghaitech.edu.cn:8443/",
     "elrc": "https://elrc.shanghaitech.edu.cn/unifiedlogin/v1/loginmanage/login/direction?redirect_url=https%3A%2F%2Felrc.shanghaitech.edu.cn%2Flearn%2F",
     "timetable": "https://eams.shanghaitech.edu.cn/eams/courseTableForStd!courseTable.action",
@@ -39,7 +40,7 @@ def checked_target(provider: str, target: str | None = None) -> str | None:
     if provider == "ids":
         target = target or "blackboard"
         if target not in SERVICES:
-            raise ValueError("IDS 登录目标须为 blackboard、elrc 或 timetable。")
+            raise ValueError("IDS 登录目标须为 blackboard、elrc、ecourse 或 timetable。")
         return target
     if target is not None:
         raise ValueError("只有 IDS 接受登录目标。")
@@ -62,9 +63,19 @@ def filtered_state(provider: str, state: dict) -> dict:
     return result
 
 
+class NetworkConfigurationError(httpx.RequestError):
+    """Public classification for invalid proxy or CA configuration at client startup."""
+
+
 def http_client(state: dict | None = None) -> httpx.Client:
     state = state or {}
-    client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40)
+    # Campus services use local DNS and the OS route (including an active campus VPN).
+    # Keep environment proxies for external providers and retain normal TLS verification.
+    try:
+        client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40,
+                              mounts={"all://*shanghaitech.edu.cn": None})
+    except (ValueError, ImportError, OSError) as error:
+        raise NetworkConfigurationError("网络客户端配置无效，请检查代理与证书设置。") from error
     for cookie in state.get("cookies", []):
         expiry = cookie.get("expires")
         expiry = int(expiry) if expiry and expiry > 0 else None
@@ -186,6 +197,18 @@ def validate(client: httpx.Client, provider: str, target: str | None, state: dic
             if isinstance(user, dict) and user.get("userName"):
                 return user["userName"]
             raise LoginRequired("Blackboard 未返回可验证的账号标识，请重新连接。")
+        elif target == "ecourse":
+            # Read the signed-in bootstrap identity, never execute page scripts.
+            user = re.search(r'\bglobalData\s*=\s*\{[\s\S]*?\buser\s*:\s*\{([^{}]*)\}', response.text)
+            subject = re.search(r'\buserNo\s*:\s*("(?:[^"\\]|\\.)*")', user[1]) if user else None
+            if subject:
+                try:
+                    value = json.loads(subject[1]).strip()
+                    if value:
+                        return value
+                except (ValueError, TypeError):
+                    pass
+            raise LoginRequired("E 云课堂未返回可验证的账号标识，请重新连接。")
         elif target == "elrc":
             response = client.get("https://elrc.shanghaitech.edu.cn/learn/login/info")
             _check_page(response, "elrc.shanghaitech.edu.cn")

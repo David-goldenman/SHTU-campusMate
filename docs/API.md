@@ -58,6 +58,9 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/auth/providers` | `{providers:[ProviderStatus]}` |
+| GET | `/auth/network` | 最近的校园网络检测；首次 `{checked_at:null,services:[]}`，不发起外部请求 |
+| POST | `/auth/network/check` | 无参数；匿名检测五个固定校园入口，返回 DNS、直连、代理对照和处理建议；详见 AUTH.md |
+| POST | `/auth/network/explain` | `{failures:[{id,target,kind,at,host?}]}`；结合实际同步错误和新入口检测给出内联诊断，最多 6 项；详见 AUTH.md |
 | GET | `/auth/<provider>/status` | 单个 `ProviderStatus`；读取已保存状态 |
 | PUT | `/auth/<provider>/credentials` | `{username,password}` → `ProviderStatus` |
 | POST | `/auth/<provider>/login` | 可选 `{target}`，登录或验证会话，返回状态 |
@@ -83,8 +86,10 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
-| GET | `/ai/settings` | `{enabled, model, key_saved}` |
-| PUT | `/ai/settings` | `{enabled, model, api_key?, delete_key?}` → 安全配置状态 |
+| GET | `/ai/settings` | 当前 `enabled/provider/model/display_name/custom/base_url/protocol/key_saved` 和 `providers` 列表 |
+| GET | `/ai/catalog` | 官方 Harness 锁定版本的 39 个内置提供商、模型 ID 与三种自定义协议 |
+| PUT | `/ai/settings` | 按需提交 `enabled/provider/model/custom/base_url/protocol/display_name/api_key/delete_key`；保存密钥默认启用 |
+| DELETE | `/ai/providers/{id}` | 删除该提供商的配置与密钥；当前提供商被删除时暂停 AI |
 | POST | `/ai/generate` | `{prompt, context?:string, format?:"text"\|"json"}` |
 | POST | `/ai/chat` | `{messages:[{role,content}], format?:"text"\|"json"}` |
 | GET | `/ai/plugins` | `{plugins:[ModuleInfo]}`，提供原生插件的模块及状态 |
@@ -127,7 +132,7 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | GET | `/modules/eams/course-search?q=&page=1` | 学校课程目录 `{items,page,page_size,total,scope,notice}` |
 | GET | `/modules/eams/course-info?syllabus_id=` | 教学大纲 `{id,title,text,url,scope,truncated}` |
 
-学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、已有课程记录、培养方案与学习档案发送至 DeepSeek 官方 API。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
+学习助手会按问题将所需课程、作业、课表、课件文字、录播／讨论、相关通知／邮件、已有课程记录、培养方案与学习档案发送至设置中选择的模型提供商。引用只接受本次读取资料中的 ID 与连续原文；文件引用带真实 `page` 与原文件入口。服务不代交作业、不执行选课；页面操作是已知工作台分类导航。专用 `/tools/*` 只接受当前任务的短期 Bearer 令牌，用户侧写入仍使用统一 CSRF 保护。字段、分页、文件大小与存储约定见 [学习助手](../modules/academic-assistant/README.md)。
 
 流式聊天的 `delta.text` 为正文增量，`complete.message` 与普通聊天结果一致，只有该事件表示成功。流开始后的失败以 `error:{status,detail}` 返回；中断、停止和失败均不保存半段聊天。引用先经工具核对，最终消息保留页码与原文；完整事件字段及生命周期见 [学习助手](../modules/academic-assistant/README.md)。
 
@@ -151,3 +156,7 @@ AI 处理调用方明确提供的文本，不会自动读取模块缓存或登�
 | POST | `timetable/events/import` | 安排字段 + `{origin_id,account_revision}`，重复导入保留手动编辑 |
 
 表中路径均以 `/modules/` 为前缀。跨模块通知与日程导入要求 `account_revision` 为当前共享账号版本，不一致返回 409。网页仍使用 CSRF 保护，原生工具只在自己的固定工具路径使用任务令牌。通知中心提供 `/agent/status`、`/agent/settings`、`/agent/check` 和 `/proposals/{id}/accept|dismiss` 代理接口。详细 schema、字数限制、状态与资料范围分别见 [邮箱](../modules/mail/README.md)、[后台助手](../modules/campus-agent/README.md)、[通知](../modules/notifications/README.md) 与 [时间表](../modules/timetable/README.md)。
+
+## 邮件文件夹与总结
+
+`GET /modules/mail/folders` 提供本地收件箱、未读和智能分类文件夹的数量；完整分类记录继续通过 `/intelligence` 读取。`GET /modules/mail/digests?period=day|week&anchor=YYYY-MM-DD` 返回北京时间的日期范围、分类统计、邮件条目、覆盖范围与已保存总结，不调用模型。`POST /modules/mail/digests {period,anchor?}` 按用户操作生成 `overview/highlights`，校验邮件引用并按账号与日期保存。邮件条目带 `workbench_url`，可返回工作台单封阅读页。范围为最近最多 100 封已同步收件箱邮件；正文不因生成总结额外下载。细节见 [邮箱接口](../modules/mail/README.md#文件夹与日周总结-api)。

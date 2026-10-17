@@ -6,7 +6,7 @@ import {resolve} from 'node:path';
 
 const base = process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap = await (await fetch(base + '/api/v1/bootstrap')).json();
-const modules = bootstrap.modules.filter(item => ['timetable','blackboard','gradescope','assistant','deadlines'].includes(item.id));
+const modules = bootstrap.modules.filter(item => ['timetable','assignments','blackboard','gradescope','assistant','deadlines'].includes(item.id));
 assert(modules.find(item => item.id === 'timetable')?.frontend_url, 'Enable the timetable module before checking its UI');
 const profile = resolve('.codex/tmp/web-check-' + process.pid);
 await mkdir(profile,{recursive:true});
@@ -18,7 +18,9 @@ function browser(action) {
 function fixture(initial, categories) {
   const savedFetch = window.fetch.bind(window);
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
-  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,calls:[],unexpected:[],failLogin:true,localEvents:[]};
+  const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
+  ai.providers.push({provider:'openai',display_name:'OpenAI',model:'gpt-4',custom:false,key_saved:false});
+  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,ai,calls:[],unexpected:[],failLogin:true,localEvents:[],assignmentOrder:{}};
   const json = (body,status=200) => new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
   window.fetch = async (url,options={}) => {
     const path = new URL(url,location.origin).pathname.replace('/api/v1','');
@@ -27,7 +29,17 @@ function fixture(initial, categories) {
     state.calls.push({path,method,target:body.target});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
-    if (path === '/ai/settings') return json({model:'deepseek-flash',enabled:false,key_saved:false});
+    if (path === '/data/backups') return json({backups:[]});
+    if (path === '/ai/catalog') return json({providers:[{id:'deepseek',name:'DeepSeek',models:['deepseek-flash','deepseek-v4-pro']},{id:'openai',name:'openai',models:['gpt-4']}],protocols:['openai-completions','openai-responses','anthropic-messages']});
+    if (path === '/ai/settings') {
+      if (method === 'PUT') {
+        const {api_key,...publicBody} = body;
+        const row = {...(ai.providers.find(row=>row.provider===body.provider)||{}),...publicBody,key_saved:Boolean(api_key)};
+        ai.providers = [...ai.providers.filter(item=>item.provider!==row.provider),row];
+        Object.assign(ai,row,{enabled:body.enabled});
+      }
+      return json(ai);
+    }
     if (path === '/auth/providers') return json({providers});
     if (path === '/modules' || path === '/modules/reload') return json({modules:state.modules,categories});
     const toggle = path.match(/^\/modules\/([^/]+)$/);
@@ -57,19 +69,66 @@ function fixture(initial, categories) {
     }
     if (path === '/modules/timetable/schedule') {
       const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
-      const start = new Date((new URL(url,location.origin).searchParams.get('week_start') || today) + 'T12:00:00+08:00');
-      start.setUTCDate(start.getUTCDate() - (start.getUTCDay() + 6) % 7);
+      const monday = value => {
+        const date = new Date(value + 'T12:00:00+08:00');
+        date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+        return date.toISOString().slice(0,10);
+      };
+      const currentWeek = monday(today);
+      const start = new Date(monday(new URL(url,location.origin).searchParams.get('week_start') || today) + 'T12:00:00+08:00');
       const days = Array.from({length:7},(_,i) => ({date:new Date(start.valueOf() + i*86400000).toISOString().slice(0,10),events:[]}));
       const at = today + 'T09:00:00+08:00';
       const events = [{id:'quiz',title:'Quiz 1',event_type:'deadline',at,source:'blackboard',submitted:false},{id:'exam',title:'合成期末考试',event_type:'exam',at,source:'eams',start_time:'09:00',location:'考试教室'},{id:'untimed-exam',title:'今日考试',event_type:'exam',at:today+'T00:00:00+08:00',date:today,source:'eams',start_time:''},...state.localEvents];
       const course = {id:'class',title:'合成课程',source:'timetable',event_type:'class',at:days[1].date+'T08:15:00+08:00',ends_at:days[1].date+'T09:55:00+08:00',period_start:1,period_end:2,teacher:'合成教师',location:'测试教室'};
       for (const day of days) day.events = events.filter(item=>item.at.slice(0,10)===day.date);
       days[1].events.push(course);
-      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days}});
+      const homeworkEnd = new Date(new Date(currentWeek + 'T12:00:00+08:00').valueOf() + 6*86400000).toISOString().slice(0,10);
+      const homework = {week_start:currentWeek,start:currentWeek,end:homeworkEnd,pending:1,late:1,items:[
+        {id:'homework-pending',title:'合成待交作业',course_title:'合成课程',due_at:today+'T20:00:00+08:00',offset:0,late:false},
+        {id:'homework-late',title:'合成迟交作业',course_title:'合成课程',due_at:today+'T18:00:00+08:00',offset:0,late:true}]};
+      const overviewWeeks = Array.from({length:4},(_,index) => {
+        const offset = index - 1, first = new Date(new Date(currentWeek + 'T12:00:00+08:00').valueOf() + offset * 7 * 86400000);
+        const weekDays = Array.from({length:7},(_,i) => ({date:new Date(first.valueOf() + i * 86400000).toISOString().slice(0,10),events:[]}));
+        const reminders = homework.items.filter(item => item.offset === offset).map(item => ({...item,event_type:'deadline',at:item.due_at,homework:true,platform:'Blackboard',category:item.late ? 'late' : 'pending'}));
+        for (const day of weekDays) {
+          day.events = events.filter(item => item.at.slice(0,10) === day.date);
+          day.events.push(...reminders.filter(item => item.at.slice(0,10) === day.date));
+          if (offset === 0 && day.date === days[1].date) day.events.push(course);
+        }
+        return {offset,week_start:weekDays[0].date,week_end:weekDays[6].date,week_one:currentWeek,teaching_week:5 + offset,periods:[],days:weekDays,conflicts:{items:[],complete:true,message:''}};
+      });
+      const overview = {week_start:homework.week_start,start:homework.start,end:homework.end,weeks:overviewWeeks,pending:homework.pending,late:homework.late};
+      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview});
+    }
+    if (path === '/modules/assignments/snapshot') {
+      const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
+      const values = [
+        {id:'assignment-a',title:'合成作业 A',course_title:'合成课程',source:'blackboard',availability:'open',submitted:false,due_at:today+'T20:00:00+08:00',category:'pending',current:true,url:'https://example.test/a',overdue:false,score:null,max_score:null},
+        {id:'assignment-b',title:'合成作业 B',course_title:'合成课程',source:'gradescope',availability:'open',submitted:false,due_at:today+'T21:00:00+08:00',category:'pending',current:true,url:'https://example.test/b',overdue:false,score:null,max_score:null},
+      ];
+      const order = state.assignmentOrder.pending;
+      if (order) values.sort((left,right) => order.indexOf(left.id) - order.indexOf(right.id));
+      return json({status:'ready',updated_at:today+'T09:00:00+08:00',data:{assignments:values,issues:[]},account_revision:'synthetic-revision',order:state.assignmentOrder});
+    }
+    if (path === '/modules/assignments/order' && method === 'PUT') {
+      if (body.account_revision !== 'synthetic-revision') return json({detail:'账号已切换，请重新读取作业后再排序。'},409);
+      state.assignmentOrder = {...state.assignmentOrder,[body.section]:body.ids};
+      return json({order:state.assignmentOrder,account_revision:'synthetic-revision'});
     }
     if (path === '/modules/timetable/calendar-settings') return json({week_one:'2026-09-14',source:'school'});
+    if (path === '/modules/timetable/commands' && method === 'POST') {
+      const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);return json({applied:true,event:item});
+    }
     if (path === '/modules/timetable/events' && method === 'POST') {
       const item = {...body,id:'local:test',source:'local',at:body.starts_at};state.localEvents.push(item);return json(item,201);
+    }
+    if (path === '/modules/timetable/commands' && method === 'POST') {
+      if (body.action === 'create') {
+        const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);
+        return json({applied:true,after:item});
+      }
+      if (body.action === 'delete') state.localEvents = [];
+      return json({applied:true});
     }
     if (path === '/modules/timetable/events/local%3Atest' && method === 'DELETE') {state.localEvents=[];return json({deleted:true});}
     state.unexpected.push(path);
@@ -133,25 +192,64 @@ try {
   assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile settings fit the viewport');
   assert(await evaluate(`document.querySelector('.sidebar').getBoundingClientRect().right<=0`),'Mobile sidebar starts closed');
   await writeFile(resolve('.codex/tmp/web-check-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await evaluate(`document.querySelector('[data-settings-tab=ai]').click();document.querySelector('[data-ai-edit=deepseek]').click();waitFor(()=>document.querySelector('[data-ai-editor]')?.open)`);
+  assert(await evaluate(`document.querySelector('[data-ai-editor]').matches(':modal')`),'Provider editor traps focus in a native dialog');
+  assert(await evaluate(`document.querySelector('[data-ai-edit=deepseek]').getBoundingClientRect().height<=36`),'Desktop provider actions stay compact');
+  assert(await evaluate(`document.querySelector('#ai-form [type=radio]').getBoundingClientRect().width<=24`),'Provider options use compact radio controls');
+  await evaluate(`document.querySelector('#ai-form').elements.api_key.value='synthetic-cancelled-key'`);
+  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await evaluate(`waitFor(()=>!document.querySelector('[data-ai-editor]').open && document.querySelector('#ai-form').elements.api_key.value==='')`);
+  assert(await evaluate(`document.activeElement.matches('[data-ai-edit=deepseek]')`),'Closing the editor restores focus to its row');
+  await evaluate(`document.querySelector('[data-ai-edit=deepseek]').click();waitFor(()=>document.querySelector('[data-ai-editor]').open)`);
+  await evaluate(`document.querySelector('#ai-form').elements.api_key.value='synthetic-saved-key';document.querySelector('#ai-form').requestSubmit();waitFor(()=>webCheck.ai.enabled && document.querySelector('#ai-form')?.hidden === true)`);
+  assert.equal(await evaluate(`webCheck.ai.enabled`),true,'Saving a key enables AI');
+  await evaluate(`document.querySelector('[data-ai-use=openai]').click();waitFor(()=>webCheck.ai.provider==='openai')`);
+  assert.equal(await evaluate(`webCheck.ai.enabled`),true,'Environment authentication providers can be selected without a saved key');
+  await evaluate(`document.querySelector('[data-ai-add]').click();waitFor(()=>document.querySelector('#ai-form')?.hidden === false)`);
+  await evaluate(`(()=>{const f=document.querySelector('#ai-form');f.querySelector('[name=mode][value=custom]').click();f.elements.provider_id.value='campus-gateway';f.elements.display_name.value='合成服务';f.elements.base_url.value='https://gateway.example/v1';f.elements.protocol.value='anthropic-messages';f.elements.model.value='synthetic-model';f.elements.api_key.value='synthetic-custom-key';f.requestSubmit();})()`);
+  await evaluate(`waitFor(()=>webCheck.ai.provider==='campus-gateway' && document.querySelector('#ai-form')?.hidden === true)`);
+  assert.equal(await evaluate(`webCheck.ai.protocol`),'anthropic-messages');
+  assert.equal(await evaluate(`document.querySelector('#ai-form').elements.api_key.value`),'','Saved secret is cleared from the form');
+  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await evaluate(`document.querySelector('[data-ai-edit=campus-gateway]').click();waitFor(()=>document.querySelector('[data-ai-editor]').open)`);
+  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth && document.querySelector('[data-ai-editor]').scrollWidth<=document.querySelector('[data-ai-editor]').clientWidth`),'Mobile provider dialog fits');
   await evaluate(`location.hash='timetable'; waitFor(()=>document.querySelector('[data-calendar]'))`);
-  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent};})()`);
+  assert.equal(await evaluate(`!!document.querySelector('[data-ai-editor][open]')`),false,'Leaving settings closes the editor');
+  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'),overview=body.querySelector('[data-overview]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,overviewCols:overview.querySelectorAll('thead th').length,overviewRows:overview.querySelectorAll('tr').length,overviewWeeks:overview.querySelectorAll('tbody tr').length,todayBeijing:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date()),overviewToday:overview.querySelector('.overview-day.is-today')?.dataset.overviewDate,overviewPinned:!overview.closest('details')&&Boolean(overview.compareDocumentPosition(body.querySelector('.planner-toolbar'))&Node.DOCUMENT_POSITION_FOLLOWING),homeworkItems:overview.querySelectorAll('.overview-item.is-late').length,platforms:[...overview.querySelectorAll('.overview-platform')].map(item=>item.textContent)};})()`);
   assert.match(timetable.content,/Quiz 1/);assert.match(timetable.content,/合成期末考试/);assert.match(timetable.content,/合成课程/);assert.match(timetable.content,/时间待公布/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
+  assert.match(timetable.content,/近四周作业日程/);assert.match(timetable.content,/不随上方周切换按钮变化/);assert.match(timetable.content,/待完成 1 · 迟交 1/);assert.match(timetable.content,/合成迟交作业/);assert.match(timetable.content,/第 5 周/);assert.equal(timetable.overviewCols,8);assert.equal(timetable.overviewRows,5);assert.equal(timetable.overviewWeeks,4);assert.equal(timetable.overviewToday,timetable.todayBeijing);assert(timetable.overviewPinned,'Assignment schedule stays pinned above the week buttons');assert.equal(timetable.homeworkItems,1);assert.deepEqual(timetable.platforms,['Blackboard','Blackboard']);
+  const overviewBefore = await evaluate(`document.querySelector('[data-overview]').innerText`);
+  const scheduleCalls = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);
+  await evaluate(`document.querySelector('[data-shift="7"]').click(); waitFor(()=>webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length>${scheduleCalls})`);
+  assert.equal(await evaluate(`document.querySelector('[data-overview]').innerText`),overviewBefore,'Week buttons do not change the assignment schedule');
+  const shiftedCalls = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);
+  await evaluate(`document.querySelector('[data-today]').click(); waitFor(()=>webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length>${shiftedCalls})`);
   await evaluate(`(async()=>{document.querySelector('[data-add]').click();const form=document.querySelector('.planner-event-form');form.elements.title.value='合成讲座';form.elements.starts_at.value=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date())+'T16:00';form.requestSubmit();await waitFor(()=>!document.querySelector('#dialog').open);await waitFor(()=>document.querySelector('.week-planner').innerText.includes('合成讲座'));})()`);
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await writeFile(resolve('.codex/tmp/timetable-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile planner fits the viewport');
   await writeFile(resolve('.codex/tmp/timetable-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  await evaluate(`location.hash='assignments';waitFor(()=>document.querySelectorAll('[data-assignment]').length===2)`);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-a','assignment-b']);
+  await evaluate(`document.querySelector('[data-assignment="assignment-a"] [data-move="down"]').click();waitFor(()=>document.querySelector('[data-order-status]').textContent==='顺序已保存')`);
+  assert.deepEqual(await evaluate(`webCheck.assignmentOrder.pending`),['assignment-b','assignment-a']);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-b','assignment-a']);
+  await evaluate(`(()=>{const card=document.querySelector('[data-assignment="assignment-b"]');card.focus();card.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));})()`);
+  await evaluate(`waitFor(()=>webCheck.assignmentOrder.pending[0]==='assignment-a')`);
+  assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-a','assignment-b']);
   await evaluate(`location.hash='settings';waitFor(()=>document.querySelector('[data-module-toggle=timetable]'))`);
   assert.equal(await evaluate(`document.querySelector('link[href*="/timetable/"]')===null`),true,'Timetable styles are removed');
   await evaluate(`window.toggleModule=async(id)=>{document.querySelector('[data-settings-tab=modules]').click();const input=document.querySelector('[data-module-toggle="'+id+'"]');input.checked=!input.checked;input.dispatchEvent(new Event('change'));await waitFor(()=>document.querySelector('[data-module-toggle="'+id+'"]')!==input);};toggleModule('timetable')`);
   assert.equal(await evaluate(`!!document.querySelector('[data-nav=timetable]')`),false);
   await evaluate(`toggleModule('blackboard')`); assert.equal(await evaluate(`!!document.querySelector('[data-nav=courses]')`),true);
   await evaluate(`toggleModule('gradescope')`); assert.equal(await evaluate(`!!document.querySelector('[data-nav=courses]')`),false);
-  await evaluate(`toggleModule('assistant')`); assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-nav]')].map(a=>a.dataset.nav)`),['settings']);
+  await evaluate(`toggleModule('assistant')`); await evaluate(`toggleModule('assignments')`); assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-nav]')].map(a=>a.dataset.nav)`),['settings']);
   await evaluate(`location.hash='timetable';waitFor(()=>location.hash.split('?')[0]==='#settings' && document.querySelector('[data-module-toggle=timetable]'))`);
   assert.deepEqual(await evaluate(`webCheck.unexpected`),[]);
-  console.log('PASS: combined timetable, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
+  console.log('PASS: pinned assignment schedule, saved drag order, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
 } finally {
   socket?.close();
   browser('close');

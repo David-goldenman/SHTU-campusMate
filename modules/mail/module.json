@@ -1,13 +1,13 @@
 {
   "id": "mail",
   "name": "校园邮箱",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "category": "mail",
   "api_version": 1,
   "navigation": {
     "label": "邮箱",
     "icon": "✉",
-    "description": "阅读校园邮件，按规则、手动或 AI 整理分类。",
+    "description": "按文件夹阅读和分类校园邮件，查看日总结与周总结。",
     "order": 20
   }
 }

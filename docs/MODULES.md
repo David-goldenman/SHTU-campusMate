@@ -1,5 +1,11 @@
 # 模块开发接口
 
+共享展示 SDK `/assets/campus.js` 的 `submissionLabel(item)` 供作业管理和课程中心显示同一提交状态及缓存提示；它只格式化来源已有字段，不请求来源、不决定待办。状态与依据由来源模块提供，待办规则由业务聚合模块实现。
+
+`applyAccent(element, {accent,tint,ink})` 校验六位十六进制颜色后，通过 CSSOM 设置 `--record-accent/--record-tint/--record-ink`，缺失或非法值移除对应属性。课程中心与时间表共用该展示 helper；共享 SDK 不选择学院、课程或业务配色。
+
+作业管理 `GET /snapshot` 的 `summary` 为全部缓存统计，`summary.by_source[平台]` 为该平台统计；两层均含 `total/unsubmitted/pending/submission_states/needs_review`，不受关键词或分页影响。七种提交状态互斥，`submitted` 只确认提交、评分情况未确认；只有 `needs_grading` 表示待评分，不能用空分数推断。按平台回答时使用对应平台的状态统计。
+
 每项业务功能在自己的 `modules/<id>/` 目录开发，框架通过清单和固定入口加载。主侧栏分类、设置和共享服务由框架统一管理；模块把页面挂到所选分类，将后端接口挂到自己的命名空间。
 
 ## 目录和清单
@@ -131,6 +137,8 @@ def create_router(context):
 模块属于受信任本地代码，运行权限与框架一致。目录分层和注入上下文用于团队分工与状态隔离；安装模块前审核其代码及外部访问行为。
 
 ## 校园数据模块
+
+来源可通过 `Source(..., network_target=共享认证目标)` 选择网络失败诊断；SDK 不选择具体业务目标。网络请求失败的 error/partial 快照附带 `network_failure:{id,target,kind,at,host?}`，重试启动或成功时清除；解析、登录和权限失败不携带该标记。标记按账号版本隔离，不保存原始异常或完整 URL。`Remote.network_error` 仅在内存保留最后一次重试仍失败的 RequestError，供 Source 识别局部失败。聚合页转发 `network_failures` 数组。共享 `sourcePanel` 自动显示，其他页面可用 `/assets/sync-network.js` 的 `bindSyncNetwork(host,context,retry?)`，调用返回对象的 `update(failures)`；同一故障去重，切页中止，恢复后清除。它通过 `context.services.auth.explainNetwork(failures)` 调用公开诊断 API；详见 [AUTH.md](AUTH.md)。结构化 HTTP 错误的 `detail.message` 显示为消息，原公开 detail 保存在前端 Error 的 `details`。
 
 公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。日期带时区，页面以 Asia/Shanghai 展示。
 

@@ -1,5 +1,6 @@
 import secrets
 import threading
+from datetime import date
 from typing import Literal
 
 from fastapi import HTTPException, Query, Request
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from backend.services.campus import Remote, Source, SourceError, rows
 from .reader import inbox, read_message
 from .intelligence import BUCKETS, INTERESTS, Intelligence, Preferences, Submission, Decision
+from .digests import Digests, DigestRequest
 
 _source = None
 _intelligence = None
@@ -140,6 +142,19 @@ def create_router(context):
         return detail
 
     intelligence = _intelligence = Intelligence(context, _source, selected, read_cached)
+    digests = Digests(context, _source, intelligence)
+
+    @router.get('/folders')
+    def folders():
+        return digests.folders()
+
+    @router.get('/digests')
+    def digest_snapshot(period: Literal['day', 'week'] = 'day', anchor: date | None = None):
+        return digests.public(period, anchor)
+
+    @router.post('/digests')
+    def generate_digest(body: DigestRequest):
+        return digests.generate(body)
 
     @router.get('/message')
     def message(message_id: str = Query(min_length=1, max_length=300)):

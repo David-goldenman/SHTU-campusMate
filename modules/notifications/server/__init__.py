@@ -20,7 +20,8 @@ def create_router(context):
     router = APIRouter()
 
     @router.get("/snapshot")
-    def snapshot():
+    async def snapshot():
+        await _service.reconcile_assignments()
         return _service.snapshot()
 
     @router.post("/generate")
