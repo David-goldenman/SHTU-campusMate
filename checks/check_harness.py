@@ -28,7 +28,13 @@ async def check(directory):
     study = directory / "modules" / "study"
     shutil.copytree(PROJECT / "modules" / "academic-assistant" / "harness", study / "harness")
     (study / "module.json").write_text(json.dumps({**manifest, "id": "study", "name": "学习工具"}), encoding="utf-8")
+    for alias, module in [('mail-tools','mail'), ('background-tools','campus-agent')]:
+        target = directory / 'modules' / alias
+        shutil.copytree(PROJECT / 'modules' / module / 'harness', target / 'harness')
+        (target / 'module.json').write_text(json.dumps({**manifest, 'id':alias}), encoding='utf-8')
     requests, workspaces, started, release = [], [], threading.Event(), threading.Event()
+    live, streamed, streaming = [], threading.Event(), False
+    cancelling, release_cancel = False, threading.Event()
     items = [{"id": "late", "title": "实验", "due_at": "2026-10-21T12:00:00+08:00"},
              {"id": "early", "title": "阅读", "due_at": "2026-10-20T12:00:00+08:00"}]
 
@@ -38,6 +44,12 @@ async def check(directory):
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.path in {'/tools/review', '/tools/read'}:
+                assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
+                assert body == ({'decision':{'bucket':'digest'}} if self.path.endswith('review') else {'module_id':'courses','path':'/snapshot'})
+                self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
+                self.wfile.write(b'{"saved":true}')
+                return
             if self.path == '/tools/query':
                 assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
                 assert body == {'area': 'assignments', 'pending': True}
@@ -48,6 +60,8 @@ async def check(directory):
                 return
             requests.append((body, self.headers.get("Authorization")))
             study_task = any(tool['function']['name'] == 'study_query' for tool in body['tools'])
+            names = {tool['function']['name'] for tool in body['tools']}
+            extension = 'mail_submit' if 'mail_submit' in names else 'campus_read' if 'campus_read' in names else None
             first = not any(message["role"] == "tool" for message in body["messages"])
             if first:
                 started.set()
@@ -58,6 +72,9 @@ async def check(directory):
                 if study_task:
                     calls = [{'index': 0, 'id': 'study-call', 'type': 'function', 'function': {'name': 'study_query', 'arguments': json.dumps({'area': 'assignments', 'pending': True})}}]
                     calls.append({'index': 1, 'id': 'skill-call', 'type': 'function', 'function': {'name': 'skill', 'arguments': json.dumps({'name': 'campus-planning'})}})
+                if extension:
+                    arguments = {'decision':{'bucket':'digest'}} if extension == 'mail_submit' else {'module_id':'courses','path':'/snapshot'}
+                    calls = [{'index':0,'id':'extension-call','type':'function','function':{'name':extension,'arguments':json.dumps(arguments)}}]
                 delta, finish = {"tool_calls": calls}, "tool_calls"
             else:
                 if study_task:
@@ -73,6 +90,13 @@ async def check(directory):
                 chunk = {"id": "synthetic", "object": "chat.completion.chunk", "model": body["model"],
                          "choices": [{"index": 0, "delta": change, "finish_reason": reason}]}
                 self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+                self.wfile.flush()
+                if streaming and study_task and not first and reason is None:
+                    if cancelling:
+                        release_cancel.wait(15)
+                        return
+                    else:
+                        assert streamed.wait(10), 'Live frame must arrive before the model response ends'
             self.wfile.write(b"data: [DONE]\n\n")
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Model)
@@ -137,15 +161,46 @@ async def check(directory):
                     (plugin / "package.json").write_text(json.dumps(package), encoding="utf-8")
                     (plugin.parent / "outside.js").write_text("export function apply() {}", encoding="utf-8")
                     refreshed = (await client.post("/api/v1/modules/reload")).json()["modules"]
-                    assert refreshed[0]["status"] == "error" and "harness 目录" in refreshed[0]["error"]
-                    result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'],
+                    failed = next(item for item in refreshed if item['id'] == 'planner')
+                    assert failed['status'] == 'error' and 'harness 目录' in failed['error']
+                    streaming = True
+
+                    def on_event(frame):
+                        live.append(frame)
+                        if frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta':
+                            streamed.set()
+
+                    result = await asyncio.to_thread(app.state.ai.run, prompt='读取待完成作业', plugins=['study'], on_event=on_event,
                                                     plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
                     assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
                     assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
-                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_finish'}
+                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish'}
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
+                    assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)
+                    for alias, prefix, tools in [('mail-tools','MAIL',{'mail_submit'}),('background-tools','AGENT',{'campus_read','campus_mail','campus_classify','campus_propose','campus_notice','campus_sync'})]:
+                        result = await asyncio.to_thread(app.state.ai.run, prompt='合成原生插件验证', plugins=[alias],
+                            plugin_env={f'CAMPUS_PLUGIN_{prefix}_URL':f'http://127.0.0.1:{server.server_port}', f'CAMPUS_PLUGIN_{prefix}_TOKEN':'synthetic-tool-token'})
+                        assert result['tools'][0]['is_error'] is False, result
+                        assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == tools
+                    cancelling, cancelled = True, threading.Event()
+
+                    def cancel_on_text(frame):
+                        if frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta':
+                            cancelled.set()
+
+                    try:
+                        await asyncio.wait_for(asyncio.to_thread(app.state.ai.run, prompt='停止合成流式任务', plugins=['study'],
+                            on_event=cancel_on_text, cancel_event=cancelled,
+                            plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'}), 12)
+                        raise AssertionError('Cancelled runtime must stop')
+                    except Exception as error:
+                        assert getattr(error, 'status_code', None) == 409, repr(error)
+                    finally:
+                        release_cancel.set()
+                    assert cancelled.is_set() and not any(path.exists() for path in workspaces)
     finally:
+        release_cancel.set()
         release.set()
         server.shutdown()
         server.server_close()
@@ -157,4 +212,4 @@ if __name__ == "__main__":
     temporary.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="check-harness-", dir=temporary) as directory:
         asyncio.run(check(Path(directory)))
-    print("PASS: official runtime, native tools/bundles, tool validation, lifecycle locks, hot updates and credential boundary")
+    print("PASS: official runtime streaming/cancellation, native tools/bundles, lifecycle locks, credentials and workspace cleanup")

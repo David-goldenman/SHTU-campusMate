@@ -40,7 +40,8 @@
 [data-ui-theme="nord-refined"] .provider-card { padding:24px; border-radius:12px; background:#fbfcfe; }
 [data-ui-theme="nord-refined"] .section-heading p { font-size:14px; }
 [data-ui-theme="nord-refined"] #toast { left:calc(50% + var(--sidebar-width)/2); }
-.module-shortcuts { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+.page-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.module-shortcuts { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .module-shortcuts button { min-height:44px; max-width:100%; padding:9px 16px; border:1px solid var(--border); border-radius:9px; background:var(--paper); color:var(--link); font-size:14px; overflow-wrap:anywhere; }
 .module-shortcuts button:hover { background:var(--surface); border-color:var(--nord9); }
 [data-ui-theme="nord-refined"] .campus-overview .overview-onboarding { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 20px; margin-bottom:24px; padding:20px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
@@ -59,6 +60,9 @@ html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a:hover { ba
 [data-ui-theme="nord-refined"] .overview-day a { min-width:0; overflow-wrap:anywhere; }
 [data-ui-theme="nord-refined"] .campus-overview .overview-sources { padding:12px 20px; border:1px solid var(--border); border-radius:12px; }
 [data-ui-theme="nord-refined"] .overview-sources summary { min-height:44px; padding:8px 0; cursor:pointer; font-size:14px; color:var(--text); }
+[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats { grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+html[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats a { padding:8px 12px; }
+[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats strong { font-size:25px; }
 @media (max-width:1100px) {
   [data-ui-theme="nord-refined"] .campus-overview .overview-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -85,4 +89,6 @@ html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a:hover { ba
   html[data-ui-theme="nord-refined"] .campus-overview .overview-stats a { padding:14px; }
   [data-ui-theme="nord-refined"] .campus-overview .overview-stats strong { font-size:30px; }
   [data-ui-theme="nord-refined"] .campus-overview .overview-columns>section { padding:16px; }
+  html[data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats a { padding:8px 4px; }
+  [data-ui-theme="nord-refined"] .campus-overview.overview-compact .overview-stats span { font-size:12px; }
 }

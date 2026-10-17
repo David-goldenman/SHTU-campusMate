@@ -1,4 +1,6 @@
 from urllib.parse import urlsplit
+from html import escape
+import re
 
 from bs4 import BeautifulSoup, Comment
 
@@ -49,6 +51,9 @@ def inbox(remote, parameters, previous):
 def presentation(content):
     if not isinstance(content, str):
         raise SourceError("邮件正文格式无法识别。")
+    if not re.search(r'</?(?:html|body|p|div|span|br|table|ul|ol|h[1-6]|a|pre|strong|b)\b', content, re.I):
+        paragraphs = re.split(r'\n\s*\n', content.replace('\r\n', '\n'))
+        content = ''.join('<p>' + escape(part).replace('\n', '<br>') + '</p>' for part in paragraphs)
     tree = BeautifulSoup(content, "html.parser")
     for comment in tree.find_all(string=lambda value: isinstance(value, Comment)):
         comment.extract()
@@ -64,6 +69,14 @@ def presentation(content):
             node.unwrap()
         else:
             attrs = {}
+            style = str(node.get('style', '')).lower()
+            classes = []
+            if re.search(r'text-align\s*:\s*center', style):
+                classes.append('mail-align-center')
+            if re.search(r'font-weight\s*:\s*(?:bold|[7-9]00)', style):
+                classes.append('mail-bold')
+            if classes:
+                attrs['class'] = ' '.join(classes)
             href = str(node.get("href") or "").strip()
             if node.name == "a" and urlsplit(href).scheme.lower() in {"http", "https"}:
                 attrs.update(href=href, target="_blank", rel="noopener noreferrer")

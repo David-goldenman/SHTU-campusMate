@@ -1,6 +1,6 @@
 # 本地 UI 与团队更新的维护说明
 
-本机在 `codex/local-ui-polish` 保留 UI 和启动器定制，持续整合团队 `origin/main`。个人启动器及其配置只保存在本地。UI 主题、交互和检查已通过 `codex/share-nord-ui` 上传，并创建 [PR #11](https://github.com/David-goldenman/Shanghaitech-2026-Hackthon/pull/11) 供团队合入；本地已继承同一份共享 UI 提交。定时任务每 15 分钟获取远端引用并报告变化，不自动合并、切换分支或推送。
+本机在 `codex/local-ui-polish` 保留 UI 和启动器定制，持续整合团队 `origin/main`。个人启动器及其配置只保存在本地。UI 主题、交互和检查已通过 `codex/share-nord-ui` 上传，[PR #11](https://github.com/David-goldenman/Shanghaitech-2026-Hackthon/pull/11) 已合入团队主线；本地沿用同一主题，并继续接收团队的界面和功能更新。定时任务每 15 分钟获取远端引用并报告变化，不自动合并、切换分支或推送。
 
 ## 从哪里启动
 
@@ -30,15 +30,17 @@
 
 ## 功能与结构改哪里
 
-主题文件只能改变外观。以下少量本地行为仍在原文件，需要合并时核对：
+主题文件只能改变外观。界面行为已成为团队主线的一部分，以下文件按各自职责维护；本地独有改动主要是已有环境启动器：
 
-- `web/app.js`：跳至主内容、切页焦点，以及非分页分类中的页面分区快捷按钮。侧栏、模块分类、分页布局与生命周期继续使用主线契约，未写死业务模块 ID。
-- `modules/dashboard/web/index.js`：保留新版近期作业和日程；全部来源尚未连接时显示 `—` 与连接引导，收起重复的未连接提示，保留独立错误。第四张统计使用已有 `ready_sources` 字段。
+- `web/app.js`：导航、常驻后台入口、聚合主页面布局、页面分区快捷按钮与主要阅读区切换，全部沿用团队主线的模块元数据与生命周期。
+- `modules/dashboard/web/index.js`：紧凑统计、按需展开的近期作业与日程；全部来源尚未连接时显示 `—` 与连接引导，保留独立错误。来源统计继续使用已有 `ready_sources` 字段。
 - `scripts/launch.py`：本机已有环境启动、进程归属检查、停止与依赖校验。只支持项目实际使用的版本、固定 Git 地址以及当前 Windows 平台条件；未知依赖条件会明确报错。
 - `run.cmd`：本机双击入口对 `run-local.ps1` 的引用。这是仍需保留的公共启动入口差异。
 - `checks/check_ui_theme.mjs`、`checks/check_launcher.py`、`checks/check_launcher_requirements.py`：本地主题与启动器回归检查，和团队检查分开维护。
 
-Piazza 保持信息同步和新附件提醒，不自动下载附件。本轮没有新增 QQ 接入或改动来源抓取逻辑。
+Piazza 保持信息同步和新附件提醒，不自动下载附件。本地没有新增 QQ 接入。
+
+本次同步到 `3535313`，包含 16 个模块：新增聊天多会话、流式 Markdown 回复、课程聚合阅读、邮件分类和校园后台助手。后台入口、流式请求、会话迁移与账号隔离采用团队主线契约；启动入口继续复用已有项目 Python。
 
 ## 下次更新怎么做
 
@@ -61,7 +63,7 @@ git merge --no-commit origin/main
 
 4. 验证后完成合并提交，重启本机后台并刷新页面。不要在尚未解决冲突时启动程序。工作区不干净或合并中断时，先检查 `git status`，不要使用强制重置覆盖修改。
 
-本次同步前的完整版本保存在本地备份分支 `codex/ui-before-sync-20261017`，可用于对照，不需要复制覆盖整个目录。需要试验团队原版时可使用独立工作目录，避免在运行中的目录来回切换分支。
+最早的 UI 版本保存在 `codex/ui-before-sync-20261017`；本次同步前的版本另保存在 `codex/backup-before-3535313`。设置和记录的冷备份保存在 `.private/backups/before-3535313-*/`，不上传 Git。需要试验团队原版时可使用独立工作目录，避免在运行中的目录来回切换分支。
 
 ## 本机验证入口
 
@@ -73,6 +75,8 @@ git merge --no-commit origin/main
 & .\.codex\venv\Scripts\python.exe -X utf8 -B checks/check_launcher.py
 & D:\Hermes\node\node.exe checks/check_web.mjs http://127.0.0.1:16666
 & D:\Hermes\node\node.exe checks/check_ui_theme.mjs http://127.0.0.1:16666
+& D:\Hermes\node\node.exe modules/academic-assistant/checks/check_web.mjs http://127.0.0.1:16666
+& D:\Hermes\node\node.exe checks/check_campus_workspace.mjs http://127.0.0.1:16666
 ```
 
 本地 UI 检查包含真实未连接页面、合成有数据/无数据快照、独立错误保留、分页切换、模块样式清理、主题开关对照以及 1440/768/375px 和横屏布局。团队检查继续覆盖登录草稿、重试、时间表和模块启停。测试窗口使用合成账号，不提交真实登录信息或调用付费 AI。

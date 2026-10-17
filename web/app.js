@@ -8,6 +8,7 @@ const scrim = document.querySelector('#menu-scrim');
 document.querySelector('.skip-link').addEventListener('click',event => { event.preventDefault(); main.focus(); });
 let state;
 let pageScope;
+let backgroundScope, backgroundKey = '';
 let revision = 0;
 const selectedViews = new Map();
 
@@ -62,7 +63,7 @@ function services(signal) {
   });
 }
 
-async function mountModule(module, container, scope) {
+async function mountModule(module, container, scope, background = false) {
   const body = document.createElement('div');
   body.className = 'module-mount';
   body.dataset.moduleId = module.id;
@@ -71,6 +72,7 @@ async function mountModule(module, container, scope) {
   card.innerHTML = '<header class="module-card-heading"><h2>' + escape(module.name) + '</h2><span class="module-status status-' + escape(module.status) + '"' + (module.status === 'ready' ? ' hidden' : '') + '>' + moduleStatuses[module.status] + '</span></header>';
   card.append(body);
   container.append(card);
+  if (background) {card.className='background-module';card.querySelector('header').remove();}
   if (module.status === 'error') {
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块需要检查</h3><p>' + escape(module.error || '请查看模块配置和服务入口。') + '</p></div>';
     return;
@@ -81,7 +83,7 @@ async function mountModule(module, container, scope) {
   scope.controller.signal.addEventListener('abort',abort,{once:true});
   if (scope.controller.signal.aborted) abort();
   try {
-    const url = new URL(module.frontend_url,location.origin);
+    const url = new URL(background ? module.background_url : module.frontend_url,location.origin);
     const prefix = '/module-assets/' + encodeURIComponent(module.id) + '/';
     if (url.origin !== location.origin || !url.pathname.startsWith(prefix)) throw new Error('模块入口需要位于本机模块资源目录。');
     const entry = await import(url.href);
@@ -90,6 +92,7 @@ async function mountModule(module, container, scope) {
     body.replaceChildren();
     const cleanup = await entry.mount(body,{
       api:moduleApi(module.id,lifetime.signal), ui, navigate, module:{...module},
+      focus:active => {card.classList.toggle('module-focused',active);container.classList.toggle('module-focus',!!container.querySelector('.module-focused'));},
       signal:lifetime.signal, services:services(lifetime.signal),
     });
     if (cleanup !== undefined && typeof cleanup !== 'function') throw new Error('模块 mount 需要返回清理函数或不返回值。');
@@ -99,6 +102,7 @@ async function mountModule(module, container, scope) {
     abort();
     scope.controller.signal.removeEventListener('abort',abort);
     if (scope.controller.signal.aborted) return;
+    if (background) {card.remove();toast(module.name + '暂时无法打开：' + error.message);return;}
     body.innerHTML = '<div class="module-error" role="alert"><h3>模块暂时无法打开</h3><p>' + escape(error.message) + '</p></div>';
     card.querySelector('.module-status').textContent = '加载失败';
     card.querySelector('.module-status').hidden = false;
@@ -106,15 +110,35 @@ async function mountModule(module, container, scope) {
   }
 }
 
+async function stopBackground() {
+  const scope=backgroundScope;backgroundScope=null;backgroundKey='';
+  if (!scope) return;
+  scope.controller.abort();
+  for (const cleanup of scope.cleanups) await cleanup();
+  scope.root.remove();
+}
+
+async function syncBackground() {
+  const modules=state.modules.filter(item=>item.enabled&&item.status==='ready'&&item.background_url);
+  const key=modules.map(item=>item.background_url).join('|');
+  if (key===backgroundKey) return;
+  await stopBackground();backgroundKey=key;
+  const root=document.createElement('div');document.body.append(root);
+  const scope={controller:new AbortController(),cleanups:[],root};backgroundScope=scope;
+  await Promise.all(modules.map(module=>mountModule(module,root,scope,true)));
+}
+
 async function render() {
   const current = ++revision;
   await dispose();
+  if (current !== revision) return;
+  await syncBackground();
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
   const enabled = state.modules.filter(module => module.enabled && module.has_frontend && (module.status === 'error' || module.status === 'ready'));
   const items = navigation.filter(([id]) => id === 'settings' || enabled.some(module => module.category === id));
-  const requested = location.hash.slice(1);
+  const requested = location.hash.slice(1).split('?')[0];
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
   document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>').join('');
@@ -131,8 +155,10 @@ async function render() {
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
   zone.dataset.count = String(visible.length);
-  const tabbed = state.categories.find(item => item.id === page)?.layout === 'tabs' && visible.length > 1;
+  const layout = state.categories.find(item => item.id === page)?.layout;
+  const tabbed = layout === 'tabs' && visible.length > 1;
   let mounted = visible;
+  if (layout === 'primary' && visible.length) {mounted=[visible.find(item=>item.id===page)||visible[0]];zone.dataset.count='1';}
   if (tabbed) {
     const selected = visible.find(item => item.id === selectedViews.get(page)) || visible.find(item => item.id === page) || visible[0];
     mounted = [selected];
@@ -149,7 +175,7 @@ async function render() {
       button.onkeydown = event => {const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];if (offset) {event.preventDefault();tabs.children[(index + offset + visible.length) % visible.length].click();}};
     });
   }
-  if (!tabbed && visible.length > 1) {
+  if (layout !== 'primary' && !tabbed && visible.length > 1) {
     const shortcuts = document.createElement('nav');
     shortcuts.className = 'module-shortcuts';
     shortcuts.setAttribute('aria-label','页面分区');
@@ -157,19 +183,20 @@ async function render() {
     shortcuts.addEventListener('click',event => {
       const button = event.target.closest('[data-module-section]');
       if (!button) return;
-      const heading = [...zone.querySelectorAll('.module-card')].find(card => card.querySelector('[data-module-id]')?.dataset.moduleId === button.dataset.moduleSection)?.querySelector('h2');
+      const card = [...zone.querySelectorAll('.module-card')].find(card => card.querySelector('[data-module-id]')?.dataset.moduleId === button.dataset.moduleSection);
+      const heading = card?.querySelector('.module-mount h2') || card?.querySelector('h2');
       if (!heading) return;
       heading.tabIndex = -1;
       heading.closest('.module-card').scrollIntoView({block:'start'});
       heading.focus({preventScroll:true});
     },{signal:scope.controller.signal});
-    zone.before(shortcuts);
+    main.querySelector('.page-heading').append(shortcuts);
   }
   const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{
       modules:state.modules, labels, signal:scope.controller.signal,
-      reload:reloadModules, setEnabled, refresh, beforeClear:dispose,
+      reload:reloadModules, setEnabled, refresh, beforeClear:async()=>{await dispose();await stopBackground();},
     }));
   } else {
     main.querySelector('#settings-area').remove();
@@ -182,6 +209,7 @@ async function render() {
 async function reloadModules() {
   ++revision;
   await dispose();
+  await stopBackground();
   main.innerHTML = '<div class="loading" role="status"><span class="spinner" aria-hidden="true"></span>正在刷新模块…</div>';
   try { Object.assign(state,await api('/modules/reload',{method:'POST'})); }
   finally { await render(); }
@@ -191,6 +219,7 @@ async function reloadModules() {
 async function setEnabled(id, enabled) {
   ++revision;
   await dispose();
+  await stopBackground();
   try { Object.assign(state,await api('/modules/' + encodeURIComponent(id),{method:'PUT',body:{enabled}})); }
   finally { await render(); }
   toast(enabled ? '模块已启用。' : '模块已停用。');
@@ -209,7 +238,7 @@ async function start() {
 }
 
 window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
-window.addEventListener('pagehide',() => { void dispose(); });
+window.addEventListener('pagehide',() => { void dispose();void stopBackground(); });
 
 try { await start(); }
 catch (error) {

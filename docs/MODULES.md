@@ -26,7 +26,7 @@ modules/notes/
 {"id":"notes","name":"笔记","version":"0.1.0","category":"courses","api_version":1}
 ```
 
-`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 使用同样的 ID 格式，`settings` 由框架保留。业务分类由模块自行声明，无需修改框架白名单。可选 `navigation:{label,icon,description,order,layout}` 决定侧栏文本、图标、描述及顺序（order 为 0–10000；layout 为 `stack` 或 `tabs`，默认 `stack`）；相同分类的模块须声明一致内容。旧清单未声明时以分类 ID、▧、空描述、order=100 兼容。冲突时显式声明优先，其后按模块 ID 排序选择第一项；分类按 order、分类 ID 排序。框架设置始终在最后。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
+`id` 必须与目录名一致，匹配 `[a-z][a-z0-9_-]{0,47}`；`reload` 由框架保留。`category` 使用同样的 ID 格式，`settings` 由框架保留。业务分类由模块自行声明，无需修改框架白名单。可选 `navigation:{label,icon,description,order,layout}` 决定侧栏文本、图标、描述及顺序（order 为 0–10000；layout 为 `stack`、`tabs` 或 `primary`，默认 `stack`）；相同分类的模块须声明一致内容。旧清单未声明时以分类 ID、▧、空描述、order=100 兼容。冲突时显式声明优先，其后按模块 ID 排序选择第一项；分类按 order、分类 ID 排序。框架设置始终在最后。`version` 由模块负责人维护，`api_version:1` 表示当前框架契约。`web/index.js`、`web/background.js`、`server/__init__.py` 与 `harness/package.json` 至少提供一个。模块可以只提供页面、后端服务或原生 AI 插件；配置能力放在自己的页面、模块 API 或插件 bundle 内。
 
 新增 AI 工具和工作流使用独立模块 ID，提供 `harness/` 原生入口。普通页面与 Python API 按需添加；纯插件的 `frontend_url` 为 `null`，通过共享 `/api/v1/ai/run` 执行。模块列表以 `harness:true` 标识原生入口，调用时选择已就绪模块。基础 AI 助手提供资料选择和任务结果展示，每项具体工具按自己的模块生命周期启停。
 
@@ -50,7 +50,9 @@ export async function mount(container, context) {
 | 上下文属性 | 用法 |
 | --- | --- |
 | `context.module` | 当前模块的 `ModuleInfo` |
+| `context.focus(active)` | 将当前模块设为本分类的主要阅读区；其他卡片暂时隐藏，false 恢复，卸载时清理 |
 | `context.api(path, options)` | 请求 `/api/v1/modules/<id>` 下的接口，自动 JSON 与本地写请求头 |
+| `context.api(path, {onEvent, signal, ...options})` | 流式 NDJSON 接口逐行调用 `onEvent(event)`；自定义取消信号与模块卸载信号共同生效 |
 | `context.services.auth.providers()` | 列出共享认证配置状态 |
 | `context.services.auth.status(id)` | 查询某认证提供方的本地状态 |
 | `context.services.ai.settings()` | 读取共享 AI 启用状态 |
@@ -88,6 +90,7 @@ def create_router(context):
 | 上下文属性 | 用法与存储边界 |
 | --- | --- |
 | `context.id` | 当前模块 ID |
+| `context.modules()` | 当前模块和分类的公开元数据，与管理接口结构一致；不返回凭据 |
 | `context.store.read(key, default=None)` | 读取本模块非秘密 JSON 状态 |
 | `context.store.write(key, value)`、`.delete(key)`、`.clear()` | 管理本模块 SQLite 命名空间 |
 | `context.secrets.get(key)`、`.save(key, dict)`、`.delete(key)` | 管理本模块 DPAPI 加密秘密，缺失返回 `{}` |
@@ -101,6 +104,10 @@ def create_router(context):
 认证用法见 [AUTH.md](AUTH.md)，AI 用法见 [AI.md](AI.md)。模块的接口、数据格式、使用的认证提供方、清理行为和检查命令写入本模块 `README.md`，便于人员交接。
 
 ## 热插拔流程
+
+模块可提供 `web/background.js`，导出与页面相同的 `mount(container, context)`。就绪时 `ModuleInfo.background_url` 返回版本化地址，否则为 null。宿主在独立节点挂载常驻界面，页面切换时保留；模块停用、刷新、清数据和页面退出时中止并清理。后台入口不增加侧栏条目，也不影响 `has_frontend` 对页面入口的定义。首次 await 前使用带 signal 的样式和清理注册；业务提醒、轮询频率和判断均属于模块。
+
+`navigation.layout` 支持 `stack`、`tabs`、`primary`。primary 只挂载分类的聚合页面，优先选择 ID 等于分类 ID 的页面，否则选择首个页面；其余来源模块保持 API 可用，停用主页面后可由仍启用的页面承接。分类内所有模块使用一致声明。
 
 1. 将完整模块目录放入 `modules/`，在设置中选择刷新模块。新发现模块默认启用，启停状态由框架保存。
 2. 侧栏显示存在已启用界面模块的分类，启停后立即更新；同分类的最后一个页面停用时隐藏入口。一个分类可同时挂载多个模块，加载错误保留入口并单独显示；纯后台与 AI 插件在设置中管理。设置始终可访问。

@@ -6,7 +6,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
 from backend.services.campus import SourceError, timestamp
 from backend.services.campus.analysis import account_revision, citations
@@ -35,6 +35,26 @@ class Output(BaseModel):
     notifications: list[Notice] = Field(max_length=30)
 
 
+class SourceCitation(BaseModel):
+    id: str = Field(min_length=1, max_length=500)
+    title: str = Field(min_length=1, max_length=300)
+    source: str = Field(min_length=1, max_length=80)
+    url: str = Field(default='', max_length=3000)
+
+
+class ImportedNotice(BaseModel):
+    account_revision: str = Field(min_length=1, max_length=100)
+    id: str = Field(min_length=1, max_length=200)
+    title: str = Field(min_length=1, max_length=120)
+    summary: str = Field(min_length=1, max_length=3000)
+    importance: Literal['urgent', 'important', 'normal'] = 'normal'
+    why: str = Field(default='', max_length=1000)
+    source_revision: str = Field(min_length=1, max_length=100)
+    citations: list[SourceCitation] = Field(default_factory=list, max_length=10)
+    proposal_id: str | None = Field(default=None, max_length=100)
+    event_at: AwareDatetime | None = None
+
+
 class Notifications:
     def __init__(self, context):
         self.context = context
@@ -58,7 +78,23 @@ class Notifications:
             if saved.get("owner") != owner:
                 saved = {}
             ai = self.context.ai.settings()
-            return {"items": saved.get("items", []), "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"] and ai["key_saved"])}
+            imported = self.context.store.read('imports:' + owner, [])
+            items = sorted([*imported, *saved.get('items', [])], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
+            return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"] and ai["key_saved"])}
+
+    def import_notice(self, body):
+        with self.state_lock:
+            owner = account_revision(self.context)
+            if body.account_revision != owner:
+                raise HTTPException(409, '账号已更新，请重新检查资料。')
+            key = 'imports:' + owner
+            items = self.context.store.read(key, [])
+            old = next((item for item in items if item['id'] == body.id), None)
+            value = {**body.model_dump(mode='json', exclude={'account_revision'}), 'read': old.get('read', False) if old and old['source_revision'] == body.source_revision else False,
+                     'created_at': old['created_at'] if old else datetime.now(timezone.utc).isoformat()}
+            items = [value, *(item for item in items if item['id'] != body.id)]
+            self.context.store.write(key, items[:300])
+        return value
 
     def generate(self, force=False):
         with self.generation:
@@ -120,6 +156,13 @@ class Notifications:
 
     def mark_read(self, notice_id, read):
         with self.state_lock:
+            key = 'imports:' + account_revision(self.context)
+            items = self.context.store.read(key, [])
+            imported = next((item for item in items if item['id'] == notice_id), None)
+            if imported:
+                imported['read'] = read
+                self.context.store.write(key, items)
+                return {'saved': True}
             saved = self.context.store.read("notifications", {})
             if saved.get("owner") != account_revision(self.context):
                 raise HTTPException(404, "通知不属于当前账号。")

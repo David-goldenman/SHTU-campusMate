@@ -27,6 +27,7 @@ function fixture(modules,categories) {
     if(path==='/auth/providers')return response({providers:[]});
     if(path==='/ai/settings')return response({model:'deepseek-flash',enabled:false,key_saved:false});
     if(path==='/modules/academic-assistant/chat')return response({messages:[]});
+    if(path==='/modules/academic-assistant/conversations')return response({items:[],active_id:null});
     if(path==='/modules/academic-assistant/profile')return response({profile:{},academic:{}});
     if(path==='/modules/academic-assistant/presets')return response({items:[{label:'本周作业',message:'合成问题'}]});
     if(path==='/modules/dashboard/sync')return response({status:'ready'});
@@ -75,7 +76,7 @@ try {
   await wait("document.querySelector('.overview-stats strong')?.textContent==='12' && document.querySelector('.study-messages')");
   assert(await evaluate("document.querySelector('.overview-columns').textContent.includes('合成课程日程')"),'Upstream agenda is preserved');
   await capture('ui-local-populated',1440,1060);
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['20px','20px','20px','20px'],'Theme wins against module first-child padding');
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['12px','12px','12px','12px'],'Compact overview uses consistent themed spacing');
   await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
   await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
@@ -89,7 +90,7 @@ try {
   const issues=await evaluate("document.querySelector('[data-module-id=dashboard] [data-issues]').textContent");
   assert.match(issues,/独立模块故障必须保留/);assert.match(issues,/应保留的独立服务提示/);assert(!issues.includes('piazza：未连接')&&!issues.includes('blackboard: 未连接'));
   await capture('ui-local-empty',375,812);
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['14px','14px','14px','14px']);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['4px','4px','4px','4px']);
   await evaluate("location.hash='settings'");await wait("document.querySelector('[data-settings-tab=accounts]')");
   assert(await evaluate("!document.querySelector('link[href*=\"/dashboard/\"]') && !document.querySelector('link[href*=\"/academic-assistant/\"]')"),'Module style cleanup preserved');
   await evaluate("document.querySelector('[data-settings-tab=ai]').click();document.querySelector('#ai-form [name=api_key]').value='synthetic-draft';document.querySelector('[data-settings-tab=local]').click();document.querySelector('[data-settings-tab=ai]').click()");

@@ -1,8 +1,10 @@
 """Official dsh subprocess adapter; module directories own all feature plugins."""
 import json
+import logging
 import os
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 from deepseek_harness import DeepSeekHarness
@@ -17,7 +19,7 @@ class Harness:
     def plugins(self):
         return {"plugins": [item for item in self.modules.list()["modules"] if item.get("harness")]}
 
-    def run(self, prompt, context, plugins, model, api_key, *, plugin_env=None):
+    def run(self, prompt, context, plugins, model, api_key, *, plugin_env=None, on_event=None, cancel_event=None):
         if any(not key.startswith("CAMPUS_PLUGIN_") or not isinstance(value, str) for key, value in (plugin_env or {}).items()):
             raise ValueError("插件环境只接受 CAMPUS_PLUGIN_ 前缀的字符串配置。")
         runtime_root = self.modules.data / 'runtime'
@@ -50,21 +52,57 @@ class Harness:
                 rows.append({'insert': [{'id': 'campus-skills', 'name': '@deepseek-ai/dsh-skill'},
                                         {'id': 'campus-tool-skill', 'name': '@deepseek-ai/dsh-tool-skill'}]})
             direct = [{"id": "campus-" + entry.info["id"], "name": entry.harness["name"]} for entry in entries if not entry.harness["bundle"]]
+            if on_event:
+                direct.append({'id': 'campus-stream', 'name': 'campus-harness-stream'})
             if direct:
                 rows.append({"insert": direct})
             patch = directory / "task.patch.yml"
             patch.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
             try:
+                def check_cancelled():
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise HTTPException(409, '本次回答已停止。')
+
+                check_cancelled()
                 command = resolve_bundled_launch_args()
                 subprocess.run([*command, "--profile", "sdk-minimal", "--dump-default-config"], cwd=workspace, env=env, capture_output=True, check=True, timeout=60)
-                subprocess.run([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + entry.harness["folder"].as_posix() for entry in entries]],
+                check_cancelled()
+                folders = [entry.harness['folder'] for entry in entries]
+                if on_event:
+                    folders.append(Path(__file__).with_name('stream'))
+                subprocess.run([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
                                cwd=workspace, env=env, capture_output=True, check=True, timeout=120)
+                check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),
                                      model=model, api_key=api_key, base_url="https://api.deepseek.com", reasoning_effort="low", max_tokens=6000, request_timeout_seconds=90) as runtime:
-                    result = runtime.run(json.dumps({"prompt": prompt, "context": context}, ensure_ascii=False))
+                    done = threading.Event()
+
+                    def watch():
+                        while not done.wait(0.1):
+                            if cancel_event.is_set():
+                                runtime.close()
+                                return
+
+                    def notify(notification):
+                        if notification.method == 'campus.stream':
+                            on_event(notification.payload['frame'])
+
+                    watcher = threading.Thread(target=watch, daemon=True) if cancel_event is not None else None
+                    if watcher:
+                        watcher.start()
+                    try:
+                        result = runtime.run(json.dumps({"prompt": prompt, "context": context}, ensure_ascii=False), on_notification=notify if on_event else None)
+                    finally:
+                        done.set()
+                        if watcher:
+                            watcher.join()
+                check_cancelled()
             except (HarnessError, OSError, TimeoutError, subprocess.SubprocessError):
+                check_cancelled()
                 raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、配置和 DeepSeek 服务后重试。") from None
             if result.finish_reason != "completed":
+                logging.getLogger(__name__).warning('Harness task ended: reason=%s; tool_calls=%s', result.finish_reason,
+                    [event.get('data', {}).get('name') for event in result.events if event.get('type') == 'tool/call'])
                 raise HTTPException(502, "AI 插件任务未完整结束，请缩小任务范围后重试。")
             outcomes = {block["toolCallId"]: block["isError"] for event in result.events if event["type"] == "tool/result"
                         for block in event["data"]["message"]["content"] if block["type"] == "tool-result"}

@@ -1,0 +1,1 @@
+{"name":"campus-background-agent","version":"0.1.0","type":"module","main":"index.js","peerDependencies":{"cordis":"*","@deepseek-ai/dsh-tools":"*"}}
