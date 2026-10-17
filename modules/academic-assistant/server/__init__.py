@@ -17,6 +17,7 @@ from .models import Answer, Attend, Chat, ConversationUpdate, CourseSearch, Docu
 from .conversations import Conversations
 from .tools import Task, profile_owner, read_profile
 from .workspace import Workspace, WorkCommand, WorkEdit
+from .reader import Reader, ReaderSettings, settings as reader_settings, save_settings as save_reader_settings
 
 INSTRUCTION = Path(__file__).with_name('instruction.md').read_text(encoding='utf-8')
 PRESETS = json.loads((Path(__file__).parents[1] / 'harness' / 'prompts.json').read_text(encoding='utf-8'))
@@ -30,6 +31,7 @@ class Agent:
         self.context, self.lock, self.tasks = context, asyncio.Lock(), {}
         self.conversations = Conversations(context)
         self.work = Workspace(context)
+        self.reader = Reader(context)
 
     def history(self):
         return self.conversations.messages()
@@ -58,6 +60,14 @@ def create_router(context):
     global _agent
     agent = _agent = Agent(context)
     router = APIRouter()
+
+    @router.get('/reader/settings')
+    def reading_settings():
+        return {**reader_settings(context), 'vision': context.ai.vision_settings()}
+
+    @router.put('/reader/settings')
+    def update_reading_settings(body: ReaderSettings):
+        return save_reader_settings(context, body)
 
     @router.get('/work')
     def work():
@@ -147,7 +157,8 @@ def create_router(context):
             _, conversation = agent.conversations.find(identity)
             if conversation['archived']:
                 raise HTTPException(409, '请先恢复这段归档对话，再继续发送消息。')
-            task, token = Task(context, body.message, agent.work), secrets.token_urlsafe(32)
+            task, token = Task(context, body.message, agent.work, agent.reader), secrets.token_urlsafe(32)
+            task.cancel_event = cancel_event
             if emit:
                 task.emit = emit
             agent.tasks[token] = task
@@ -199,6 +210,7 @@ def create_router(context):
                     return answer
                 raise
             finally:
+                task.finished = True
                 agent.tasks.pop(token, None)
 
     @router.post('/chat')
@@ -303,10 +315,17 @@ def create_router(context):
 
 
 def start(context):
+    _agent.reader.stopped.clear()
     _agent.work.start()
 
 
 def stop(context):
     if _agent is not None:
+        _agent.reader.stopped.set()
+        for task in _agent.tasks.values():
+            task.finished = True
+        if not _agent.reader.lock.acquire(timeout=5):
+            raise RuntimeError('资料读取任务仍在停止，请稍后重试。')
+        _agent.reader.lock.release()
         _agent.work.close()
         _agent.tasks.clear()

@@ -5,6 +5,7 @@ import {sendOnEnter, fitComposer} from './composer.js';
 import {welcomeMarkup} from './welcome.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
+import {showReaderSettings} from './reader-settings.js';
 
 const icons = {
   history:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
@@ -70,6 +71,9 @@ export async function mount(container, context) {
   const workButton=document.createElement('button');workButton.type='button';workButton.className='text-button';workButton.textContent='学习事务';
   container.querySelector('.study-menu>div').prepend(workButton);
   workButton.onclick=context.ui.safeAction(workButton,()=>showWorkspace(context));
+  const readerButton=document.createElement('button');readerButton.type='button';readerButton.className='text-button';readerButton.textContent='资料读取';
+  container.querySelector('.study-menu>div').append(readerButton);
+  readerButton.onclick=context.ui.safeAction(readerButton,()=>showReaderSettings(context));
   input.value = drafts.get(activeId || '') || '';
   saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
   const retry = container.querySelector('[data-retry]');
@@ -147,7 +151,7 @@ export async function mount(container, context) {
       if (!groups.has(key)) groups.set(key,{...source,quotes:[]});
       groups.get(key).quotes.push({...source,index:index + 1});
     });
-    return citations.length ? `<details class="study-references"><summary>参考资料 <span>${groups.size} 份 · ${citations.length} 处引文</span></summary><div class="study-reference-list">${[...groups.values()].map(source => `<article><h4>${e(source.title)}</h4>${source.quotes.map(quote => `<div class="study-quote-label">[${quote.index}]${quote.page && quote.kind !== 'text' ? ' · 第 ' + quote.page + ' 页' : ''}</div><blockquote>${e(quote.quote)}</blockquote>`).join('')}<div class="study-source-links">${source.url ? link(source.url,'打开来源 ↗',e) : ''}${source.download_url ? link(source.download_url,'下载原文件',e) : ''}</div></article>`).join('')}</div></details>` : '';
+    return citations.length ? `<details class="study-references"><summary>参考资料 <span>${groups.size} 份 · ${citations.length} 处引文</span></summary><div class="study-reference-list">${[...groups.values()].map(source => `<article><h4>${e(source.title)}</h4>${source.quotes.map(quote => `<div class="study-quote-label">[${quote.index}]${quote.page && quote.kind !== 'text' ? ' · 第 ' + quote.page + ' 页' : ''}${quote.evidence_type === 'model_interpretation' ? ' · 图像解释（AI）' : quote.read_method === 'vision' ? ' · 识图转录' : quote.read_method === 'ocr' ? ' · OCR 转录' : ''}</div>${quote.uncertain ? '<p class="field-hint">待核对：' + e(quote.uncertain) + '</p>' : ''}<blockquote>${e(quote.quote)}</blockquote>`).join('')}<div class="study-source-links">${source.url ? link(source.url,'打开来源 ↗',e) : ''}${source.download_url ? link(source.download_url,'下载原文件',e) : ''}</div></article>`).join('')}</div></details>` : '';
   }
   function renderBody(node, text, settled = false) {
     node.innerHTML = renderMarkdown(text);

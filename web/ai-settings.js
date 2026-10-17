@@ -1,4 +1,5 @@
 import {escape as e, safeAction, toast, confirmDialog} from './shared.js';
+import {visionSettingsPanel, mountVisionSettings} from './vision-settings.js';
 
 const protocols = {'openai-completions':'OpenAI Chat Completions','openai-responses':'OpenAI Responses','anthropic-messages':'Anthropic Messages'};
 
@@ -8,6 +9,7 @@ export function aiSettingsPanel(ai) {
     <div class="section-heading"><div><h2>模型</h2><p>选择各功能共用的模型。API Key 加密保存在本机。</p></div><button type="button" class="button button-secondary" data-ai-add>＋ 添加提供商</button></div>
     <div class="ai-current"><span>AI 服务<span class="ai-service-state">${ai.enabled ? '已启用' : '已暂停'}</span></span><label class="settings-switch"><input type="checkbox" role="switch" aria-label="启用 AI" data-ai-enabled ${ai.enabled ? 'checked' : ''}><span aria-hidden="true"></span></label></div>
     <div class="ai-provider-list">${rows.map(row => `<article class="ai-provider-card"><div class="ai-provider-info"><div class="ai-provider-name"><h3>${e(row.display_name)}</h3>${row.provider === ai.provider ? '<span class="ai-current-tag">当前使用</span>' : ''}</div><p>${e(row.model)} · ${row.key_saved ? '密钥已保存' : row.provider === 'deepseek' ? '待填写密钥' : '环境认证'}</p></div><div class="form-actions">${row.provider !== ai.provider && (row.key_saved || row.provider !== 'deepseek') ? `<button type="button" class="button button-secondary" data-ai-use="${e(row.provider)}">使用</button>` : ''}<button type="button" class="button button-secondary" data-ai-edit="${e(row.provider)}" aria-label="编辑 ${e(row.display_name)}">编辑</button>${row.provider !== 'deepseek' ? `<button type="button" class="text-button danger-text" data-ai-remove="${e(row.provider)}" aria-label="删除 ${e(row.display_name)}">删除</button>` : ''}</div></article>`).join('')}</div>
+    ${visionSettingsPanel(ai.vision)}
     <dialog class="ai-provider-dialog settings-compact" aria-labelledby="ai-editor-title" data-ai-editor>
       <div class="dialog-heading"><h2 id="ai-editor-title" data-ai-editor-title>添加模型提供商</h2><button class="icon-button" type="button" data-ai-close aria-label="关闭模型编辑">×</button></div>
       <form id="ai-form" class="ai-provider-editor" hidden>
@@ -23,6 +25,7 @@ export function aiSettingsPanel(ai) {
 }
 
 export function mountAISettings(panel, ai, {request, refresh, signal}) {
+  mountVisionSettings(panel, ai.vision, {request, refresh, signal});
   const editor = panel.querySelector('[data-ai-editor]'), form = panel.querySelector('#ai-form'), f = form.elements;
   let catalog, editing, opener;
   const profiles = ai.providers || [{provider:'deepseek',display_name:'DeepSeek',base_url:'https://api.deepseek.com',custom:false,model:ai.model,key_saved:ai.key_saved}];

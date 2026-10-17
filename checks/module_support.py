@@ -60,6 +60,9 @@ class AI:
     def generate(self, **kwargs):
         return copy.deepcopy(self.result)
 
+    def vision_settings(self):
+        return {'enabled':False, 'ready':False, 'revision':'synthetic-vision', 'model':'', 'base_url':''}
+
     def chat(self, **kwargs):
         return copy.deepcopy(self.result)
 
