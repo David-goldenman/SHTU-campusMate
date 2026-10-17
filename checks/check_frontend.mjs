@@ -3,13 +3,16 @@ import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter} from '../modules/academic-assistant/web/composer.js';
 
-for (const keys of [{}, {ctrlKey:true}, {metaKey:true}, {shiftKey:true}, {isComposing:true}, {keyCode:229}, {repeat:true}, {key:'a'}]) {
+for (const [keys, sends, prevents] of [
+  [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
+  [{shiftKey:true},0,0], [{isComposing:true},0,0], [{keyCode:229},0,0],
+  [{repeat:true},0,1], [{key:'a'},0,0],
+]) {
   let submitted = 0, prevented = 0;
   const event = {key:'Enter', ...keys, preventDefault() {prevented++;}};
   sendOnEnter(event, {requestSubmit() {submitted++;}});
-  const enter = event.key === 'Enter' && !event.shiftKey && !event.isComposing && event.keyCode !== 229;
-  assert.equal(submitted, enter && !event.repeat ? 1 : 0, JSON.stringify(keys));
-  assert.equal(prevented, enter ? 1 : 0, JSON.stringify(keys));
+  assert.equal(submitted, sends, JSON.stringify(keys));
+  assert.equal(prevented, prevents, JSON.stringify(keys));
 }
 console.log('chat composer: Enter/Ctrl/Meta sends once; Shift, IME and held keys do not submit');
 
