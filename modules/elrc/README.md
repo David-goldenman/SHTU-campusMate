@@ -33,6 +33,7 @@
 
 ## 数据和边界
 
+- `/snapshot` 网络失败附带 `network_failure`，课程中心自动显示诊断。`/discover` 和 `/courses/{id}/sync` 网络失败返回 HTTP 502 与 `{detail:{message,network_failure}}`，原生页面就地诊断；逐课失败标记同时保存在 `/sync`。成功同步清除旧状态，已缓存内容保持可读。标记与诊断协议见 [AUTH.md](../../docs/AUTH.md)。
 - 学校请求通过 `context.auth.authenticated_client("ids", target="elrc")`；不复制 QJQ 的独立登录、凭据或 Cookie 文件。
 - 缓存仅位于本模块 `context.data_dir`，进度使用 `context.store`。模块不保存账号秘密。
 - 按学校的 `detail.courseId` 和学期关联录播，避免同名课程串课；时间轴保持原项目的 100 纳秒转换（除以 10,000,000）。

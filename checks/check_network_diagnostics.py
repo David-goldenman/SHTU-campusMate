@@ -45,7 +45,7 @@ async def checks():
         try:
             with protocols.http_client():
                 raise AssertionError("Invalid proxy scheme unexpectedly initialized")
-        except ValueError:
+        except protocols.NetworkConfigurationError:
             pass
         assert network.probe_client("invalid-proxy://127.0.0.1:9") is None
     finding = network.diagnosis(DNS, OK, {**FAIL, "status": "configuration_error"})
@@ -150,6 +150,7 @@ with tempfile.TemporaryDirectory(dir=temporary) as directory:
         assert client.get("/api/v1/auth/network").json() == {"checked_at": None, "services": []}
         assert check.await_count == 0
         assert client.post("/api/v1/auth/network/check").status_code == 403
+        assert client.post("/api/v1/auth/network/explain", json={"failures": []}).status_code == 403
         token = client.get("/api/v1/bootstrap").json()["csrf_token"]
         response = client.post("/api/v1/auth/network/check", headers={"X-Framework-Token": token})
         assert response.status_code == 200 and check.await_count == 1
