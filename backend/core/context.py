@@ -39,3 +39,4 @@ class ModuleContext:
     ai: Any
     api: Any
     modules: Any = None
+    runtime: Any = None

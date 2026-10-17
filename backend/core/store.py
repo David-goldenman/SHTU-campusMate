@@ -43,6 +43,15 @@ class Store:
     def for_module(self, module_id: str):
         return Store(self.path, "module:" + module_id)
 
+    def export_modules(self):
+        with self.lock:
+            return self.db.execute("SELECT namespace, key, value FROM state WHERE namespace LIKE 'module:%' ORDER BY namespace, key").fetchall()
+
+    def restore_modules(self, rows):
+        with self.lock, self.db:
+            self.db.execute("DELETE FROM state WHERE namespace LIKE 'module:%'")
+            self.db.executemany('INSERT INTO state VALUES (?, ?, ?)', rows)
+
     def close(self):
         with self.lock:
             self.db.close()

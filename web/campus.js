@@ -26,7 +26,7 @@ export async function sourcePanel(container, context, render) {
     if (context.signal.aborted) return;
     button.disabled = snapshot.status === 'syncing';
     container.querySelector('[data-connect]').hidden = !['not_connected','login_required','verification_required'].includes(snapshot.status);
-    container.querySelector('[data-status]').textContent = (labels[snapshot.status] || snapshot.status) + (snapshot.updated_at ? ' · ' + time(snapshot.updated_at) : '');
+    container.querySelector('[data-status]').textContent = (labels[snapshot.status] || snapshot.status) + (snapshot.updated_at ? ' · 上次成功同步 ' + time(snapshot.updated_at) : ' · 暂无成功同步记录');
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
     await render(container.querySelector('[data-content]'), snapshot, context, refresh);
     if (snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);

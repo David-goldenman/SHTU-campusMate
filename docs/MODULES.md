@@ -93,6 +93,7 @@ def create_router(context):
 | --- | --- |
 | `context.id` | 当前模块 ID |
 | `context.modules()` | 当前模块和分类的公开元数据，与管理接口结构一致；不返回凭据 |
+| `context.runtime.watch(name, worker)` | 登记已有 Thread 或 concurrent.futures.Future 的运行状态，不启动或停止任务；每模块最多 16 个名称，同名替换，名称不含账号或私人内容 |
 | `context.store.read(key, default=None)` | 读取本模块非秘密 JSON 状态 |
 | `context.store.write(key, value)`、`.delete(key)`、`.clear()` | 管理本模块 SQLite 命名空间 |
 | `context.secrets.get(key)`、`.save(key, dict)`、`.delete(key)` | 管理本模块 DPAPI 加密秘密，缺失返回 `{}` |
@@ -118,6 +119,10 @@ def create_router(context):
 5. 移除模块时先停用，再删除其代码目录并刷新。用户数据按模块 ID 保留；需要清除时在设置中选择模块数据清除，包含已移除模块留下的数据。
 
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
+
+运行状态登记已用于共享 Source 同步、时间表校历更新、校园后台助手、通知检查和学习提醒。在线程 start 或提交 Future 后调用 `context.runtime.watch('简短任务名', worker)`；重复任务使用固定名称，不能按任务 ID 无限添加。框架记录接口时间、HTTP 状态及错误编号，业务成功与数据新鲜度仍由模块 API 表达。状态仅存于当前实例内存，详见 [运行状态响应](API.md#模块管理)。合成上下文可省略 runtime，调用方用 `getattr(context,'runtime',None)` 兼容。
+
+清除模块数据前会自动快照；恢复同时替换所有模块的普通状态和文件，不处理秘密或核心账号状态。快照需要所有模块的 stop 成功后才读取，后台任务必须完成清理才能参与恢复。不得把凭据放入 store/data_dir；备份只遵循这两个公开的非秘密数据边界。使用 `HTTPException(status, '可公开说明')` 报告预期业务错误，未经处理的异常由框架提供通用提示和错误编号。
 
 原生 AI 插件位于 `harness/`，使用标准 npm package.json 与 Cordis 接口，也支持官方 `dsh.bundle.patch`。模块清单响应的 `harness: true` 表示该模块提供原生插件；它与模块共用启停和刷新。`context.ai.run(..., plugins=[模块ID])` 在独立官方运行时中加载所选插件，并在结束时释放。执行期间插件所属模块保持活动请求计数。详见 [AI 与插件文档](AI.md#原生-harness-插件)。
 

@@ -7,6 +7,7 @@ import sys
 import threading
 import types
 import uuid
+import time
 from contextlib import contextmanager
 from urllib.parse import unquote
 from dataclasses import dataclass, field
@@ -15,13 +16,14 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
+from .errors import catch_errors, error_response
+from .runtime import RuntimeStatus
 
 
 class Navigation(BaseModel):
@@ -54,6 +56,7 @@ class Entry:
     harness: dict | None = None
     stopping: Future | None = None
     calls: set = field(default_factory=set)
+    runtime: RuntimeStatus = field(default_factory=RuntimeStatus)
 
 
 class ModuleManager:
@@ -72,7 +75,8 @@ class ModuleManager:
 
     def list(self):
         with self.lock:
-            modules = [dict(entry.info) for entry in self.entries.values()]
+            modules = [{**entry.info, 'runtime': {**entry.runtime.snapshot(), 'active_requests': entry.requests,
+                        'pending_calls': len(entry.calls)}} for entry in self.entries.values()]
             categories = {}
             # Explicit declarations win over compatibility fallbacks. Module ID breaks ties.
             for info in sorted(modules, key=lambda item: (item.get("navigation") is None, item["id"])):
@@ -166,7 +170,7 @@ class ModuleManager:
             revision = uuid.uuid4().hex
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
-            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list)
+            entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
             if backend.is_file():
                 name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
@@ -179,6 +183,7 @@ class ModuleManager:
                     raise ValueError("create_router(context) 必须返回 APIRouter。")
                 entry.app = FastAPI(title=manifest.name, version=manifest.version, docs_url=None, redoc_url=None, exception_handlers=self.exception_handlers)
                 entry.app.include_router(router)
+                entry.app.middleware('http')(catch_errors)
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
             info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
@@ -356,10 +361,19 @@ class ModuleManager:
         module_id = path.lstrip("/").split("/", 1)[0]
         entry = await run_in_threadpool(self._begin_request, module_id)
         if not entry:
-            await JSONResponse({"detail": "模块未启用或没有后端入口。"}, status_code=404)(scope, receive, send)
+            await error_response(Request(scope), 404, '模块未启用或没有后端入口。')(scope, receive, send)
             return
+        started, status = time.monotonic(), 500
+        nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id, 'state': {}}
+
+        async def recorded_send(message):
+            nonlocal status
+            if message['type'] == 'http.response.start':
+                status = message['status']
+            await send(message)
+
         try:
-            nested = {**scope, "root_path": scope.get("root_path", "") + "/" + module_id}
-            await entry.app(nested, receive, send)
+            await entry.app(nested, receive, recorded_send)
         finally:
+            entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'))
             await run_in_threadpool(self._end_request, entry)
