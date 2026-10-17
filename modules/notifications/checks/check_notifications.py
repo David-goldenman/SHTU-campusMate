@@ -16,6 +16,8 @@ with sandbox('notifications') as context:
     raw = course('gradescope','1','合成课程','CS100','Fall 2026','https://www.gradescope.com/courses/1')
     data = validate_bundle({'courses':[{'id':'group:1','source':'catalog','title':'合成课程','term':'2026-fall','current':True,'course_ids':[raw['id']],'sources':[raw]}]})
     async def api(module,path='/snapshot',**kwargs):
+        if module == 'assignments' and path == '/snapshot':
+            return httpx.Response(404, json={'detail': 'Synthetic optional dependency is absent'})
         assert module == 'courses' and path == '/context' and kwargs['method'] == 'POST'
         return httpx.Response(200,json=build_context(data,account_revision(context),**kwargs['body']))
     context.api = api
