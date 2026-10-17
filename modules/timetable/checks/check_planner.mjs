@@ -24,6 +24,9 @@ assert.equal(eventGroup(early),'timed');
 assert.equal(eventGroup({...early,event_type:'deadline'}),'deadline');
 assert.equal(eventGroup({...early,all_day:true}),'untimed');
 assert.equal(eventGroup({...early,event_type:'exam',start_time:''}),'untimed');
+assert.equal(eventGroup({...early,event_type:'class',status:'rescheduled'}),'timed');
+assert.equal(eventGroup({...early,event_type:'exam',source:'local'}),'timed');
+assert.equal(eventGroup({id:'tutorial',event_type:'tutorial',period_start:5,period_end:6}),'class');
 console.log('PASS: legacy lesson placement, numeric ordering, overlap lanes, period clocks and event groups');
 
 const axis = {dataset:{periodCount:'13'},style:{setProperty(name,value) {this[name]=value;}}};

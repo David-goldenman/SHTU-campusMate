@@ -1,13 +1,13 @@
 {
   "id": "timetable",
   "name": "时间表",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "category": "timetable",
   "api_version": 1,
   "navigation": {
     "label": "时间表",
     "icon": "▦",
-    "description": "查看上课安排、quiz 与作业截止时间，以及教务考试。",
+    "description": "管理课程、Quiz、考试和习题课，按实际情况记录请假与调课。",
     "order": 30
   }
 }

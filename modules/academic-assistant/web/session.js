@@ -35,6 +35,7 @@ export function createChatSession() {
         if (turn !== current || current.controller.signal.aborted) return;
         if (value.type === 'error') throw new Error(value.detail);
         if (value.type === 'activity') current.steps = value.steps;
+        if (value.type === 'change') current.changes.push(value.change);
         if (value.type === 'reset') current.text = '';
         if (value.type === 'delta') current.text += value.text;
         if (value.type === 'complete') current.answer = value.message;
@@ -45,7 +46,7 @@ export function createChatSession() {
       drafts.delete(current.conversationId);
     } catch (error) {
       current.status = current.controller.signal.aborted ? 'stopped' : 'error';
-      current.error = current.status === 'stopped' ? '已停止生成，问题保留在输入框中。' : error.message;
+      current.error = (current.status === 'stopped' ? '已停止生成，问题保留在输入框中。' : error.message) + (current.changes.length ? ' 已保存的本地修改见回执，请勿重复执行。' : '');
       if (turn === current) drafts.set(current.conversationId || '',current.message);
     } finally {
       if (turn === current) notify();
@@ -55,7 +56,7 @@ export function createChatSession() {
     if (!context || context.signal.aborted) throw new Error('对话服务尚未就绪，请刷新页面后重试。');
     if (turn?.status === 'running') return;
     drafts.delete(identity || '');
-    turn = {conversationId:identity,message,messages:[...messages],text:'',steps:[],status:'running',controller:new AbortController()};
+    turn = {conversationId:identity,message,messages:[...messages],text:'',steps:[],changes:[],status:'running',controller:new AbortController()};
     const current = turn;
     notify();
     current.finished = run(current,context);
