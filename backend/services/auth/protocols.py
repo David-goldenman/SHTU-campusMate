@@ -62,12 +62,19 @@ def filtered_state(provider: str, state: dict) -> dict:
     return result
 
 
+class NetworkConfigurationError(httpx.RequestError):
+    """Public classification for invalid proxy or CA configuration at client startup."""
+
+
 def http_client(state: dict | None = None) -> httpx.Client:
     state = state or {}
     # Campus services use local DNS and the OS route (including an active campus VPN).
     # Keep environment proxies for external providers and retain normal TLS verification.
-    client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40,
-                          mounts={"all://*shanghaitech.edu.cn": None})
+    try:
+        client = httpx.Client(headers={"User-Agent": state.get("user_agent", UA)}, follow_redirects=True, timeout=40,
+                              mounts={"all://*shanghaitech.edu.cn": None})
+    except (ValueError, ImportError, OSError) as error:
+        raise NetworkConfigurationError("网络客户端配置无效，请检查代理与证书设置。") from error
     for cookie in state.get("cookies", []):
         expiry = cookie.get("expires")
         expiry = int(expiry) if expiry and expiry > 0 else None

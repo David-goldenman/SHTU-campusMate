@@ -26,6 +26,7 @@ def rows(value, key=None):
 class Remote:
     def __init__(self, client, cancelled, hosts):
         self.client, self.cancelled, self.hosts = client, cancelled, set(hosts)
+        self.network_error = None
 
     def check(self):
         if self.cancelled.is_set():
@@ -55,10 +56,11 @@ class Remote:
                         arguments.pop("json", None)
                 else:
                     raise SourceError("来源跳转次数过多。")
-            except (httpx.TimeoutException, httpx.NetworkError):
+            except httpx.RequestError as error:
                 if attempt == 0:
                     self.cancelled.wait(0.25)
                     continue
+                self.network_error = error
                 raise SourceError("来源连接超时或网络中断，已保留上次成功数据。") from None
             if response.status_code == 401 or "/login" in response.url.path.lower() or "authserver" in response.url.path:
                 raise LoginRequired("来源登录已失效，请到设置重新连接。")

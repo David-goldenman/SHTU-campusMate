@@ -1,9 +1,22 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Literal
+from datetime import datetime, timezone
 
 from .protocols import PROVIDERS
-from .network import NetworkDiagnostics
+from .network import NetworkDiagnostics, explain_failure
+
+
+class SyncNetworkFailure(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    target: Literal["timetable", "blackboard", "elrc"]
+    kind: Literal["dns_error", "tls_error", "timeout", "proxy_error", "protocol_error", "configuration_error", "connection_error"]
+    at: datetime
+    host: str | None = Field(default=None, max_length=253)
+
+
+class SyncNetworkFailures(BaseModel):
+    failures: list[SyncNetworkFailure] = Field(min_length=1, max_length=6)
 
 
 class Credentials(BaseModel):
@@ -30,6 +43,13 @@ def create_router(service):
     @router.post("/network/check")
     async def check_network():
         return await network.check()
+
+    @router.post("/network/explain")
+    async def explain_network(body: SyncNetworkFailures):
+        moments = [item.at.replace(tzinfo=timezone.utc) if item.at.tzinfo is None else item.at for item in body.failures]
+        after = min(max(moments), datetime.now(timezone.utc))
+        report = await network.check(after=after)
+        return {"reports": [explain_failure(item.model_dump(mode="json"), report) for item in body.failures]}
 
     def checked(provider):
         if provider not in PROVIDERS:

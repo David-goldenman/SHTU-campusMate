@@ -10,7 +10,7 @@ _source = None
 
 def create_router(context):
     global _source
-    _source = Source(context, "ids", ["elrc.shanghaitech.edu.cn"], fetch, target="elrc", state_prefix="campus:")
+    _source = Source(context, "ids", ["elrc.shanghaitech.edu.cn"], fetch, target="elrc", state_prefix="campus:", network_target="elrc")
     accounts = AccountCache(context, "ids")
     router = APIRouter()
 
