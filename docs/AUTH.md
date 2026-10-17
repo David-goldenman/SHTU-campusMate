@@ -1,6 +1,6 @@
 # 共享认证服务
 
-框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`timetable`，默认 `blackboard`。
+框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`ecourse`、`timetable`，默认 `blackboard`。E 云课堂使用原站登录页中的已登录账号标识验证身份，其课程数据由独立模块只读同步。
 
 ## 用户连接流程
 
@@ -16,6 +16,10 @@ Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账�
 ## 校园网络、代理与校外 VPN
 
 ### 网络检测
+
+教务、Blackboard、ELRC 同步遇到网络错误时，时间表、课程中心及来源页直接自动检测并显示原因、处理建议和重试入口。ELRC 的更新目录和逐课同步也显示同类提示；登录、权限和解析错误保留原有提示，不触发网络诊断。同步成功后清除旧故障提示，失败保留已有缓存。后台失败在页面读到新故障标记时诊断，不持续轮询网络。
+
+`POST /api/v1/auth/network/explain` 接收 `{failures:[{id,target,kind,at,host?}]}`（1–6 项），同样要求框架 CSRF。target 仅为 timetable/blackboard/elrc/ecourse，kind 仅为 `dns_error/tls_error/timeout/proxy_error/protocol_error/configuration_error/connection_error`。返回 `{reports:[{failure_id,target,name,failed_at,checked_at,diagnosis,entry,vpn_guide}]}`；使用固定入口，不访问传入 host，只用它匹配已知学校入口。故障标记不含请求路径、参数、异常原文或账号信息。实际同步的 DNS/TLS/配置错误优先；当前入口可达时明确说明无法证明失败的资料接口恢复，不把单独代理对照失败当成本次直连同步失败的原因。新故障不复用早于故障发生时间的检测。
 
 设置 → 网络检测会在首次进入时检查统一认证、教务、Blackboard、ELRC 和邮箱入口，可在切换网络或连接 VPN 后重新检测。每个服务显示系统 DNS、工作台直连和已配置 HTTPS/ALL 代理的匿名对照结果；实际校园同步仍默认绕过普通代理。返回 401 表示服务已响应但需要登录，403 表示访问受限，5xx 表示网络已连通但服务响应异常，不把这些状态当成 VPN 未连接。
 
@@ -74,7 +78,7 @@ DNS 失败和实际连接错误是可确认的观测；内网地址不可达只�
   "has_session": true,
   "status": "ready",
   "target": "elrc",
-  "targets": ["blackboard", "elrc", "timetable"],
+  "targets": ["ecourse", "blackboard", "elrc", "timetable"],
   "checked_at": "2026-10-01T00:00:00+00:00"
 }
 ```
@@ -84,6 +88,8 @@ DNS 失败和实际连接错误是可确认的观测；内网地址不可达只�
 登录失败返回 401，需要验证码或浏览器验证返回 409，未知提供方返回 404，无效请求返回 400 或 422，远端连接失败返回 502。失败后读取状态接口可获取操作提示。HTTP 校验错误不回显输入的秘密。
 
 ## Python 模块接入
+
+模块只需校验账号归属时调用 `context.auth.get_account_revision(provider)`。它每次直接读取当前持久化账号版本，与 `get_status(provider)['account_revision']` 一致，不缓存版本、不读取凭据或会话。资料快照、账号缓存和聚合查询在读取前后用该接口复核账号；需要显示登录状态或判断恢复方式时继续使用 `get_status`。凭据加密、文件事务与会话恢复不受此读取优化影响。
 
 模块从框架注入的 `context.auth` 获取共享服务。所有请求与响应消费都留在上下文内，客户端退出后更新 Cookie 会加密写回：
 

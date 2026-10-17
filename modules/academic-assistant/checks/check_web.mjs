@@ -112,7 +112,7 @@ try{
  await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===3&&!!document.querySelector('.study-welcome'))`);
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===3).then(()=>document.querySelector('[data-open-chat="'+chatCheck.chats[0].id+'"]').click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===4))`);
  await evaluate(`chatCheck.mode='answer';document.querySelector('#study-message').value='回车合成问题';document.querySelector('#study-message').focus();true`);
- await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
+ await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8,text:'\r'});
  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,modifiers:8});
  assert(await evaluate(`!document.querySelector('#study-message').disabled && document.querySelector('#study-message').value.includes(String.fromCharCode(10))`),'Shift+Enter inserts a line break');
  await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});

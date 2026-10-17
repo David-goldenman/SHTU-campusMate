@@ -8,8 +8,10 @@ if [[ "${1:-}" == --check ]]; then
         command -v "$tool" >/dev/null || { echo "Missing Windows tool: $tool" >&2; exit 1; }
     done
     echo 'Launch dependencies found. Python 3.12+ and locked packages are prepared on launch.'
-    if ! command -v node >/dev/null || ! command -v pnpm >/dev/null; then
-        echo 'AI plugins additionally need Linux Node.js 22+ and pnpm in PATH.'
+    if ! command -v node >/dev/null; then
+        echo 'AI plugins need Node.js 22+ with Corepack or pnpm in PATH.'
+    elif ! command -v pnpm >/dev/null && ! command -v corepack >/dev/null; then
+        echo 'AI plugins need pnpm or Corepack in PATH.'
     fi
     exit 0
 fi

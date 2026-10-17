@@ -103,6 +103,10 @@ main:has(.module-focus) .module-shortcuts { display:none; }
 .network-service p { margin:10px 0; }
 .network-service ul { margin:12px 0; padding-left:24px; }
 .network-finding { font-weight:600; }
+.network-inline h4 { margin:0 0 8px; }
+.network-inline p { margin:8px 0; }
+.network-inline ul { padding-left:24px; }
+.network-inline-actions { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 20px; }
 .network-service summary { cursor:pointer; color:var(--link); padding:8px 0; }
 .network-service dl { display:grid; grid-template-columns:120px minmax(0,1fr); gap:8px 16px; font-size:14px; }
 .network-service dd { margin:0; overflow-wrap:anywhere; }

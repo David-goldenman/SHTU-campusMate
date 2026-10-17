@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {applyLessonPositions, compareEvents, eventGroup, lessonLayout, periodsFor} from '../web/planner.js';
+import {applyLessonPositions, compareEvents, eventGroup, isCancelledClass, lessonLayout, matchesFilter, periodsFor} from '../web/planner.js';
 
 const lessons = [
   {id:'a',event_type:'class',period_start:10,period_end:11,at:null},
@@ -28,6 +28,24 @@ assert.equal(eventGroup({...early,event_type:'class',status:'rescheduled'}),'tim
 assert.equal(eventGroup({...early,event_type:'exam',source:'local'}),'timed');
 assert.equal(eventGroup({id:'tutorial',event_type:'tutorial',period_start:5,period_end:6}),'class');
 console.log('PASS: legacy lesson placement, numeric ordering, overlap lanes, period clocks and event groups');
+
+const cancelled = {...lessons[1],id:'cancelled',status:'cancel'};
+const cancellationEvents = [lessons[1],cancelled,early];
+const visible = cancellationEvents.filter(item => matchesFilter(item));
+assert.deepEqual(visible.map(item => item.id),['z','early']);
+assert.equal(lessonLayout(visible).lanes,1,'Cancelled lessons do not consume overlap lanes');
+assert.deepEqual(lessonLayout(visible).items.map(({item}) => item.id),['z']);
+assert.equal(lessonLayout([cancelled].filter(item => matchesFilter(item))).items.length,0,'A cancelled-only week has no course cards');
+assert(!matchesFilter({...cancelled,period_start:null,period_end:null,at:early.at}),'Clock-based cancelled classes are also hidden');
+assert.deepEqual(cancellationEvents.filter(item => matchesFilter(item,'study',true)).map(item => item.id),['z','cancelled']);
+assert.deepEqual(cancellationEvents.filter(item => matchesFilter(item,'life',true)).map(item => item.id),['early']);
+assert(matchesFilter(cancelled,'all',true),'Cancelled lessons remain available for restoration');
+assert(matchesFilter({...cancelled,status:'scheduled'}),'Restored lessons appear by default');
+for (const status of ['scheduled','leave','moved','rescheduled']) assert(matchesFilter({...cancelled,status}));
+assert(isCancelledClass(cancelled));
+assert(!isCancelledClass({...cancelled,event_type:'activity'}));
+assert.equal(cancelled.status,'cancel','Visibility does not erase cancellation records');
+console.log('PASS: cancelled courses hidden by default, recoverable on demand and combined with category filters');
 
 const axis = {dataset:{periodCount:'13'},style:{setProperty(name,value) {this[name]=value;}}};
 const day = {dataset:{periodCount:'13',lessonLanes:'2'},style:{setProperty(name,value) {this[name]=value;}}};

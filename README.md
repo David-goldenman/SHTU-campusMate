@@ -6,7 +6,7 @@
 
 ## 当前开发状态
 
-已集成 16 个模块，Windows 原生运行；共享登录状态和本地学习资料可在重启后恢复。聊天、邮件分类与后台检查使用官方 DeepSeek Harness 原生插件，框架负责通用生命周期，业务判断与副作用留在模块中。多会话会迁移已有聊天记录；手动邮件分类和已编辑的时间安排优先保留。完整行为与边界见 [学习助手](modules/academic-assistant/README.md)、[邮箱](modules/mail/README.md)、[后台助手](modules/campus-agent/README.md) 和 [验收记录](docs/LIVE_ACCEPTANCE.md)。
+已集成 17 个模块，Windows 原生运行；共享登录状态和本地学习资料可在重启后恢复。聊天、邮件分类与后台检查使用官方 DeepSeek Harness 原生插件，框架负责通用生命周期，业务判断与副作用留在模块中。多会话会迁移已有聊天记录；手动邮件分类和已编辑的时间安排优先保留。完整行为与边界见 [学习助手](modules/academic-assistant/README.md)、[邮箱](modules/mail/README.md)、[后台助手](modules/campus-agent/README.md) 和 [验收记录](docs/LIVE_ACCEPTANCE.md)。
 
 模型与功能插件设置采用紧凑列表、行尾操作及开关；模型配置在弹窗中编辑，运行详情按需展开，沿用 Nord 配色并适配窄屏。
 
@@ -22,7 +22,7 @@
 
 ## 启动
 
-当前开发入口为 Windows 原生：Python 服务和官方 Harness 在 Windows 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要 Windows uv、Git、Node.js 22+ 和 Edge；原生插件安装需要 pnpm。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；WSL 可通过 `--distro` 显式选择，继续作为 Linux 开发入口。官方 Harness 运行时随 Python 依赖安装。
+当前开发入口为 Windows 原生：Python 服务和官方 Harness 在 Windows 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要 Windows uv、Git、Node.js 22+ 和 Edge；原生插件安装需要 pnpm，未安装 pnpm 时框架会自动通过 Node.js 自带的 Corepack 提供本地兜底。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；WSL 可通过 `--distro` 显式选择，继续作为 Linux 开发入口。官方 Harness 运行时随 Python 依赖安装。
 
 在 Windows 双击 `run.cmd`，或运行：
 
@@ -37,7 +37,7 @@
 
 启动器默认使用 Windows 原生环境；指定 `--distro` 或 `CAMPUS_WSL_DISTRO` 时使用对应 WSL 发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
 
-默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
+默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；若 PATH 中没有 uv，启动器会用本机 Python/pip 将其安装到 `.private/runtime/tools/uv` 并复用，也可用 `CAMPUS_UV` 指定已有程序。uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
 
 在已配置环境的 WSL 中也可运行 `bash ./run.sh`，手动打开 [本地工作台](http://127.0.0.1:16666)。应用运行环境、缓存、启动状态和本机生成的 Windows 互操作脚本放在 `.private/runtime/`；开发环境与验证资料放在 `.codex/`，均不会提交。迁移源码时不复制虚拟环境；目标电脑重新准备依赖，详情见 [四人协作、打包与迁移](docs/DELIVERY.md)。
 

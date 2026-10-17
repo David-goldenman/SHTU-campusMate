@@ -1,7 +1,7 @@
 {
   "id": "mail",
   "name": "校园邮箱",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "category": "mail",
   "api_version": 1,
   "navigation": {

@@ -1,7 +1,7 @@
 {
   "id": "campus-agent",
   "name": "校园后台助手",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "category": "notifications",
   "api_version": 1,
   "navigation": {"label":"通知","icon":"☷","description":"提炼带来源的重要事项，跟踪已读状态。","order":70}

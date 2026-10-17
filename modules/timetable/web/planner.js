@@ -1,5 +1,13 @@
 // Shared by the desktop grid and mobile agenda. Lesson numbers work offline.
 export const isLesson = item => Number.isInteger(item.period_start) && Number.isInteger(item.period_end);
+export const isCancelledClass = item => item.event_type === 'class' && item.status === 'cancel';
+
+export function matchesFilter(item, filter = 'all', showCancelled = false) {
+  if (isCancelledClass(item) && !showCancelled) return false;
+  return filter === 'all' || (filter === 'study'
+    ? ['class','deadline','quiz','tutorial','study','presentation','exam'].includes(item.event_type)
+    : ['activity','lecture'].includes(item.event_type));
+}
 
 export function compareEvents(a, b) {
   if (isLesson(a) && isLesson(b)) {

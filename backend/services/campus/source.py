@@ -6,13 +6,15 @@ import httpx
 from fastapi import APIRouter, HTTPException
 
 from ..auth import LoginRequired, VerificationRequired
+from ..auth.network import failure_context
 from .data import digest, validate_bundle
 from .remote import Remote
 
 
 class Source:
-    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix=""):
+    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None):
         self.context, self.provider, self.hosts, self.fetch, self.target = context, provider, hosts, fetch, target
+        self.network_target = network_target
         self.sync_key, self.snapshot_key = state_prefix + "sync", state_prefix + "snapshot"
         self.cancelled, self.lock = threading.Event(), threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=context.id)
@@ -22,8 +24,7 @@ class Source:
             context.store.write(self.sync_key, {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
 
     def owner(self):
-        account = self.context.auth.get_status(self.provider)
-        return digest(account["account_revision"])
+        return digest(self.context.auth.get_account_revision(self.provider))
 
     def snapshot(self):
         with self.lock:
@@ -51,16 +52,25 @@ class Source:
     def run(self):
         owner = self.owner()
         previous = self.snapshot()["data"]
+        observed_network_error = None
         try:
             def read(client):
+                nonlocal observed_network_error
                 remote = Remote(client, self.cancelled, self.hosts)
-                return validate_bundle(self.fetch(remote, previous))
+                try:
+                    return validate_bundle(self.fetch(remote, previous))
+                finally:
+                    observed_network_error = remote.network_error
             data = self.context.auth.read_with_recovery(self.provider, read, target=self.target, cancelled=self.cancelled)
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
                     return
                 self.context.store.write(self.snapshot_key, {"owner": owner, "data": data, "updated_at": datetime.now(timezone.utc).isoformat()})
-                self.context.store.write(self.sync_key, {"status": "partial" if data["issues"] else "ready", "owner": owner})
+                state = {"status": "partial" if data["issues"] else "ready", "owner": owner}
+                if self.network_target and observed_network_error is not None:
+                    state.update(status="partial", message="部分来源网络请求失败，已保留可用内容。",
+                                 network_failure=failure_context(observed_network_error, self.network_target))
+                self.context.store.write(self.sync_key, state)
         except Exception as error:
             if self.cancelled.is_set():
                 return
@@ -69,11 +79,21 @@ class Source:
                 message = str(error)
             elif isinstance(error, HTTPException):
                 message = str(error.detail)
-            elif isinstance(error, httpx.HTTPError):
+            elif observed_network_error is not None or isinstance(error, httpx.RequestError):
                 message = "来源网络请求失败，已保留缓存。"
+            elif isinstance(error, httpx.HTTPStatusError):
+                message = f"来源返回 HTTP {error.response.status_code}，已保留缓存，请稍后重试或检查访问权限。"
             else:
                 message = "来源数据处理失败（" + type(error).__name__ + "），已保留缓存。"
-            self.context.store.write(self.sync_key, {"status": status, "message": message, "owner": owner})
+            with self.lock:
+                if self.cancelled.is_set() or owner != self.owner():
+                    return
+                state = {"status": status, "message": message, "owner": owner}
+                if self.network_target and status == "error":
+                    failure = failure_context(error if isinstance(error, httpx.RequestError) else observed_network_error, self.network_target)
+                    if failure:
+                        state["network_failure"] = failure
+                self.context.store.write(self.sync_key, state)
 
     def router(self):
         router = APIRouter()

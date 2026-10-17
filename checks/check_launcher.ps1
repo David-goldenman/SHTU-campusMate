@@ -24,8 +24,23 @@ Assert ((Get-WslCandidates $installed '' 'docker-desktop') -notcontains 'docker-
 Rejects { Get-WslCandidates $installed 'Missing' 'Debian' }
 Rejects { Get-WslCandidates @('docker-desktop') '' 'docker-desktop' }
 Assert ((Quote-Bash "a'b c") -eq "'a'\''b c'") 'Shell path quoting failed.'
+Assert ((Get-UvCandidates 'C:\workspace' | Where-Object { $_ -match 'runtime[\\/]tools[\\/]uv[\\/]Scripts[\\/]uv\.exe$' })) 'Private uv bootstrap path is missing.'
 
+$previousUv = $env:CAMPUS_UV
 $temporary = Join-Path $root ('.codex/tmp/launcher-check-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $temporary -Force | Out-Null
+$fakeUv = Join-Path $temporary 'uv.exe'
+New-Item -ItemType File -Path $fakeUv -Force | Out-Null
+try {
+    $env:CAMPUS_UV = $fakeUv
+    Assert ((Find-Uv $temporary) -eq $fakeUv) 'CAMPUS_UV override was not used.'
+    $env:CAMPUS_UV = Join-Path $temporary 'missing-uv.exe'
+    Rejects { Find-Uv $temporary }
+} finally {
+    if ($null -ne $previousUv) { $env:CAMPUS_UV = $previousUv }
+    else { Remove-Item Env:CAMPUS_UV -ErrorAction SilentlyContinue }
+}
+
 New-Item -ItemType Directory -Path (Join-Path $temporary '.private/runtime/launcher') -Force | Out-Null
 @{ launch_id = 'owned-instance'; port = 17666; pid = 123 } | ConvertTo-Json | Set-Content (Join-Path $temporary '.private/runtime/launcher/server.json')
 $script:Health = @{ application = 'campus-framework'; launch_id = 'owned-instance' }

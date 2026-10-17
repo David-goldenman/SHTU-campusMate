@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -53,6 +54,33 @@ def prepare(command, *, cwd, env, timeout, check_cancelled):
             process.communicate(timeout=5)
 
 
+def pnpm_path(runtime_root):
+    """Provide a Corepack-backed pnpm shim when the executable is not installed.
+
+    The official Harness CLI installs plugin packages with ``pnpm``. Node.js
+    ships Corepack, but its shims are often not enabled on Windows; creating a
+    local shim keeps plugin tasks working without administrator rights or a
+    separate global pnpm installation.
+    """
+    path = os.environ.get("PATH", "")
+    if shutil.which("pnpm", path=path):
+        return path
+    corepack = shutil.which("corepack", path=path)
+    if not corepack:
+        return path
+    tools = runtime_root / "tools"
+    tools.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        shim, content = tools / "pnpm.cmd", f'@echo off\r\ncall "{corepack}" pnpm %*\r\n'
+    else:
+        shim, content = tools / "pnpm", f'#!/bin/sh\nexec "{corepack}" pnpm "$@"\n'
+    if not shim.is_file() or shim.read_bytes() != content.encode("utf-8"):
+        shim.write_bytes(content.encode("utf-8"))
+    if os.name != "nt":
+        shim.chmod(0o755)
+    return str(tools) + os.pathsep + path
+
+
 class Harness:
     def __init__(self, modules):
         self.modules = modules
@@ -81,10 +109,13 @@ class Harness:
                 if rules.is_file():
                     instructions.append(rules.read_text(encoding='utf-8'))
             (workspace / 'AGENTS.md').write_text('\n\n'.join(instructions), encoding='utf-8')
-            env = {**os.environ, "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
+            env = {**os.environ, "PATH": pnpm_path(runtime_root), "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
                    "XDG_CACHE_HOME": str(runtime_root / 'cache'), "COREPACK_HOME": str(runtime_root / 'corepack'),
+                   "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
                    "npm_config_store_dir": str(runtime_root / 'pnpm-store'), "npm_config_cache": str(runtime_root / 'npm-cache'),
                    "npm_config_auto_install_peers": "false", "npm_config_update_notifier": "false", **(plugin_env or {})}
+            if not shutil.which("pnpm", path=env["PATH"]):
+                raise HTTPException(503, "AI 插件安装需要 pnpm；请安装 pnpm，或使用带 Corepack 的 Node.js 22+。")
             bypass = env.get("no_proxy", env.get("NO_PROXY", "")) + ",127.0.0.1,localhost"
             env.update(NO_PROXY=bypass, no_proxy=bypass)
             config = connection or {'provider': 'deepseek', 'base_url': 'https://api.deepseek.com'}

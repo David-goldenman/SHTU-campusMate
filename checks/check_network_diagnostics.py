@@ -45,7 +45,7 @@ async def checks():
         try:
             with protocols.http_client():
                 raise AssertionError("Invalid proxy scheme unexpectedly initialized")
-        except ValueError:
+        except protocols.NetworkConfigurationError:
             pass
         assert network.probe_client("invalid-proxy://127.0.0.1:9") is None
     finding = network.diagnosis(DNS, OK, {**FAIL, "status": "configuration_error"})
@@ -128,13 +128,14 @@ async def checks():
         diagnostics = network.NetworkDiagnostics()
         assert diagnostics.snapshot()["checked_at"] is None
         first, second = await asyncio.gather(diagnostics.check(), diagnostics.check())
-        assert first == second and probe_mock.await_count == 10
-        assert first["reachable_count"] == 5 and first["vpn_status"] == first["campus_location"] == "unknown"
+        assert first == second and probe_mock.await_count == 12
+        assert first["reachable_count"] == 6 and first["vpn_status"] == first["campus_location"] == "unknown"
+        assert any(item["id"] == "ecourse" for item in first["services"])
         assert all(item["diagnosis"]["code"] == "proxy" for item in first["services"])
         assert "secret" not in json.dumps(first) and "proxy.example" not in json.dumps(first)
         diagnostics.completed -= 10
         await diagnostics.check()
-        assert probe_mock.await_count == 20
+        assert probe_mock.await_count == 24
 
 
 asyncio.run(checks())
@@ -150,6 +151,7 @@ with tempfile.TemporaryDirectory(dir=temporary) as directory:
         assert client.get("/api/v1/auth/network").json() == {"checked_at": None, "services": []}
         assert check.await_count == 0
         assert client.post("/api/v1/auth/network/check").status_code == 403
+        assert client.post("/api/v1/auth/network/explain", json={"failures": []}).status_code == 403
         token = client.get("/api/v1/bootstrap").json()["csrf_token"]
         response = client.post("/api/v1/auth/network/check", headers={"X-Framework-Token": token})
         assert response.status_code == 200 and check.await_count == 1

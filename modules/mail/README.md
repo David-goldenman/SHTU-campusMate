@@ -14,6 +14,8 @@
 
 页面采用邮件列表与正文分栏，支持全文摘要筛选和主题／发件人搜索。纯文本换行转为段落和换行标记；清理后的 HTML 保留标题、列表、表格、粗体、居中和原文链接，使用本机 Nord 排版。正文按账号缓存，阅读不修改原站已读状态。
 
+进入邮箱默认显示“重点关注”，其余邮件通过兴趣推荐、一般通知、已筛选和收件箱查看；文件夹显示数量，搜索限定当前文件夹。从邮件引用进入时直接显示对应原件。兴趣推荐仍可在通知中心查看，但不触发右下角的新消息弹出或计数；重点邮件照常提醒。
+
 ## 偏好与语义复核
 
 `GET/PUT /preferences` 管理按邮箱账号保存的学段、年级、专业、在修课程、形策／心理健康完成状态、兴趣及完整自然语言要求；GET 返回 `{preferences,buckets,interests}`，PUT 接收完整 preferences。兴趣模式为 `follow/digest/hide`；完成状态为 `unknown/required/done/na`。初始资料留待用户填写，兴趣类别独立保存。`GET /intelligence` 返回 `{messages:[{...message,classification}],preferences,buckets,interests}`。

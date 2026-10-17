@@ -1,3 +1,5 @@
+import {bindSyncNetwork} from '/assets/sync-network.js';
+
 export async function mount(container, context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const cleanup = () => { removeStyle(); container.replaceChildren(); };
@@ -9,11 +11,23 @@ export async function mount(container, context) {
     <div class="elrc-toolbar"><label>学期<select data-term><option value="current">本学期</option><option value="all">全部学期</option></select></label>
     <button class="button button-primary" data-discover>更新课程目录</button><button class="button button-secondary" data-settings>账号设置</button></div>
     <p role="status" data-status>正在读取本地课程目录…</p>
+    <div data-network hidden></div>
     <form data-search class="elrc-toolbar"><label>查找已同步的课程资料<input name="query" maxlength="200" required placeholder="例如：电场叠加"></label><button class="button" type="submit">搜索原文</button></form>
     <div data-results></div><div data-courses class="elrc-courses"></div><section data-detail></section>
   </div>`;
   const find = selector => container.querySelector(selector);
   const status = text => { if (!context.signal.aborted) find('[data-status]').textContent = text; };
+  const diagnose = bindSyncNetwork(find('[data-network]'), context);
+  async function syncAction(action) {
+    diagnose.update([]);
+    try { await action(); }
+    catch (error) {
+      if (context.signal.aborted) return;
+      status(error.message);
+      diagnose.update(error.details?.network_failure ? [error.details.network_failure] : []);
+      throw error;
+    }
+  }
   let activeCourse = '', activeLesson = '', offset = 0;
   let revision = 0;
   const term = () => find('[data-term]').value;
@@ -61,15 +75,19 @@ export async function mount(container, context) {
       if (button.hasAttribute('data-settings')) context.navigate('settings');
       if (button.hasAttribute('data-discover')) {
         status('正在更新学校课程目录…');
-        await context.api('/discover', {method: 'POST', body: {semester: term()}});
-        await load();
+        await syncAction(async () => {
+          await context.api('/discover', {method: 'POST', body: {semester: term()}});
+          await load();
+        });
       }
       if (button.dataset.view) await showCourse(button.dataset.view);
       if (button.dataset.sync) {
         status('正在同步该课程；课次较多时需要几分钟。已保存的内容可继续读取。');
-        await context.api('/courses/' + encodeURIComponent(button.dataset.sync) + '/sync', {method: 'POST', body: {force: false}});
-        await load();
-        await showCourse(button.dataset.sync);
+        await syncAction(async () => {
+          await context.api('/courses/' + encodeURIComponent(button.dataset.sync) + '/sync', {method: 'POST', body: {force: false}});
+          await load();
+          await showCourse(button.dataset.sync);
+        });
       }
       if (button.dataset.lesson) await showLesson(button.dataset.lesson);
       if (button.hasAttribute('data-page')) await showLesson(activeLesson, Number(button.dataset.page));

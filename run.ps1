@@ -60,8 +60,7 @@ try {
         }
     } else {
         $env:CAMPUS_EDGE = Find-Edge
-        $uvCommand = Get-Command uv.exe -ErrorAction SilentlyContinue
-        if (!$uvCommand) { throw 'Install Windows uv (https://docs.astral.sh/uv/getting-started/installation/), then reopen this launcher.' }
+        $uv = Get-Uv $PSScriptRoot
         $nodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
         if (!$nodeCommand) { throw 'Install Windows Node.js 22+ for the school login window.' }
         $nodeVersion = & $nodeCommand.Source --version
@@ -76,12 +75,12 @@ try {
         $env:TMP = $env:TEMP
         New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
         if ($options.Check) {
-            & $uvCommand.Source --version
-            Write-Host "Native Windows and Node $nodeVersion ready. AI plugin installation also requires pnpm."
+            & $uv --version
+            Write-Host "Native Windows and Node $nodeVersion ready. AI plugin installation uses pnpm, with a local Corepack fallback."
             exit 0
         }
         Push-Location $PSScriptRoot
-        try { & $uvCommand.Source sync --locked; if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed.' } }
+        try { & $uv sync --locked; if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed.' } }
         finally { Pop-Location }
     }
     $launchId = [guid]::NewGuid().ToString('N')
@@ -98,7 +97,7 @@ try {
         $code = $script:WslExitCode
     } else {
         Push-Location $PSScriptRoot
-        try { & $uvCommand.Source run --no-sync python -m backend.main @serverArgs; $code = $LASTEXITCODE }
+        try { & $uv run --no-sync python -m backend.main @serverArgs; $code = $LASTEXITCODE }
         finally { Pop-Location }
     }
     if ($code -ne 0) { Write-Host "Startup failed (exit $code). See the message above. If the port is occupied, use --port 17666." }

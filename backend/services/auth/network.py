@@ -4,18 +4,20 @@ import ipaddress
 import socket
 import ssl
 import time
+import uuid
 from contextlib import AsyncExitStack
 from datetime import datetime, timezone
 from urllib.request import getproxies
 
 import httpx
 
-from .protocols import IDS, PROVIDERS, SERVICES, UA
+from .protocols import IDS, PROVIDERS, SERVICES, UA, NetworkConfigurationError
 
 TARGETS_TO_CHECK = (
     ("ids", "统一认证", IDS + "/login"),
     ("timetable", "教务系统", SERVICES["timetable"]),
     ("blackboard", "Blackboard", SERVICES["blackboard"]),
+    ("ecourse", "E 云课堂", SERVICES["ecourse"]),
     ("elrc", "虚拟教学社区 ELRC", "https://elrc.shanghaitech.edu.cn/learn/login/info"),
     ("coremail", "学校邮箱", PROVIDERS["coremail"]["url"]),
 )
@@ -51,6 +53,8 @@ async def resolve(host, port):
 
 
 def error_kind(error):
+    if isinstance(error, NetworkConfigurationError):
+        return "configuration_error"
     chain, seen = [], set()
     while error is not None and id(error) not in seen:
         seen.add(id(error))
@@ -68,6 +72,44 @@ def error_kind(error):
     if any(isinstance(item, httpx.ProtocolError) for item in chain):
         return "protocol_error"
     return "connection_error"
+
+
+def failure_context(error, target):
+    """Public sync marker: no URL paths, query strings, exception text or account data."""
+    if not isinstance(error, httpx.RequestError):
+        return None
+    try:
+        host = error.request.url.host
+    except RuntimeError:
+        host = None
+    known_hosts = {httpx.URL(url).host for _, _, url in TARGETS_TO_CHECK}
+    return {"id": uuid.uuid4().hex, "target": target, "kind": error_kind(error),
+            "at": datetime.now(timezone.utc).isoformat(), "host": host if host in known_hosts else None}
+
+
+def explain_failure(failure, report):
+    target = next(item for item in report["services"] if item["id"] == failure["target"])
+    observed = next((item for item in report["services"] if item["host"] == failure.get("host")), target)
+    kind = failure["kind"]
+    strong = kind in {"dns_error", "tls_error", "configuration_error", "proxy_error"}
+    if strong:
+        if kind == "proxy_error":
+            finding = {"code": "proxy", "confidence": "confirmed", "title": "同步请求的代理连接失败",
+                       "message": "本次同步请求在代理连接阶段失败。", "actions": ["检查代理是否可用，校园域名应设为直连；校外同时确认校园 VPN 已连接。"]}
+        else:
+            dns = {"status": "dns_error", "kinds": [], "addresses": []} if kind == "dns_error" else observed["dns"]
+            finding = diagnosis(dns, {"status": kind, "reachable": False}, observed["proxy"])
+        if observed["direct"]["reachable"]:
+            finding = {**finding, "message": finding["message"] + " 当前入口探测已收到响应，可在修正配置后或网络恢复后重试同步。"}
+    elif not observed["direct"]["reachable"]:
+        finding = observed["diagnosis"]
+    else:
+        finding = {"code": "sync_connection", "confidence": "unknown", "title": "同步连接失败，当前入口已可达",
+                   "message": "入口探测不能证明刚才失败的资料接口已恢复；可能是短时网络中断或该接口异常。",
+                   "actions": ["已保留上次成功数据，请重新同步。若持续失败，请稍后重试或联系该服务支持。"]}
+    return {"failure_id": failure["id"], "target": failure["target"], "name": target["name"],
+            "failed_at": failure["at"], "checked_at": report["checked_at"], "diagnosis": finding,
+            "entry": observed, "vpn_guide": VPN_GUIDE}
 
 
 def probe_client(proxy=None):
@@ -183,10 +225,11 @@ class NetworkDiagnostics:
     def snapshot(self):
         return self.result or {"checked_at": None, "services": []}
 
-    async def check(self):
+    async def check(self, *, after=None):
         # Coalesce simultaneous checks, and prevent repeated clicks flooding school services.
         async with self.lock:
-            if self.result and time.monotonic() - self.completed < 5:
+            if self.result and time.monotonic() - self.completed < 5 and (
+                    after is None or datetime.fromisoformat(self.result["checked_at"]) >= after):
                 return self.result
             proxies = getproxies()
             proxy_url = proxies.get("https") or proxies.get("all")

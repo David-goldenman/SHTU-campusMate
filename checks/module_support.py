@@ -37,6 +37,9 @@ class Auth:
     def get_status(self, provider):
         return {"username": "synthetic@example.edu", "has_session": True, "account_revision": self.revision}
 
+    def get_account_revision(self, provider):
+        return self.revision
+
     @contextmanager
     def authenticated_client(self, provider, target=None, *, cancelled=None):
         with httpx.Client(transport=self.transport, follow_redirects=True) as client:

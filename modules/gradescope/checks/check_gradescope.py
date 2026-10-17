@@ -20,6 +20,14 @@ items = reader.assignments(table,101,[])
 assert items[0]['actionable'] is True and items[0]['submitted'] is False
 assert items[1]['source_id'] is None and items[1]['availability'] == 'scheduled' and items[1]['actionable'] is False
 assert items[2]['submitted'] is True and items[2]['score'] == 9
+def status_row(markup):
+    return reader.assignments('<table id="assignments-student-table"><tbody><tr><td class="table--primaryLink"><button data-assignment-id="999">合成判定</button></td><td class="submissionStatus">' + markup + '</td></tr></tbody></table>', 101, [])[0]
+assert status_row('<span class="submissionStatus--score">—</span>')['submitted'] is None
+assert status_row('<span class="submissionStatus--score">0 / 10</span>')['submitted'] is True
+assert status_row('No Submission <span class="submissionStatus--score">0 / 10</span>')['submitted'] is False
+assert status_row('Submitted <span class="submissionStatus--score">—</span>')['submitted'] is True
+assert status_row('Draft')['submission_status'] == 'draft'
+assert status_row('Exempt')['exempt'] is True and status_row('Exempt')['submitted'] is None
 props = {'assignment':{'submission_allowed':False,'template_url':'https://production-gradescope-uploads.s3-us-west-2.amazonaws.com/statement.pdf'}, 'questions':[]}
 detail = '<div data-react-class="AssignmentSubmissionViewer" data-react-props="' + html.escape(json.dumps(props),quote=True) + '"></div>'
 result = reader.enrich(items[0],detail)

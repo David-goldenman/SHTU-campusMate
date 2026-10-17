@@ -2,8 +2,11 @@
 import asyncio
 import copy
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -12,6 +15,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from backend.services.ai import AIService, create_router
+from backend.services.ai import harness
 from backend.services.ai.routes import AISettings
 
 
@@ -35,7 +39,23 @@ class Memory:
         self.values.pop(key, None)
 
 
+def check_pnpm_fallback():
+    with tempfile.TemporaryDirectory() as directory:
+        corepack = 'C:\\nodejs\\corepack.cmd' if os.name == 'nt' else '/usr/bin/corepack'
+
+        def which(name, path=None):
+            return corepack if name == 'corepack' else None
+
+        with patch.object(harness.shutil, 'which', side_effect=which):
+            path = harness.pnpm_path(Path(directory))
+        tools = Path(directory) / 'tools'
+        shim = tools / ('pnpm.cmd' if os.name == 'nt' else 'pnpm')
+        assert path.split(os.pathsep)[0] == str(tools)
+        assert shim.is_file() and 'corepack' in shim.read_text(encoding='utf-8').lower()
+
+
 def main():
+    check_pnpm_fallback()
     store, vault, requests = Memory(), Memory(), []
     mode = "text"
 
@@ -107,7 +127,7 @@ def main():
             assert deleted.status_code == 200 and not deleted.json()["key_saved"]
             assert not vault.get("ai:deepseek")
     asyncio.run(routes())
-    print("PASS: AI settings, secret boundary, text/JSON generation, chat and safe provider errors")
+    print("PASS: AI settings, secret boundary, text/JSON generation, chat, safe provider errors and pnpm fallback")
 
 
 if __name__ == "__main__":
