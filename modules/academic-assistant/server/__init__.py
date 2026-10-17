@@ -62,7 +62,12 @@ def create_router(context):
 
     @router.get('/chat')
     def history():
-        return {'messages': agent.history(), 'conversation_id': agent.conversations.index()['active_id']}
+        owner = account_revision(context)
+        identity = agent.conversations.index(owner)['active_id']
+        messages = agent.conversations.messages(identity, owner) if identity else []
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已更新，请重新打开对话。')
+        return {'messages': messages, 'conversation_id': identity, 'owner': owner}
 
     @router.get('/conversations')
     def conversations():
