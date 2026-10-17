@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
-from .errors import catch_errors, error_response
+from .errors import PublicError, catch_errors, error_response
 from .runtime import RuntimeStatus
 
 
@@ -135,34 +135,34 @@ class ModuleManager:
         entry = Entry(info, folder)
         try:
             if not folder.resolve().is_relative_to(self.root) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", folder.name):
-                raise ValueError("模块目录名称或位置不符合规范。")
+                raise PublicError("模块目录名称或位置不符合规范。")
             manifest = Manifest.model_validate(json.loads((folder / "module.json").read_text(encoding="utf-8")))
             if manifest.id != folder.name:
-                raise ValueError("module.json 的 id 必须与目录名称一致。")
+                raise PublicError("module.json 的 id 必须与目录名称一致。")
             if manifest.id == "reload":
-                raise ValueError("reload 是框架保留的模块标识。")
+                raise PublicError("reload 是框架保留的模块标识。")
             if manifest.category == "settings":
-                raise ValueError("settings 是框架保留的设置分类。")
+                raise PublicError("settings 是框架保留的设置分类。")
             info.update(manifest.model_dump())
             frontend, backend = folder / "web" / "index.js", folder / "server" / "__init__.py"
             background = folder / 'web' / 'background.js'
             plugin = folder / "harness" / "package.json"
             for path in (frontend, background, backend, plugin):
                 if not path.resolve().is_relative_to(folder.resolve()):
-                    raise ValueError("模块入口必须位于自己的目录内。")
+                    raise PublicError("模块入口必须位于自己的目录内。")
             info["has_frontend"] = frontend.is_file()
             if plugin.is_file():
                 package = json.loads(plugin.read_text(encoding="utf-8"))
                 if not isinstance(package.get("name"), str) or not re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", package["name"]):
-                    raise ValueError("Harness package.json 需要合法的 npm 包名。")
+                    raise PublicError("Harness package.json 需要合法的 npm 包名。")
                 bundle = package.get("dsh", {}).get("bundle", {}).get("patch")
                 target = (plugin.parent / (bundle or package.get("main", "index.js"))).resolve()
                 if not target.is_relative_to(plugin.parent.resolve()) or not target.is_file():
-                    raise ValueError("Harness 插件入口必须位于自己的 harness 目录内。")
+                    raise PublicError("Harness 插件入口必须位于自己的 harness 目录内。")
                 entry.harness = {"name": package["name"], "folder": plugin.parent.resolve(), "bundle": bool(bundle)}
             info["harness"] = entry.harness is not None
             if not frontend.is_file() and not background.is_file() and not backend.is_file() and not entry.harness:
-                raise ValueError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
+                raise PublicError("模块需要 web/index.js、web/background.js、server/__init__.py 或 harness/package.json 入口。")
             info["enabled"] = self.store.read("modules", {}).get(manifest.id, True)
             if not info["enabled"]:
                 info["status"] = "disabled"
@@ -180,7 +180,7 @@ class ModuleManager:
                 exec(compile(backend.read_text(encoding="utf-8"), str(backend), "exec"), entry.package.__dict__)
                 router = entry.package.create_router(entry.context)
                 if not isinstance(router, APIRouter):
-                    raise ValueError("create_router(context) 必须返回 APIRouter。")
+                    raise PublicError("create_router(context) 必须返回 APIRouter。")
                 entry.app = FastAPI(title=manifest.name, version=manifest.version, docs_url=None, redoc_url=None, exception_handlers=self.exception_handlers)
                 entry.app.include_router(router)
                 entry.app.middleware('http')(catch_errors)
@@ -194,7 +194,7 @@ class ModuleManager:
             except Exception as stop_error:
                 info.update(status="error", error=f"模块停止失败（{type(stop_error).__name__}），请检查 stop(context)。")
                 return entry
-            info.update(status="error", error=str(error) if type(error) is ValueError else f"模块加载失败（{type(error).__name__}）。")
+            info.update(status="error", error=str(error) if isinstance(error, PublicError) else f"模块加载失败（{type(error).__name__}），请检查模块后重新加载。")
         return entry
 
     def reload(self):

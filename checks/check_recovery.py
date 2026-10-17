@@ -24,6 +24,8 @@ async def check(root):
     modules, data = root / 'modules', root / 'data'
     modules.mkdir(); data.mkdir()
     fixture(modules, 'alpha', 'one'); fixture(modules, 'beta', 'two')
+    fixture(modules, 'gamma', 'broken')
+    (modules / 'gamma/server/__init__.py').write_text("def create_router(context):\n    raise ValueError('synthetic-private-startup')\n")
     store, vault = Store(data / 'state.sqlite3'), MemoryVault()
     store.write('auth:synthetic', {'private': 'synthetic-core-secret'})
     vault.save('synthetic', {'private': 'synthetic-vault-secret'})
@@ -31,7 +33,10 @@ async def check(root):
     manager, backups = app.state.modules, app.state.backups
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://127.0.0.1:17668') as client:
-            client.headers['X-Framework-Token'] = (await client.get('/api/v1/bootstrap')).json()['csrf_token']
+            bootstrap = await client.get('/api/v1/bootstrap')
+            assert 'synthetic-private-startup' not in bootstrap.text
+            assert next(item for item in bootstrap.json()['modules'] if item['id'] == 'gamma')['status'] == 'error'
+            client.headers['X-Framework-Token'] = bootstrap.json()['csrf_token']
             alpha = manager.entries['alpha']
             @alpha.app.get('/failure')
             def failure():
