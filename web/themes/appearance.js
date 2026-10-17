@@ -3,12 +3,30 @@ import {escape as e} from '../shared.js';
 const key = 'campus.appearance.v1';
 export let themes = Object.freeze({default:{id:'default',name:'Default · Nord',styles:[],views:{},backgrounds:{}}});
 const companion = value => ['female','male','hidden'].includes(value) ? value : 'female';
+const campusThemes = ['observatory','star-notes'];
+const object = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+function normalizeCampusPreferences(value) {
+  value = object(value);
+  return {...value,
+    moments:{dashboard:value.moments?.dashboard!==false,timetable:value.moments?.timetable!==false},
+    rotation:{autoplay:value.rotation?.autoplay!==false,seconds:[10,20,30,60].includes(value.rotation?.seconds)?value.rotation.seconds:20},
+  };
+}
 export function normalizeAppearance(value = {}) {
+  const options = {...object(value?.options)};
+  // Earlier blue-white themes saved these fields at the root; retain both variants' choices.
+  for (const id of campusThemes) {
+    const current = object(options[id]);
+    options[id] = normalizeCampusPreferences({...current,
+      moments:{...object(value?.moments),...object(current.moments)},
+      rotation:{...object(value?.rotation),...object(current.rotation)},
+    });
+  }
   return {
     theme:typeof value?.theme === 'string' && /^[a-z][a-z0-9-]{0,47}$/.test(value.theme) ? value.theme : 'default',
     companions:{observatory:companion(value?.companions?.observatory),'star-notes':companion(value?.companions?.['star-notes'])},
     reduceMotion:value?.reduceMotion === true,
-    options:value?.options && typeof value.options === 'object' && !Array.isArray(value.options) ? value.options : {},
+    options,
   };
 }
 let state;
@@ -16,6 +34,9 @@ try {state = normalizeAppearance(JSON.parse(localStorage.getItem(key)));}
 catch {state = normalizeAppearance();}
 let selected = themes.default, entry = {}, themeStyles = [];
 export function getAppearance() {return structuredClone(state);}
+export function getCampusPreferences(id = selected.id) {
+  return {...structuredClone(normalizeCampusPreferences(state.options[id])),reduceMotion:state.reduceMotion};
+}
 function apply() {
   document.documentElement.dataset.theme = selected.id;
   if (entry.artTheme) document.documentElement.dataset.artTheme = selected.id;
@@ -85,6 +106,7 @@ export function appearancePanel() {
     <p data-theme-unavailable class="notice" hidden>已保存的主题暂不可用，当前使用 Default。你的原选择仍会保留。</p>
     <section class="art-companion-section" aria-labelledby="art-companion-title"><div class="art-companion-frame"><img data-companion-portrait alt="观星伙伴插画" width="720" height="480" loading="lazy"><div data-companion-hidden hidden><span aria-hidden="true">✦</span><p>留白，也是一种陪伴。</p></div></div><div class="art-companion-controls"><span class="art-overline" data-companion-theme></span><h3 id="art-companion-title">一位观星的同行者</h3><p>只在外观设置里相遇，把工作区留给你的思考。</p><fieldset class="art-companion-field"><legend class="visually-hidden">人物形象</legend>${['female','male','hidden'].map((id,index)=>`<label><input type="radio" name="art-companion" value="${id}"><span>${['女版','男版','隐藏'][index]}</span></label>`).join('')}</fieldset><p class="field-hint">两套主题会分别记住你的人物选择。</p></div></section>
     <div class="art-motion-row"><div><h3>动态效果</h3><p>减少装饰动画，同时尊重系统偏好。</p></div><label class="art-motion-toggle"><input data-art-motion type="checkbox"><span>减少动态效果</span></label></div>
+    <section class="art-moments-section" aria-labelledby="art-moments-title" hidden><div><h3 id="art-moments-title">在日常里，偶遇一幅画。</h3><p>只在页面下方显示图片，不添加场景说明。可自动轮播，也可手动切换。</p><div class="art-moment-options"><label><input type="checkbox" data-art-moment="dashboard"><span>首页页尾</span></label><label><input type="checkbox" data-art-moment="timetable"><span>时间表页尾</span></label></div><div class="art-moment-rotation"><label><input type="checkbox" data-art-autoplay><span>自动轮播图片</span></label><label>切换间隔<select data-art-interval>${[10,20,30,60].map(seconds=>`<option value="${seconds}">${seconds} 秒</option>`).join('')}</select></label></div></div><img class="art-moment-preview" src="/assets/themes/assets/campus-water.webp" alt="校园照片蓝白处理预览" width="720" height="480" loading="lazy"></section>
     <footer class="art-settings-footer"><p>主题切换后会重新打开当前页面。</p><p data-appearance-status role="status" aria-live="polite"></p></footer></section>`;
 }
 export function bindAppearance(host,signal) {
@@ -95,7 +117,12 @@ export function bindAppearance(host,signal) {
     host.querySelector('[data-theme-unavailable]').hidden=selected.id===value.theme;
     host.querySelector('.art-companion-section').hidden=!art;
     host.querySelector('[data-art-motion]').checked=value.reduceMotion;
+    host.querySelector('.art-moments-section').hidden=!art;
     if (!art) return;
+    const preferences=getCampusPreferences();
+    host.querySelectorAll('[data-art-moment]').forEach(input=>{input.checked=preferences.moments[input.dataset.artMoment];});
+    host.querySelector('[data-art-autoplay]').checked=preferences.rotation.autoplay;
+    host.querySelector('[data-art-interval]').value=String(preferences.rotation.seconds);
     host.querySelectorAll('[name="art-companion"]').forEach(input=>{input.checked=input.value===selection;});
     host.querySelector('[data-companion-theme]').textContent=selected.name;
     const image=host.querySelector('[data-companion-portrait]');image.hidden=selection==='hidden';
@@ -104,7 +131,15 @@ export function bindAppearance(host,signal) {
   }
   host.addEventListener('change',event=>{
     const target=event.target;
-    const patch=target.name==='art-theme'?{theme:target.value}:target.name==='art-companion'?{companions:{[selected.id]:target.value}}:target.matches('[data-art-motion]')?{reduceMotion:target.checked}:null;
+    const preferences=getCampusPreferences();
+    let campusPatch=null;
+    if (campusThemes.includes(selected.id)) {
+      if (target.matches('[data-art-moment]')) campusPatch={...preferences,moments:{...preferences.moments,[target.dataset.artMoment]:target.checked}};
+      else if (target.matches('[data-art-autoplay]')) campusPatch={...preferences,rotation:{...preferences.rotation,autoplay:target.checked}};
+      else if (target.matches('[data-art-interval]')) campusPatch={...preferences,rotation:{...preferences.rotation,seconds:Number(target.value)}};
+      if(campusPatch) delete campusPatch.reduceMotion;
+    }
+    const patch=campusPatch?{options:{...state.options,[selected.id]:campusPatch}}:target.name==='art-theme'?{theme:target.value}:target.name==='art-companion'?{companions:{[selected.id]:target.value}}:target.matches('[data-art-motion]')?{reduceMotion:target.checked}:null;
     if (!patch) return;
     const saved=setAppearance(patch);
     host.querySelector('[data-appearance-status]').textContent=saved?'外观已保存。':'浏览器限制了保存，请允许本站保存数据后重试。';

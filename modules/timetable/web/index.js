@@ -1,5 +1,6 @@
 import {link, time, applyAccent} from '/assets/campus.js';
 import {bindSyncNetwork} from '/assets/sync-network.js';
+import {mountCampusMoment} from '/assets/themes/campus-moments.js';
 import {applyLessonPositions, compareEvents, eventGroup, isCancelledClass, isLesson, lessonLayout, matchesFilter, periodsFor} from './planner.js';
 
 const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',tutorial:'习题课',study:'学习',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
@@ -15,7 +16,8 @@ export async function mount(container, context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('week-planner');
   let current = dayOf(Date.now()), snapshot, timer, midnight, request = 0, filter = 'all', showCancelled = false;
-  const cleanup = () => {clearTimeout(timer);clearTimeout(midnight);removeStyle();};
+  let removeMoment = () => {};
+  const cleanup = () => {removeMoment();clearTimeout(timer);clearTimeout(midnight);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
   const networkHost = document.createElement('div');
   networkHost.hidden = true;
@@ -119,6 +121,8 @@ export async function mount(container, context) {
     const overview=container.querySelector('.planner-overview');
     if(overview)overview.ontoggle=()=>{overviewOpen=overview.open;};
     const weekDetail=container.querySelector('.planner-week-detail');weekDetail.ontoggle=()=>{weekOpen=weekDetail.open;};
+    removeMoment();
+    if (['observatory','star-notes'].includes(context.theme?.id)) removeMoment = mountCampusMoment(container,'timetable',context.signal);
     container.prepend(networkHost);
     diagnose.update(snapshot.network_failures || []);
     container.querySelectorAll('[data-shift]').forEach(button => button.onclick = act(button,async () => {current = shift(current,Number(button.dataset.shift));await refresh();}));
