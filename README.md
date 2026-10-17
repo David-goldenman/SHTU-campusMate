@@ -6,7 +6,7 @@
 
 ## 当前开发状态
 
-已集成 16 个模块，Windows 原生运行；共享登录状态和本地学习资料可在重启后恢复。聊天、邮件分类与后台检查使用官方 DeepSeek Harness 原生插件，框架负责通用生命周期，业务判断与副作用留在模块中。多会话会迁移已有聊天记录；手动邮件分类和已编辑的时间安排优先保留。完整行为与边界见 [学习助手](modules/academic-assistant/README.md)、[邮箱](modules/mail/README.md)、[后台助手](modules/campus-agent/README.md) 和 [验收记录](docs/LIVE_ACCEPTANCE.md)。
+已集成 17 个模块，Windows 原生运行；共享登录状态和本地学习资料可在重启后恢复。聊天、邮件分类与后台检查使用官方 DeepSeek Harness 原生插件，框架负责通用生命周期，业务判断与副作用留在模块中。多会话会迁移已有聊天记录；手动邮件分类和已编辑的时间安排优先保留。完整行为与边界见 [学习助手](modules/academic-assistant/README.md)、[邮箱](modules/mail/README.md)、[后台助手](modules/campus-agent/README.md) 和 [验收记录](docs/LIVE_ACCEPTANCE.md)。
 
 ## 下一阶段开发方向
 

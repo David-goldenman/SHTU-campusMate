@@ -15,7 +15,7 @@ from .commands import Command, adjustments_key, event_record, execute
 from .homework import homework_window, overview_weeks
 from .school_calendar import SchoolCalendar, term_key
 
-SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
+SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂", "eams": "教务系统"}
 _source = None
 _calendar = None
 

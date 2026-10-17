@@ -40,7 +40,7 @@ def arrange(data, now=None, order=None):
     groups = {member: course for course in data["courses"] for member in course["course_ids"]}
     values = []
     for item in data["assignments"]:
-        if item["source"] not in {"gradescope", "blackboard"}:
+        if item["source"] not in {"gradescope", "blackboard", "ecourse"}:
             continue
         group = groups.get(item.get("course_id"), {})
         category = assignment_section(item, at)

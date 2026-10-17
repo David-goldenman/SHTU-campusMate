@@ -1,5 +1,7 @@
 # 课程中心
 
+E 云课堂（`ecourse`）通过公开快照接入课程、课件说明、公告和作业；统一同步会触发其只读刷新。原站提供的学期、课程代码及开课院系保留在课程来源记录中，附件通过原站课程栏目查看。来源停用按现有协议降级，首页助手通过 `/context` 使用同一份资料。
+
 作业分类与作业管理共用提交状态标签，区分草稿、待评分、已评分、豁免和待核实；pending 筛选排除豁免与未知状态。`POST /context` 同时保留 `submission_status/submission_evidence/submission_reason/checked_at/submitted_at/submission_stale/exempt/due_at_evidence`，供 AI 与通知使用来源证据，而不是只看一个布尔值。
 
 `GET /snapshot` 的 `network_failures` 转发已启用来源的网络故障标记。页面自动检测并在同步提示旁给出原因和处理建议，无需进入设置；仅来源明确的网络错误触发，成功重试后清除。
