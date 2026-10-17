@@ -1,5 +1,9 @@
 # 模块开发接口
 
+共享展示 SDK `/assets/campus.js` 的 `submissionLabel(item)` 供作业管理和课程中心显示同一提交状态及缓存提示；它只格式化来源已有字段，不请求来源、不决定待办。状态与依据由来源模块提供，待办规则由业务聚合模块实现。
+
+作业管理 `GET /snapshot` 的 `summary` 为全部缓存统计，`summary.by_source[平台]` 为该平台统计；两层均含 `total/unsubmitted/pending/submission_states/needs_review`，不受关键词或分页影响。七种提交状态互斥，`submitted` 只确认提交、评分情况未确认；只有 `needs_grading` 表示待评分，不能用空分数推断。按平台回答时使用对应平台的状态统计。
+
 每项业务功能在自己的 `modules/<id>/` 目录开发，框架通过清单和固定入口加载。主侧栏分类、设置和共享服务由框架统一管理；模块把页面挂到所选分类，将后端接口挂到自己的命名空间。
 
 ## 目录和清单
@@ -93,6 +97,7 @@ def create_router(context):
 | --- | --- |
 | `context.id` | 当前模块 ID |
 | `context.modules()` | 当前模块和分类的公开元数据，与管理接口结构一致；不返回凭据 |
+| `context.runtime.watch(name, worker)` | 登记已有 Thread 或 concurrent.futures.Future 的运行状态，不启动或停止任务；每模块最多 16 个名称，同名替换，名称不含账号或私人内容 |
 | `context.store.read(key, default=None)` | 读取本模块非秘密 JSON 状态 |
 | `context.store.write(key, value)`、`.delete(key)`、`.clear()` | 管理本模块 SQLite 命名空间 |
 | `context.secrets.get(key)`、`.save(key, dict)`、`.delete(key)` | 管理本模块 DPAPI 加密秘密，缺失返回 `{}` |
@@ -119,6 +124,10 @@ def create_router(context):
 
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
 
+运行状态登记已用于共享 Source 同步、时间表校历更新、校园后台助手、通知检查和学习提醒。在线程 start 或提交 Future 后调用 `context.runtime.watch('简短任务名', worker)`；重复任务使用固定名称，不能按任务 ID 无限添加。框架记录接口时间、HTTP 状态及错误编号，业务成功与数据新鲜度仍由模块 API 表达。状态仅存于当前实例内存，详见 [运行状态响应](API.md#模块管理)。合成上下文可省略 runtime，调用方用 `getattr(context,'runtime',None)` 兼容。
+
+清除模块数据前会自动快照；恢复同时替换所有模块的普通状态和文件，不处理秘密或核心账号状态。快照需要所有模块的 stop 成功后才读取，后台任务必须完成清理才能参与恢复。不得把凭据放入 store/data_dir；备份只遵循这两个公开的非秘密数据边界。使用 `HTTPException(status, '可公开说明')` 报告预期业务错误，未经处理的异常由框架提供通用提示和错误编号。
+
 原生 AI 插件位于 `harness/`，使用标准 npm package.json 与 Cordis 接口，也支持官方 `dsh.bundle.patch`。模块清单响应的 `harness: true` 表示该模块提供原生插件；它与模块共用启停和刷新。`context.ai.run(..., plugins=[模块ID])` 在独立官方运行时中加载所选插件，并在结束时释放。执行期间插件所属模块保持活动请求计数。详见 [AI 与插件文档](AI.md#原生-harness-插件)。
 
 插件工具按声明的 schema 接收模型参数，并通过 `execution.signal` 响应取消；注册和清理由 Cordis effect 管理。Python 模块选择公开 API 中的资料，在线程池调用同步 AI 服务，再校验引用、输出和账号版本。模块 README 记录工具名、所需 Cordis 服务、输入输出、外部访问与写入范围、持久化和检查方式；版本升级随功能分支更新清单、调用方和文档。
@@ -126,6 +135,8 @@ def create_router(context):
 模块属于受信任本地代码，运行权限与框架一致。目录分层和注入上下文用于团队分工与状态隔离；安装模块前审核其代码及外部访问行为。
 
 ## 校园数据模块
+
+来源可通过 `Source(..., network_target=共享认证目标)` 选择网络失败诊断；SDK 不选择具体业务目标。网络请求失败的 error/partial 快照附带 `network_failure:{id,target,kind,at,host?}`，重试启动或成功时清除；解析、登录和权限失败不携带该标记。标记按账号版本隔离，不保存原始异常或完整 URL。`Remote.network_error` 仅在内存保留最后一次重试仍失败的 RequestError，供 Source 识别局部失败。聚合页转发 `network_failures` 数组。共享 `sourcePanel` 自动显示，其他页面可用 `/assets/sync-network.js` 的 `bindSyncNetwork(host,context,retry?)`，调用返回对象的 `update(failures)`；同一故障去重，切页中止，恢复后清除。它通过 `context.services.auth.explainNetwork(failures)` 调用公开诊断 API；详见 [AUTH.md](AUTH.md)。结构化 HTTP 错误的 `detail.message` 显示为消息，原公开 detail 保存在前端 Error 的 `details`。
 
 公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。日期带时区，页面以 Asia/Shanghai 展示。
 

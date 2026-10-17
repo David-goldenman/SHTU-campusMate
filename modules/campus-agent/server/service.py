@@ -385,6 +385,8 @@ class CampusAgent:
     def start(self):
         self.thread = threading.Thread(target=self.loop, name='campus-agent', daemon=True)
         self.thread.start()
+        if getattr(self.context, 'runtime', None):
+            self.context.runtime.watch('资料变化检查', self.thread)
 
     def loop(self):
         while not self.stopping.is_set():

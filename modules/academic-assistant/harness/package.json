@@ -1,6 +1,6 @@
 {
   "name": "campus-academic-assistant",
-  "version": "0.3.2",
+  "version": "0.3.5",
   "description": "校园资料问答、本地日程编辑与作业进度、提醒和学习计划管理",
   "type": "module",
   "main": "index.js",

@@ -20,7 +20,7 @@
 
 ## 启动
 
-当前开发入口为 Windows 原生：Python 服务和官方 Harness 在 Windows 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要 Windows uv、Git、Node.js 22+ 和 Edge；原生插件安装需要 pnpm。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；WSL 可通过 `--distro` 显式选择，继续作为 Linux 开发入口。官方 Harness 运行时随 Python 依赖安装。
+当前开发入口为 Windows 原生：Python 服务和官方 Harness 在 Windows 运行，工作台与学校登录使用 Windows Edge，凭据由当前 Windows 用户的 DPAPI 加密。需要 Windows uv、Git、Node.js 22+ 和 Edge；原生插件安装需要 pnpm，未安装 pnpm 时框架会自动通过 Node.js 自带的 Corepack 提供本地兜底。uv 根据 `.python-version` 和 `uv.lock` 准备 Python 3.12 及依赖；WSL 可通过 `--distro` 显式选择，继续作为 Linux 开发入口。官方 Harness 运行时随 Python 依赖安装。
 
 在 Windows 双击 `run.cmd`，或运行：
 
@@ -35,7 +35,7 @@
 
 启动器默认使用 Windows 原生环境；指定 `--distro` 或 `CAMPUS_WSL_DISTRO` 时使用对应 WSL 发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
 
-默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
+默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；若 PATH 中没有 uv，启动器会用本机 Python/pip 将其安装到 `.private/runtime/tools/uv` 并复用，也可用 `CAMPUS_UV` 指定已有程序。uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
 
 在已配置环境的 WSL 中也可运行 `bash ./run.sh`，手动打开 [本地工作台](http://127.0.0.1:16666)。应用运行环境、缓存、启动状态和本机生成的 Windows 互操作脚本放在 `.private/runtime/`；开发环境与验证资料放在 `.codex/`，均不会提交。迁移源码时不复制虚拟环境；目标电脑重新准备依赖，详情见 [四人协作、打包与迁移](docs/DELIVERY.md)。
 
@@ -62,6 +62,8 @@ AI 工具和工作流统一使用官方 DeepSeek Harness 后端运行时。每�
 | `checks/`、`docs/` | 框架和共享服务的最小检查、接口及团队规范 |
 
 项目以空配置启动。账号、密码、Cookie、登录参数、AI Key 和模块秘密统一写入 `.private/vault.dpapi`；接口只返回配置及会话状态。普通设置保存在 `.private/settings.sqlite3`，模块文件存放在 `.private/modules/<id>/`。设置中可分别清除凭据、模块数据，或重置全部本地数据。私有资料和开发环境遵循项目 `.gitignore`。
+
+设置 → 功能模块可读取当前请求、最近失败和后台线程状态；设置 → 本地设置提供模块数据备份、恢复和单份删除。清除或恢复模块数据前会自动保存一份；备份失败则不继续操作。备份位于 `.private/backups/`，不会随“清除当前数据”删除，需在备份列表单独删除；不含账号凭据、登录状态和 API Key。恢复使用当前账号，账号版本不匹配的记录继续隔离。错误提示带下一步操作和错误编号，便于定位问题。接口和恢复边界见 [统一 API](docs/API.md)。
 
 DPAPI 密文绑定当前 Windows 用户；更换电脑或 Windows 账号后需重新配置凭据。登录验证使用 `.private/runtime/auth/` 中按服务固定的 Edge 资料，导入后关闭窗口并保留资料；断开账号或清除凭据时删除对应资料。Windows 会话密钥由操作系统管理，项目内保存密文。
 

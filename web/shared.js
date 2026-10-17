@@ -60,7 +60,13 @@ export async function api(path, {onEvent, timeoutMs, idleTimeoutMs = 240000, ...
       if(request.signal.aborted)throw error;
       throw new Error(response.ok ? '服务返回了无法读取的数据，请重试。' : '服务请求失败（'+response.status+'），请稍后重试。');
     }
-    if (!response.ok) throw new Error(typeof value?.detail === 'string' ? value.detail : '请求失败，请检查设置后重试。');
+    if (!response.ok) {
+      const detail = typeof value?.detail === 'string' ? value.detail : Array.isArray(value?.detail) ? value.detail.map(item => (item.loc || []).filter(key => key !== 'body').join('.') + '：' + item.msg).join('；') : typeof value?.detail?.message === 'string' ? value.detail.message : '请求失败。';
+      const message = [detail,value?.action,value?.request_id ? '错误编号：' + value.request_id : ''].filter(Boolean).join(' ');
+      const error = new Error(message);
+      Object.assign(error,{status:response.status,code:value?.code,requestId:value?.request_id,action:value?.action,details:value?.detail});
+      throw error;
+    }
     return value;
   } catch(error) {
     if(deadline.signal.aborted)throw deadline.signal.reason;

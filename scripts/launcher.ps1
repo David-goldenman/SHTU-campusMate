@@ -46,6 +46,70 @@ function Get-WslCandidates([string[]]$Installed, [string]$Requested, [string]$De
     @(@($Default | Where-Object { $_ -in $usable }) + @($usable | Where-Object { $_ -ne $Default } | Sort-Object { if ($_ -match '^(Ubuntu|Debian)') { 0 } else { 1 } }, { $_ }))
 }
 
+function Get-UvCandidates([string]$Root) {
+    $paths = @((Join-Path $Root '.private/runtime/tools/uv/Scripts/uv.exe'))
+    if ($env:USERPROFILE) {
+        $paths += Join-Path $env:USERPROFILE '.local/bin/uv.exe'
+        $paths += Join-Path $env:USERPROFILE '.cargo/bin/uv.exe'
+    }
+    if ($env:LOCALAPPDATA) {
+        $paths += Join-Path $env:LOCALAPPDATA 'Programs/uv/uv.exe'
+        $paths += Join-Path $env:LOCALAPPDATA 'Microsoft/WinGet/Links/uv.exe'
+    }
+    @($paths)
+}
+
+function Find-Uv([string]$Root) {
+    if ($env:CAMPUS_UV) {
+        if (Test-Path -LiteralPath $env:CAMPUS_UV -PathType Leaf) { return (Resolve-Path -LiteralPath $env:CAMPUS_UV).Path }
+        $override = Get-Command $env:CAMPUS_UV -ErrorAction SilentlyContinue
+        if ($override) { return [string]$override.Source }
+        throw "CAMPUS_UV does not point to uv.exe: $env:CAMPUS_UV"
+    }
+    $command = Get-Command uv.exe -ErrorAction SilentlyContinue
+    if ($command) { return [string]$command.Source }
+    foreach ($candidate in Get-UvCandidates $Root) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return $null
+}
+
+function Get-PythonCandidates {
+    $candidates = @()
+    $python = Get-Command python.exe -ErrorAction SilentlyContinue
+    if ($python) { $candidates += @{ Path = [string]$python.Source; Arguments = @() } }
+    $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($launcher) { $candidates += @{ Path = [string]$launcher.Source; Arguments = @('-3.12') } }
+    @($candidates)
+}
+
+function Install-Uv([string]$Root) {
+    $destination = Join-Path $Root '.private/runtime/tools/uv'
+    New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    $pythonCandidates = @(Get-PythonCandidates)
+    if (!$pythonCandidates.Count) {
+        throw 'uv is not installed and Python with pip was not found. Install uv (https://docs.astral.sh/uv/getting-started/installation/) or Python 3.12+, then run the launcher again.'
+    }
+    Write-Host 'uv was not found. Installing it once into .private/runtime/tools/uv ...'
+    Write-Host 'This first-time setup needs network access.'
+    foreach ($candidate in $pythonCandidates) {
+        $arguments = @($candidate.Arguments) + @('-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '--no-warn-script-location', '--prefix', $destination, 'uv')
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { & $candidate.Path @arguments 2>&1 | ForEach-Object { Write-Host $_ } }
+        finally { $ErrorActionPreference = $previous }
+        $installed = Join-Path $destination 'Scripts/uv.exe'
+        if (Test-Path -LiteralPath $installed -PathType Leaf) { return (Resolve-Path -LiteralPath $installed).Path }
+    }
+    throw 'Automatic uv installation failed. Check the network or proxy, or install uv manually from https://docs.astral.sh/uv/getting-started/installation/ and run the launcher again.'
+}
+
+function Get-Uv([string]$Root) {
+    $uv = Find-Uv $Root
+    if ($uv) { return $uv }
+    Install-Uv $Root
+}
+
 function Find-Edge {
     $candidates = @(
         (Get-Command msedge.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source),
