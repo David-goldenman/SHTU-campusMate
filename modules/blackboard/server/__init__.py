@@ -2,9 +2,9 @@ from urllib.parse import urljoin
 
 from fastapi import HTTPException, Query
 
-from backend.services.campus import Source, SourceError, rows
+from backend.services.campus import Source, SourceError, rows, semester
 from backend.services.campus.files import download
-from .reader import BASE, checked, fetch
+from .reader import BASE, TERM, checked, fetch
 
 _source = None
 
@@ -16,6 +16,10 @@ class BlackboardSource(Source):
         for item in value['data']['assignments']:
             if item.get('submitted') is None:
                 item['submitted'] = False
+        for item in value['data']['courses']:
+            term = TERM.search(item.get('title', ''))
+            if not item.get('term') and term:
+                item.update(term=term[0], semester=semester(term[0]))
         return value
 
 

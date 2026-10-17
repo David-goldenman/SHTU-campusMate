@@ -18,7 +18,7 @@ assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'2099-0
 assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'bad-date'}},at) == ('unknown',None)
 assert reader.availability(None,at) == ('unknown',None)
 assert reader.activity('<div id="grades_wrapper"><div id="12" class="sortable_item_row submitted_item_row">Submitted</div><div id="13" class="sortable_item_row">未提交</div></div>') == {'_12_1':True,'_13_1':False}
-for term in ['2026秋季学期', '2026-2027学年秋季学期']:
+for term in ['2026秋季学期', '2026-2027学年秋季学期', '2026 秋', '2026秋', '2026年秋季']:
     courses = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">PHYS1183 普通物理II-' + term + '</a></div>')
     assert courses['_9_1']['term'] == term
 
@@ -72,7 +72,8 @@ async def check_cached_submissions():
         app.include_router(load('courses').create_router(courses), prefix='/courses')
         app.include_router(load('assignments').create_router(assignments), prefix='/assignments')
         data = validate_bundle({
-            'courses': [course('blackboard', '_9_1', '合成课程', 'QA101', '2026-fall')],
+            'courses': [course('blackboard', '_9_1', '合成课程', 'QA101', '', status='active'),
+                        course('blackboard', '_10_1', '另一合成课程2026 秋', 'QA102')],
             'assignments': [{'id': 'blackboard:' + name, 'source': 'blackboard', 'title': name, 'course_id': 'blackboard:_9_1', 'submitted': submitted, 'actionable': actionable}
                             for name, submitted, actionable in [('null', None, True), ('false', False, True), ('submitted', True, True), ('closed', None, False), ('unknown_open', None, None)]],
         })
@@ -84,7 +85,8 @@ async def check_cached_submissions():
                     if module in {'blackboard', 'courses', 'assignments'}:
                         return await client.request(options.get('method', 'GET'), '/' + module + path, json=options.get('body'))
                     if module == 'timetable':
-                        return httpx.Response(200, json={'data': validate_bundle({'metadata': {'semester': '2026-fall'}})})
+                        return httpx.Response(200, json={'data': validate_bundle({'metadata': {'semester': '2026-fall'},
+                            'courses': [course('timetable', 'current', '教务合成课程', 'QA101', '2026-fall')]})})
                     if module == 'gradescope':
                         return httpx.Response(200, json={'data': validate_bundle({
                             'courses': [course('gradescope', 'qa', '另一课程', 'QA102', '2026-fall')],
@@ -92,13 +94,17 @@ async def check_cached_submissions():
                         })})
                     return httpx.Response(404)
                 courses.api = assignments.api = api
-                values = (await client.get('/blackboard/snapshot')).json()['data']['assignments']
+                snapshot = (await client.get('/blackboard/snapshot')).json()['data']
+                assert snapshot['courses'][0]['term'] == ''
+                assert snapshot['courses'][1]['semester'] == '2026-fall'
+                values = snapshot['assignments']
                 assert [item['submitted'] for item in values] == [False, False, True, False, False]
                 assert bb.store.read('snapshot')['data']['assignments'][0]['submitted'] is None, 'Reading normalizes the response without rewriting cached source data'
                 pending = (await client.get('/courses/catalog/assignments?current=true&pending=true')).json()['items']
                 assert {item['id'] for item in pending} == {'blackboard:null', 'blackboard:false'}
                 overview = (await client.get('/assignments/snapshot')).json()
                 assert {item['id'] for item in overview['pending']} == {'blackboard:null', 'blackboard:false'}
+                assert overview['summary']['by_source']['blackboard'] == {'total': 5, 'unsubmitted': 4, 'pending': 2}
                 assert next(item for item in overview['data']['assignments'] if item['id'] == 'gradescope:unknown')['submitted'] is None
                 response = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:null']})
                 assert response.status_code == 200, response.text

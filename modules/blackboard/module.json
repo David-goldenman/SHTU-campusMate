@@ -1,7 +1,7 @@
 {
   "id": "blackboard",
   "name": "Blackboard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "category": "courses",
   "api_version": 1,
   "navigation": {
