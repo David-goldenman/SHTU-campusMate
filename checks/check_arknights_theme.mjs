@@ -8,7 +8,7 @@ const bootstrap = await (await fetch(base + '/api/v1/bootstrap')).json();
 const catalog = await (await fetch(base + '/api/v1/themes')).json();
 assert(catalog.items.some(item => item.id === 'arknights'));
 assert.deepEqual(catalog.errors, []);
-const modules = bootstrap.modules.filter(item => item.has_frontend && item.enabled);
+const modules = bootstrap.modules.filter(item => item.enabled && (item.has_frontend || item.id === 'campus-agent'));
 const output = resolve('.codex/arknights');
 const profile = resolve(output, 'browser-' + process.pid);
 await mkdir(profile, {recursive:true});
@@ -22,7 +22,7 @@ function browser(action) {
 function fixture(modules, categories, catalog) {
   if (!localStorage.getItem('campus.appearance.v1')) localStorage.setItem('campus.appearance.v1', JSON.stringify({theme:'arknights'}));
   const original = window.fetch.bind(window);
-  const state = window.arkCheck = {modules, unexpected:[]};
+  const state = window.arkCheck = {modules, unexpected:[],courses:8,empty:false,notices:Array.from({length:10},(_,index)=>({id:'notice:'+index,title:'课程资料有更新',summary:'请查看课程资料与作业安排。',importance:'important',read:false,source_revision:'r1'}))};
   const json = value => new Response(JSON.stringify(value), {headers:{'Content-Type':'application/json'}});
   const due = hours => new Date(Date.now() + hours * 3600000).toISOString();
   const pending = [
@@ -36,6 +36,7 @@ function fixture(modules, categories, catalog) {
     const path = target.pathname.replace('/api/v1', '');
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/themes') return json(catalog);
+    if (path === '/modules/campus-agent/status') return json({owner:'synthetic',enabled:true,running:false,notices:state.notices,proposals:[]});
     if (path === '/ai/settings') return json({model:'deepseek-flash',enabled:false,key_saved:false});
     if (path === '/modules/academic-assistant/chat') return json({messages:[],owner:'synthetic'});
     if (path === '/modules/academic-assistant/conversations') return json({items:[],active_id:null});
@@ -45,9 +46,9 @@ function fixture(modules, categories, catalog) {
     if (path === '/modules/assignments/snapshot') return json({status:'ready',data:{assignments:pending,issues:[]},pending});
     if (path === '/modules/dashboard/snapshot') {
       const date = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
-      return json({status:'ready',updated_at:null,stats:{courses:8,pending:3,materials:42,ready_sources:6},pending,
-        data:{metadata:{source_metadata:Object.fromEntries(['timetable','blackboard','gradescope','piazza','elrc','mail'].map(id => [id,{status:'ready'}]))},issues:[]},
-        notifications:[],agenda:[{date,events:[{title:'计算机组成原理',event_type:'class',at:date+'T14:00:00+08:00',location:'教学中心 301'},{title:'线性代数 · 习题课',event_type:'class',at:date+'T16:00:00+08:00',location:'教学中心 201'}]}]});
+      return json({status:'ready',updated_at:null,stats:{courses:state.courses,pending:pending.length,materials:42,ready_sources:6},pending:state.empty?[]:pending,
+        data:{metadata:{source_metadata:Object.fromEntries(['timetable','blackboard','gradescope','piazza','elrc','mail'].map(id => [id,{status:state.empty?'not_connected':'ready'}]))},issues:[]},
+        notifications:[],agenda:state.empty?[]:[{date,events:[{title:'计算机组成原理',event_type:'class',at:date+'T14:00:00+08:00',location:'教学中心 301'},{title:'线性代数 · 习题课',event_type:'class',at:date+'T16:00:00+08:00',location:'教学中心 201'}]}]});
     }
     state.unexpected.push(path);
     return new Response(JSON.stringify({detail:'Unexpected synthetic API: '+path}), {status:400});
@@ -82,7 +83,9 @@ try {
   const capture = async (name,width,height) => {
     await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<850});
     await evaluate('window.scrollTo(0,0);new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    await wait("innerWidth>850 || document.querySelector('.sidebar').getBoundingClientRect().right<=0");
     assert(await evaluate('document.documentElement.scrollWidth<=innerWidth'),'Viewport overflow at '+width);
+    assert(await evaluate("(()=>{const bar=document.querySelector('.topbar').getBoundingClientRect(),button=document.querySelector('.campus-agent-button').getBoundingClientRect(),badge=document.querySelector('[data-agent-count]').getBoundingClientRect();return button.top>=bar.top&&button.bottom<=bar.bottom&&badge.left>=button.left&&badge.right<=button.right&&badge.top>=button.top&&badge.bottom<=button.bottom;})()"),'Notification controls stay inside the status bar at '+width);
     await writeFile(resolve(output,name+'.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   };
   await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
@@ -94,6 +97,11 @@ try {
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'184px');
   assert.equal(await evaluate("document.querySelectorAll('h1').length"),1);
   assert.equal(await evaluate("document.querySelectorAll('.ark-tile').length"),6);
+  assert.equal(await evaluate("document.querySelector('[data-ark-metric=pending]').textContent"),'3');
+  assert.equal(await evaluate("document.querySelector('[data-ark-metric=courses]').textContent"),'8');
+  assert.equal(await evaluate("document.querySelector('[data-ark-metric=materials]').textContent"),'42');
+  assert(await evaluate("document.querySelector('[data-ark-agenda]').textContent.includes('教学中心 301')"),'The timetable panel carries the original agenda');
+  assert(await evaluate("document.querySelector('[data-ark-task]').textContent.includes('Lab 03') && document.querySelector('[data-ark-deadline] time')"),'The assignment panel carries the original deadline');
   assert(await evaluate("document.querySelector('.ark-overview').textContent.includes('Lab 03')"),'Original deadlines remain available');
   assert(await evaluate("document.querySelector('.overview-agenda').textContent.includes('教学中心 301')"),'Original agenda remains available');
   await capture('home-desktop',1440,1080);
@@ -104,6 +112,18 @@ try {
   await capture('home-mobile',375,812);
   await capture('home-landscape',812,375);
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await evaluate("arkCheck.courses=9;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("document.querySelector('[data-ark-metric=courses]').textContent==='9'");
+  await evaluate("arkCheck.notices.push({id:'notice:new',title:'新的课程通知',summary:'期中复习资料已发布。',importance:'important',read:false,source_revision:'r2'})");
+  await wait("!document.querySelector('.campus-agent-peek').hidden");
+  assert(await evaluate("document.querySelector('.campus-agent-peek').getBoundingClientRect().top>=document.querySelector('.topbar').getBoundingClientRect().bottom"),'The notification panel opens below the status bar');
+  await capture('notification-desktop',1440,1000);
+  await evaluate("document.querySelector('.campus-agent-peek button').click()");
+  await evaluate("arkCheck.empty=true;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("document.querySelector('[data-ark-metric=courses]').textContent==='—'");
+  assert(await evaluate("document.querySelector('[data-ark-agenda]').textContent.includes('暂无可用日程') && !document.querySelector('[data-ark-deadline] time')"),'Connection prompts and unknown counts follow the original overview');
+  await evaluate("arkCheck.empty=false;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("document.querySelector('[data-ark-metric=courses]').textContent==='9'");
   await evaluate("document.querySelector('.ark-tile-assistant').click()");
   await wait("document.querySelector('.study-chat-card.module-focused') && document.activeElement.matches('[name=message]')");
   assert.equal(await evaluate('location.hash'),'#dashboard','Reopening Home returns to the daily overview');
@@ -130,7 +150,7 @@ try {
   await wait("document.documentElement.dataset.theme==='arknights' && document.querySelector('.ark-terminal')");
   assert.deepEqual(await evaluate('arkCheck.unexpected'),[]);
   assert.deepEqual(errors,[]);
-  console.log('PASS PRTS theme: complete overview, installed shortcuts, focused chat, remount cleanup, disabled assistant, saved selection, desktop/tablet/mobile/landscape');
+  console.log('PASS PRTS theme: overview summaries and refresh, status-bar notifications, focused chat, remount cleanup, disabled assistant, saved selection, desktop/tablet/mobile/landscape');
 } finally {
   socket?.close();browser('close');
 }
