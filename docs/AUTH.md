@@ -13,6 +13,34 @@
 
 Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账号密码，点击“保存并登录”即可完成两个步骤；服务确认保存后清空密码框。已保存密码的同一账号可留空直接登录，修改账号时必须重新填写密码。密码登录遇到二次验证时，卡片显示原因，可继续打开官方窗口并在完成后连接。每张卡片独立显示进度与结果，操作期间禁用其控件；其他账号、AI 配置及尚未提交的输入保持原状。设备绑定进度也在原卡片更新。
 
+## 校园网络、代理与校外 VPN
+
+### 网络检测
+
+设置 → 网络检测会在首次进入时检查统一认证、教务、Blackboard、ELRC 和邮箱入口，可在切换网络或连接 VPN 后重新检测。每个服务显示系统 DNS、工作台直连和已配置 HTTPS/ALL 代理的匿名对照结果；实际校园同步仍默认绕过普通代理。返回 401 表示服务已响应但需要登录，403 表示访问受限，5xx 表示网络已连通但服务响应异常，不把这些状态当成 VPN 未连接。
+
+无效代理配置可能在同步客户端初始化时阻止请求，即使匿名直连探测成功也应先修正配置。代理路径失败的同时返回 401 时保留登录提示；实际请求的 TLS/配置错误优先于独立 DNS 探测的超时，避免将已观察到的连接错误误判为 VPN 或 DNS 问题。
+
+`GET /api/v1/auth/network` 只读取本进程最近检测（首次为 `{checked_at:null,services:[]}`）；`POST /api/v1/auth/network/check` 使用框架 CSRF 发起固定入口检测，无请求参数，不允许自定义 URL。响应包含 `checked_at,summary,scope,reachable_count,total,proxy_configured,campus_location,vpn_status,services`；每个 service 包含 `id,name,host,port,dns{status,addresses,kinds},direct{status,reachable,http_status?,elapsed_ms},proxy,diagnosis{code,confidence,title,message,actions}`。`proxy` 未配置时为 null；不返回代理地址、用户名、密码、响应正文、Cookie 或跳转票据。
+
+检测仅发送匿名 HTTPS GET，读取响应头后关闭，不跟随跳转、不读取 Vault、不改变账号或网络配置。系统 DNS 等待最多 3 秒，单次 HTTP 探测总限时 6 秒，所有固定入口并发检查；同一进程合并并发检测并在完成后 5 秒内复用结果，界面注明时间。切页取消界面请求，已发出的服务端检查仍有上述上限；不启动后台定时检测。结果仅保存在内存，重启清除。
+
+DNS 失败和实际连接错误是可确认的观测；内网地址不可达只提示“疑似校园网络或 VPN 路径问题”，保留服务故障的可能。198.18.0.0/15 解析结合连接失败仅提示疑似 Fake-IP/TUN。`campus_location`、`vpn_status` 均为 `unknown`，不根据 IP、进程或服务可达性推断物理位置及 VPN 已连接。入口可达不代表全部资料接口、账号权限或同步均正常。检测通过已有普通代理做对照（不受 NO_PROXY 绕过规则影响），TUN/透明代理仍可能拦截两条路径，不能把它们解释为两个独立物理网络。
+
+### 默认路由
+
+共享认证客户端对 `shanghaitech.edu.cn` 及其子域默认跳过 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`，覆盖教务、Blackboard 的 8443 端口、ELRC、IDS 和学校邮箱。域名由本机解析，连接交给操作系统网络；Gradescope、Piazza 等外部来源继续使用用户原有的 HTTP／SOCKS 代理配置。依赖包含 HTTPX 的 SOCKS 支持，避免用户配置 `ALL_PROXY=socks5://…` 时连客户端都无法创建。学校官方登录的独立 Edge 窗口同样跳过浏览器代理。该策略只在本应用中生效，不修改用户的系统代理、环境变量或路由表，保留证书验证与自定义 CA 支持。
+
+| 使用环境 | 默认路径 |
+| --- | --- |
+| 已接入校园网 | 应用 → 系统网络 → 校园服务 |
+| 校外且学校 VPN 已连接 | 应用 → 系统网络／学校 VPN 客户端 → 校园服务 |
+| 校外且尚未连接学校 VPN | 可公开访问的服务照常使用；内网服务需用户先连接学校 VPN，再重新同步 |
+
+直连表示跳过应用层代理，系统 VPN 仍可接管连接。校外访问校园内网资源，按[学校 VPN 接入指南（2026-09-07）](https://it.shanghaitech.edu.cn/2021/0424/c8423a63191/page.htm)安装并连接官方客户端，通过[学校 VPN 入口](https://vpn.shanghaitech.edu.cn)完成认证。应用不代填 VPN 密码／验证码，也不把 VPN 客户端进程存在当作连接成功的证明；以学校服务实际可达为准。公开入口是否允许校外访问可能变化，不能仅凭登录页面可打开就认定所有接口和附件可用。
+
+若代理软件启用了 TUN、透明转发或 Fake-IP DNS，它仍可能接管应用的直连流量。应在该软件中将校园域名设为直连，并按学校 VPN 实际下发的校园网段设置 TUN 排除，让校园域名使用系统／校园 DNS，确保学校 VPN 的路径生效。应用不猜测固定校园网段或 DNS 地址，也不自动改动第三方代理和 VPN 配置。切换网络后可直接重试同步；WSL 运行方式还需确认 WSL 能使用宿主机的 VPN 路径，Windows 原生运行默认沿用 Windows 网络。
+
 ## HTTP 接口
 
 服务默认地址为 `http://127.0.0.1:16666`，接口说明见 `/api/docs`，结构见 `/api/openapi.json`。写操作先读取 `GET /api/v1/bootstrap` 的 `csrf_token`，放入 `X-Framework-Token` 请求头；浏览器使用同源访问。全部认证接口只返回状态，账号密码、Cookie、sid 与令牌在进程内部使用。

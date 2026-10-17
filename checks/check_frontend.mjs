@@ -3,6 +3,15 @@ import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
+import {renderNetwork} from '../web/network.js';
+
+const networkMarkup=renderNetwork({summary:'0 / 1 个入口响应',scope:'仅检测入口',proxy_configured:true,services:[{
+  name:'<script>untrusted</script>',host:'school.example',port:443,dns:{status:'ok',addresses:['10.15.1.1']},
+  direct:{reachable:false,status:'timeout',elapsed_ms:12},proxy:null,
+  diagnosis:{code:'campus_route',confidence:'suspected',title:'疑似校园网络或 VPN 路径问题',message:'无法确认 VPN 状态',actions:['校外先连接校园 VPN']},
+}]});
+assert(!networkMarkup.includes('<script>') && networkMarkup.includes('&lt;script&gt;'));
+assert(networkMarkup.includes('暂不可达')&&networkMarkup.includes('可能原因依据')&&networkMarkup.includes('无法确认 VPN 状态'));
 
 for (const [keys, sends, prevents] of [
   [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
