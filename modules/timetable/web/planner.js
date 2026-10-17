@@ -33,3 +33,17 @@ export function lessonLayout(events) {
   });
   return {items, lanes:Math.max(1, lanes.length)};
 }
+
+export function applyLessonPositions(container) {
+  // CSP rejects inline style attributes; individual CSSOM properties are allowed.
+  for (const element of container.querySelectorAll('[data-period-count]')) {
+    element.style.setProperty('--period-count',element.dataset.periodCount);
+  }
+  for (const element of container.querySelectorAll('[data-lesson-lanes]')) {
+    element.style.setProperty('--lesson-lanes',element.dataset.lessonLanes);
+  }
+  for (const element of container.querySelectorAll('[data-lesson-start]')) {
+    element.style.gridRow = `${element.dataset.lessonStart} / span ${element.dataset.lessonSpan}`;
+    element.style.gridColumn = element.dataset.lessonLane;
+  }
+}
