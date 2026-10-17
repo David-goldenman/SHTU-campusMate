@@ -22,8 +22,7 @@ class Source:
             context.store.write(self.sync_key, {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
 
     def owner(self):
-        account = self.context.auth.get_status(self.provider)
-        return digest(account["account_revision"])
+        return digest(self.context.auth.get_account_revision(self.provider))
 
     def snapshot(self):
         with self.lock:

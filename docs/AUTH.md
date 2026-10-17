@@ -57,6 +57,8 @@ Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账�
 
 ## Python 模块接入
 
+模块只需校验账号归属时调用 `context.auth.get_account_revision(provider)`。它每次直接读取当前持久化账号版本，与 `get_status(provider)['account_revision']` 一致，不缓存版本、不读取凭据或会话。资料快照、账号缓存和聚合查询在读取前后用该接口复核账号；需要显示登录状态或判断恢复方式时继续使用 `get_status`。凭据加密、文件事务与会话恢复不受此读取优化影响。
+
 模块从框架注入的 `context.auth` 获取共享服务。所有请求与响应消费都留在上下文内，客户端退出后更新 Cookie 会加密写回：
 
 ```python

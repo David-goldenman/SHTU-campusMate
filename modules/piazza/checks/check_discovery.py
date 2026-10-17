@@ -59,7 +59,7 @@ async def check_api(directory):
     store = Store(directory / "settings.sqlite3")
     store.write("courses", [{"id": "manual", "name": "Keep selected"}])
     app = FastAPI(exception_handlers={RuntimeError: runtime_error})
-    context = SimpleNamespace(id="piazza", data_dir=directory, store=store, auth=SimpleNamespace(authenticated_client=authenticated, get_status=lambda provider: {"account_revision": "synthetic"}))
+    context = SimpleNamespace(id="piazza", data_dir=directory, store=store, auth=SimpleNamespace(authenticated_client=authenticated, get_account_revision=lambda provider: "synthetic"))
     app.include_router(create_router(context))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get('/catalog')).json()["courses"] == []
