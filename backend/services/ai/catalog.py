@@ -18,5 +18,7 @@ def runtime_route(config):
         profile['baseURL'] = config['base_url']
     if config['custom']:
         profile.update(api=config['protocol'], models=[{'id': config['model']}])
+        if config.get('image_input'):
+            profile['models'][0]['input'] = ['text', 'image']
     return config['provider'], [{'insert': [{'id': 'campus-provider', 'name': '@deepseek-ai/dsh-llm-pi-ai',
                                            'config': {'providers': {config['provider']: profile}}}]}]

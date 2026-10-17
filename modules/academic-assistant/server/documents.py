@@ -8,7 +8,7 @@ from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
 
-def extract(content, media_type, title):
+def extract(content, media_type, title, *, allow_empty=False):
     if not content or len(content) > 30 * 1024 * 1024:
         raise HTTPException(422, "资料应为非空且至多 30 MB 的文件。")
     try:
@@ -35,12 +35,14 @@ def extract(content, media_type, title):
                     node = ElementTree.fromstring(archive.read(target))
                     paragraphs = [''.join(part.itertext()) for part in node.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}p')]
                     pages.append('\n'.join(paragraphs).strip()[:20000])
+        elif content.startswith((b'\x89PNG\r\n\x1a\n', b'\xff\xd8\xff')) or content[:4] == b'RIFF' and content[8:12] == b'WEBP':
+            kind, pages = 'image', ['']
         elif media_type.startswith('text/') or title.lower().endswith(('.txt', '.md', '.csv')):
             kind, pages = "text", [content.decode('utf-8-sig').strip()[:20000]]
         else:
             raise HTTPException(422, "当前支持 PDF、PPTX 和 UTF-8 文本；请下载原文件查看其他格式。")
     except (ValueError, KeyError, OSError, PyPdfError, zipfile.BadZipFile, ElementTree.ParseError):
         raise HTTPException(422, "资料文字无法解析，请下载原文件查看。") from None
-    if not any(pages):
+    if not allow_empty and not any(pages):
         raise HTTPException(422, "资料没有可提取的文字，扫描页或图片内容请在原文件中查看。")
     return {"kind": kind, "pages": pages}
