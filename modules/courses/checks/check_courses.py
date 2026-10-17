@@ -14,6 +14,34 @@ catalog = sys.modules[package.__name__ + '.catalog']
 assert catalog.current_semester({'elrc': {'data': {'metadata': {'semester': {'id': '2030-2031-2'}}}}}) == '2031-spring'
 
 
+def check_term_matches():
+    known = [course('timetable', 'current', '教务本学期', 'QA101', '2026-fall'),
+             course('timetable', 'ambiguous', '重复开课', 'QA102', '2026-fall'),
+             course('elrc', 'older', '重复开课', 'QA102', '2025-fall')]
+    unknown = [course('blackboard', 'match', '名称不同但课程代码一致', 'QA101', '', status='active'),
+               course('blackboard', 'ambiguous', '学期无法唯一确定', 'QA102', '', status='active'),
+               course('blackboard', 'unmatched', '只有活跃标记', 'QA999', '', status='active'),
+               course('blackboard', 'completed', '已结束课程', 'QA101', '', status='completed'),
+               course('blackboard', 'unknown', '状态未知课程', 'QA101'),
+               course('gradescope', 'unknown', '其他来源', 'QA101')]
+    snapshots = {'timetable': {'data': validate_bundle({'courses': known})}, 'blackboard': {'data': validate_bundle({'courses': unknown})}}
+    combined = catalog.combine(snapshots, [], '2026-fall')
+    current = next(item for item in combined['courses'] if 'blackboard:match' in item['course_ids'])
+    assert current['current'] and current['course_ids'] == ['timetable:current', 'blackboard:match']
+    assert current['term_matches'] == [{'course_id': 'blackboard:match', 'term': '2026-fall', 'source_ids': ['timetable:current']}]
+    assert current['sources'][-1]['term'] == '' and unknown[0]['term'] == '', 'Keep the original source record intact'
+    for item in unknown[1:]:
+        assert not next(group for group in combined['courses'] if item['id'] in group['course_ids'])['current']
+    manual = catalog.combine(snapshots, [{'id': 'manual', 'title': '手动关联', 'course_ids': ['blackboard:match', 'gradescope:unknown']}], '2026-fall')
+    assert not next(group for group in manual['courses'] if group['id'] == 'manual:manual')['current']
+    unknown[0]['term'] = '2025-fall'
+    explicit = catalog.combine(snapshots, [], '2026-fall')
+    assert not next(group for group in explicit['courses'] if 'blackboard:match' in group['course_ids'])['current']
+
+
+check_term_matches()
+
+
 async def check():
     with sandbox('courses') as context:
         sources = {

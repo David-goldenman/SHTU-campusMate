@@ -10,7 +10,7 @@ from backend.services.campus.data import digest
 
 BASE = "https://elearning.shanghaitech.edu.cn:8443"
 KINDS = {"resource/x-bb-folder": "folder", "resource/x-bb-file": "file", "resource/x-bb-assignment": "assignment", "resource/x-bb-asmt-test-link": "test", "resource/x-bb-externallink": "link"}
-TERM = re.compile(r"20\d{2}(?:-20\d{2}学年)?\S*?[春夏暑秋]季?学期")
+TERM = re.compile(r"20\d{2}(?:[-–]20\d{2})?(?:学年|年)?\s*[春夏暑秋]季?(?:学期)?")
 
 
 def checked(value):

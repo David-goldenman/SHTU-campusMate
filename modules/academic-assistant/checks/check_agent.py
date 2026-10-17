@@ -59,7 +59,8 @@ async def check():
             if name == 'blackboard':
                 return httpx.Response(200, content=slides(), headers={'content-type': 'application/zip'})
             if name == 'assignments':
-                return httpx.Response(200, json={'data': {'assignments': [assignment]}, 'pending': [assignment]})
+                return httpx.Response(200, json={'data': {'assignments': [assignment]}, 'pending': [assignment],
+                                                'summary': {'total': 1, 'unsubmitted': 1, 'pending': 1, 'by_source': {'gradescope': {'total': 1, 'unsubmitted': 1, 'pending': 1}}}})
             if name == 'courses':
                 return httpx.Response(200, json={'data': validate_bundle({'assignments': [assignment], 'materials': [material], 'metadata': {'source_metadata': {'blackboard': {'updated_at': 'synthetic-revision'}}}})})
             raise AssertionError((name, path))
@@ -82,6 +83,10 @@ async def check():
                 response = await client.post(base + '/tools/query', json={'area': 'assignments', 'pending': True}, headers=headers)
                 assert response.status_code == 200, response.text
                 source = response.json()['items'][0]
+                assert json.loads(response.json()['summary']['text'])['pending'] == 1
+                filtered = await client.post(base + '/tools/query', json={'area': 'assignments', 'q': '不存在的作业'}, headers=headers)
+                assert filtered.json()['items'] == [] and filtered.json()['total'] == 0
+                assert json.loads(filtered.json()['summary']['text'])['pending'] == 1, 'Global summary is independent of search and pagination'
                 response = await client.post(base + '/tools/document', json={'record_id': material['id'], 'q': 'superposition'}, headers=headers)
                 assert response.status_code == 200, response.text
                 document = response.json()['items'][0]
