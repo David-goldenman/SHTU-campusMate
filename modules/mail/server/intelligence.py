@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.services.campus.data import digest
 
-BUCKETS = {'focus': '重点关注', 'recommend': '兴趣推荐', 'digest': '摘要', 'filter': '已筛选'}
+BUCKETS = {'focus': '重点关注', 'recommend': '兴趣推荐', 'digest': '一般通知', 'filter': '已筛选'}
 INTERESTS = {'research': '科研讲座', 'clubs': '社团活动', 'culture': '文体活动', 'volunteer': '志愿服务',
              'competition': '竞赛', 'career': '实习招聘', 'abroad': '境外升学', 'domestic': '境内升学'}
 PROMPT = Path(__file__).with_name('mail-prompt.md').read_text(encoding='utf-8')
@@ -137,7 +137,9 @@ class Intelligence:
         # Contact details do not help decide which campus notices matter.
         text = {key: re.sub(r'(?<!\d)1[3-9]\d{9}(?!\d)', '[联系电话]', re.sub(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', '[邮箱地址]', value)) for key, value in text.items()}
         preliminary_value = preliminary(item, preferences)
-        fingerprint = digest([self.source.owner(), text, preferences, self.context.ai.settings()['model'], PROMPT])
+        ai = self.context.ai.settings()
+        route = ai['model'] if ai.get('provider', 'deepseek') == 'deepseek' else [ai['provider'], ai['model'], ai.get('base_url')]
+        fingerprint = digest([self.source.owner(), text, preferences, route, PROMPT])
         return {'message_id': message_id, 'fingerprint': fingerprint, 'notification': text, 'sender': item.get('sender', ''),
                 'received_at': item.get('received_at'), 'preferences': preferences, 'preliminary': preliminary_value,
                 'instruction': PROMPT, 'schema': Decision.model_json_schema()}
