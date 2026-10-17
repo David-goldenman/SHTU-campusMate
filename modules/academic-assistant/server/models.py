@@ -29,7 +29,7 @@ class Remember(BaseModel):
 
 
 class Query(BaseModel):
-    area: Literal["courses", "assignments", "timetable", "course_history", "degree_plan", "notifications", "mail", "profile"]
+    area: Literal["courses", "assignments", "timetable", "course_history", "degree_plan", "notifications", "mail", "profile", "workspace"]
     q: str = Field(default="", max_length=300)
     course_id: str = Field(default="", max_length=300)
     pending: bool = False
@@ -68,6 +68,15 @@ class Attend(BaseModel):
     quote: str = Field(min_length=2, max_length=1000)
 
 
+class ScheduleEdit(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    action: Literal['create', 'update', 'delete', 'adjust_class']
+    quote: str = Field(min_length=2, max_length=8000)
+    record_id: str = Field(default='', max_length=400)
+    event: dict = Field(default_factory=dict)
+    adjustment: dict = Field(default_factory=dict)
+
+
 class Citation(BaseModel):
     source_id: str = Field(min_length=1, max_length=500)
     quote: str = Field(min_length=1, max_length=800)
@@ -77,3 +86,4 @@ class Answer(BaseModel):
     text: str | None = Field(default=None, min_length=1, max_length=24000)
     citations: list[Citation] = Field(default_factory=list, max_length=24)
     insufficient_context: bool = False
+    basis: Literal['sources', 'general'] = 'sources'

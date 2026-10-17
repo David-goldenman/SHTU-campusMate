@@ -52,6 +52,15 @@ async def check(directory):
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.path in {'/tools/schedule-edit', '/tools/work-edit', '/tools/capabilities'}:
+                assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
+                if self.path.endswith('schedule-edit'):
+                    assert body['action'] == 'create' and body['event']['event_type'] == 'tutorial' and body['event']['period_start'] == 3
+                if self.path.endswith('work-edit'):
+                    assert body['item']['kind'] == 'reminder' and body['item']['due_at'].endswith('+08:00')
+                self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
+                self.wfile.write(b'{"applied":true,"items":[]}')
+                return
             if self.path in {'/tools/review', '/tools/read'}:
                 assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
                 assert body == ({'decision':{'bucket':'digest'}} if self.path.endswith('review') else {'module_id':'courses','path':'/snapshot'})
@@ -80,6 +89,12 @@ async def check(directory):
                 if study_task:
                     calls = [{'index': 0, 'id': 'study-call', 'type': 'function', 'function': {'name': 'study_query', 'arguments': json.dumps({'area': 'assignments', 'pending': True})}}]
                     calls.append({'index': 1, 'id': 'skill-call', 'type': 'function', 'function': {'name': 'skill', 'arguments': json.dumps({'name': 'campus-planning'})}})
+                    for name, arguments in [
+                        ('study_schedule_edit', {'action':'create','quote':'添加合成习题课','event':{'title':'合成习题课','event_type':'tutorial','date':'2026-10-20','period_start':3,'period_end':4}}),
+                        ('study_work_edit', {'action':'create','quote':'提醒我合成复习','item':{'kind':'reminder','title':'合成复习','due_at':'2026-10-20T19:00:00+08:00'}}),
+                        ('study_capabilities', {}),
+                    ]:
+                        calls.append({'index':len(calls),'id':name,'type':'function','function':{'name':name,'arguments':json.dumps(arguments)}})
                 if extension:
                     arguments = {'decision':{'bucket':'digest'}} if extension == 'mail_submit' else {'module_id':'courses','path':'/snapshot'}
                     calls = [{'index':0,'id':'extension-call','type':'function','function':{'name':extension,'arguments':json.dumps(arguments)}}]
@@ -182,7 +197,8 @@ async def check(directory):
                                                     plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
                     assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
                     assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
-                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish'}
+                    assert all(not tool['is_error'] for tool in result['tools']), result
+                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish', 'study_capabilities', 'study_schedule_edit', 'study_work_edit'}
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
                     assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)

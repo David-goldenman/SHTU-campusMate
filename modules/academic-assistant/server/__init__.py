@@ -13,13 +13,15 @@ from fastapi.responses import StreamingResponse
 from anyio import CancelScope
 
 from backend.services.campus.analysis import account_revision
-from .models import Answer, Attend, Chat, ConversationUpdate, CourseSearch, Document, Navigate, Profile, Query, Remember, Search
+from .models import Answer, Attend, Chat, ConversationUpdate, CourseSearch, Document, Navigate, Profile, Query, Remember, ScheduleEdit, Search
 from .conversations import Conversations
 from .tools import Task, profile_owner, read_profile
+from .workspace import Workspace, WorkCommand, WorkEdit
 
 INSTRUCTION = Path(__file__).with_name('instruction.md').read_text(encoding='utf-8')
 PRESETS = json.loads((Path(__file__).parents[1] / 'harness' / 'prompts.json').read_text(encoding='utf-8'))
 TOOL_NAMES = {'query': '查询学习资料', 'search': '检索课程原文', 'document': '读取作业或课件页码', 'course-search': '查询教务课程与大纲', 'remember': '更新学习档案', 'navigate': '打开工作台页面', 'attend': '确认参加并加入时间表', 'finish': '核对原文引用'}
+TOOL_NAMES.update({'schedule-edit': '编辑时间表', 'capabilities': '查看助手能力', 'work-edit': '管理学习事务'})
 _agent = None
 
 
@@ -27,6 +29,7 @@ class Agent:
     def __init__(self, context):
         self.context, self.lock, self.tasks = context, asyncio.Lock(), {}
         self.conversations = Conversations(context)
+        self.work = Workspace(context)
 
     def history(self):
         return self.conversations.messages()
@@ -55,6 +58,14 @@ def create_router(context):
     global _agent
     agent = _agent = Agent(context)
     router = APIRouter()
+
+    @router.get('/work')
+    def work():
+        return agent.work.snapshot()
+
+    @router.post('/work/commands')
+    async def work_command(body: WorkCommand):
+        return await agent.work.command(body)
 
     @router.get('/presets')
     def presets():
@@ -136,7 +147,7 @@ def create_router(context):
             _, conversation = agent.conversations.find(identity)
             if conversation['archived']:
                 raise HTTPException(409, '请先恢复这段归档对话，再继续发送消息。')
-            task, token = Task(context, body.message), secrets.token_urlsafe(32)
+            task, token = Task(context, body.message, agent.work), secrets.token_urlsafe(32)
             if emit:
                 task.emit = emit
             agent.tasks[token] = task
@@ -171,11 +182,20 @@ def create_router(context):
                     raise HTTPException(502, '回答内容不完整，请重试。')
                 created = datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()
                 answer = {'role': 'assistant', **task.answer, 'text': text, 'conversation_id': identity,
-                         'navigation': task.navigation, 'tools': result['tools'], 'created_at': created, 'model': result['model'], 'context_version': 2}
+                         'navigation': task.navigation, 'changes': task.changes, 'tools': result['tools'], 'created_at': created, 'model': result['model'], 'context_version': 2}
                 pair = [{'role': 'user', 'text': body.message, 'created_at': created, 'context_version': 2}, answer]
                 task.check()
                 agent.conversations.append(identity, pair, task.owner)
                 return answer
+            except Exception:
+                if task.changes:
+                    task.check()
+                    created = datetime.now(ZoneInfo('Asia/Shanghai')).isoformat()
+                    answer = {'role': 'assistant', 'text': '以下本地修改已保存。文字回答未完成，请查看操作回执；无需重复执行已完成的修改。',
+                              'changes': task.changes, 'citations': [], 'created_at': created, 'conversation_id': identity, 'context_version': 2}
+                    agent.conversations.append(identity, [{'role': 'user', 'text': body.message, 'created_at': created, 'context_version': 2}, answer], task.owner)
+                    return answer
+                raise
             finally:
                 agent.tasks.pop(token, None)
 
@@ -265,9 +285,26 @@ def create_router(context):
     async def attend(body: Attend, request: Request):
         return await perform('attend', body, request)
 
+    @router.post('/tools/schedule-edit')
+    async def schedule_edit(body: ScheduleEdit, request: Request):
+        return await perform('schedule-edit', body, request)
+
+    @router.post('/tools/capabilities')
+    async def capabilities(request: Request):
+        return await perform('capabilities', None, request)
+
+    @router.post('/tools/work-edit')
+    async def work_edit(body: WorkEdit, request: Request):
+        return await perform('work-edit', body, request)
+
     return router
+
+
+def start(context):
+    _agent.work.start()
 
 
 def stop(context):
     if _agent is not None:
+        _agent.work.close()
         _agent.tasks.clear()

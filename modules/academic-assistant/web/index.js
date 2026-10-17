@@ -2,6 +2,7 @@ import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
 import {sendOnEnter, fitComposer} from './composer.js';
 import {chatSession} from './session.js';
+import {changeCards, showWorkspace} from './workspace.js';
 
 const icons = {
   history:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
@@ -62,6 +63,9 @@ export async function mount(container, context) {
   const newChat = container.querySelector('[data-new-chat]');
   const conversation = container.querySelector('.study-conversation');
   const input = form.elements.message;
+  const workButton=document.createElement('button');workButton.type='button';workButton.className='text-button';workButton.textContent='学习事务';
+  container.querySelector('.study-menu>div').prepend(workButton);
+  workButton.onclick=context.ui.safeAction(workButton,()=>showWorkspace(context));
   input.value = drafts.get(activeId || '') || '';
   saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
   const retry = container.querySelector('[data-retry]');
@@ -161,6 +165,7 @@ export async function mount(container, context) {
     if (message.role === 'user') body.textContent = message.text;
     else {
       body.classList.add('study-markdown');renderBody(body,message.text || '',!!message.created_at || !!message.model);
+      body.insertAdjacentHTML('afterend',changeCards(message.changes || [],e));
       if (message.model) {
         const footer = document.createElement('footer');footer.className='study-message-footer';
         footer.innerHTML = '<span>' + e(message.model) + '</span><button class="text-button" type="button">复制回答</button>';
@@ -171,7 +176,7 @@ export async function mount(container, context) {
   }
   function empty() {
     conversation.classList.add('is-empty');
-    messages.innerHTML = '<div class="study-welcome"><div><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，想一起解决什么？</h3></div><p>聊作业、复习和选课，让每个问题都有据可依。</p></div>';
+    messages.innerHTML = '<div class="study-welcome"><div><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，想一起解决什么？</h3></div><p>理解知识、编写代码、调整日程，也一起管理作业、提醒和计划。</p></div>';
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
   archived=conversations.items.find(item=>item.id===activeId)?.archived || false;
@@ -233,6 +238,7 @@ export async function mount(container, context) {
       else context.api('/profile').then(current=>{if(!context.signal.aborted)fillProfile(current);}).catch(error=>{if(!context.signal.aborted)container.querySelector('[data-profile-error]').textContent=error.message;});
     } else {
       pending.remove();if(!messages.children.length)empty();
+      if(value.changes?.length)append({role:'assistant',text:'以下本地修改已保存。',changes:value.changes});
       input.value=value.message;errorNode.textContent=value.error;retry.hidden=value.status==='stopped';
     }
     chatSession.forget(activeId);

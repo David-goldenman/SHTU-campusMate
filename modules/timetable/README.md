@@ -17,10 +17,19 @@
 | `POST /calendar/refresh` | 重新读取学校公开校历，保留手动日期 |
 | `GET /events`、`POST /events` | 查询与创建个人安排，创建返回 201 |
 | `PUT /events/{id}`、`DELETE /events/{id}` | 修改与删除自己添加的安排 |
+| `GET /capabilities` | 本地支持的安排类型、动作、范围及冲突检查说明 |
+| `POST /commands` | 带账号版本、幂等操作 ID 和预期记录版本的新增、修改、删除与课程调整 |
+| `GET /changes` | 当前学校账号最近 50 条成功操作回执 |
 
 `/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
-个人安排请求为 `{title,event_type,starts_at,ends_at?,course_title?,location?,notes?}`，时间必须含时区，结束晚于开始；类型限 `quiz/presentation/activity/lecture`。安排按 IDS 账号版本隔离。课程与来源事项通过对应模块维护；本模块只编辑个人安排。
+个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
+
+`POST /commands` 请求为 `{action,account_revision,request_id,record_id?,expected_revision?,event?,adjustment?}`。`action` 为 `create/update/delete/adjust_class`，`request_id` 为 UUID，账号版本来自 `/schedule`。修改或删除使用读取记录的 `revision`；缺失、过时或切换账号返回 409。相同请求 ID 的相同请求返回原回执，不重复执行，复用 ID 改参数返回 409。`event` 是新增的完整字段或修改的部分字段；换用钟点或节次时清除另一模式。旧 `/events` 接口保留兼容，页面和主页 AI 使用版本检查的命令接口。
+
+课程 `adjustment` 为 `{lesson_id,on_date,action,scope?,until_date?,to_date?,starts_at?,ends_at?,period_start?,period_end?,location?,notes?}`。动作 `leave/cancel/move/restore`，范围 `once`（默认）或 `following`（从这一次起、截至可选日期的同一排课系列，不自动扩展到课程的其他排课系列）。只调地点也用 `move`。调整按学校账号与学期保存，同一原始上课日期以最新适用规则为准；`restore` 恢复原教务安排。跨周调课在原位置标注“已调课”，目标周显示新安排；只改地点不生成重复卡片。缺失来源课程 ID 时保留覆盖并提示。
+
+回执含 `{applied,before,after,affected_count,week_start,checked_weeks,conflicts,local_only}`。冲突检查比较节次或已知钟点区间，排除已请假、已取消及调课前位置；连续调整检查各目标周，并纳入当前可用的来源考试、校历及个人安排。来源缺失、仅有节次或缺少结束时间时 `conflicts.complete=false`，不能据此声称无冲突。日历也返回 `conflicts`，页面展示时间重叠；课程覆盖仅影响本地时间表，不办理学校端请假审批或正式调课。
 
 `POST /events/import` 接收个人安排字段及 `{origin_id,account_revision}`，供已确认的跨模块安排导入。账号版本为共享 `account_revision(context)`；不一致返回 409。相同账号与 origin_id 使用稳定安排 ID，已存在则返回 `{...event,existing:true}`，保留用户修改。后台建议的接受／拒绝状态由来源模块保存，防止用户删除后被重复添加。前端继续通过普通个人安排接口编辑或删除导入项。
 

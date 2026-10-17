@@ -1,7 +1,9 @@
 import {link, time} from '/assets/campus.js';
-import {applyLessonPositions, compareEvents, eventGroup, lessonLayout, periodsFor} from './planner.js';
+import {applyLessonPositions, compareEvents, eventGroup, isLesson, lessonLayout, periodsFor} from './planner.js';
 
-const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
+const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',tutorial:'习题课',study:'学习',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
+const personalKinds = ['quiz','exam','tutorial','study','presentation','activity','lecture'];
+const statuses = {leave:'已请假',cancel:'已取消',moved:'已调课',rescheduled:'调课后'};
 const zone = {timeZone:'Asia/Shanghai'};
 const dayOf = value => new Intl.DateTimeFormat('sv-SE',zone).format(new Date(value));
 const clock = value => new Intl.DateTimeFormat('zh-CN',{...zone,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value));
@@ -17,12 +19,13 @@ export async function mount(container, context) {
 
   function when(item) {
     if (item.all_day) return '全天';
-    if (item.event_type === 'class') return '第 ' + item.period_start + '–' + item.period_end + ' 节' + (item.at ? ' · ' + clock(item.at) + (item.ends_at ? '–' + clock(item.ends_at) : '') : ' · 钟点待同步');
-    if (item.event_type === 'exam' && !item.start_time) return '时间待公布';
+    if (isLesson(item)) return '第 ' + item.period_start + '–' + item.period_end + ' 节' + (item.at ? ' · ' + clock(item.at) + (item.ends_at ? '–' + clock(item.ends_at) : '') : ' · 钟点待同步');
+    if (item.event_type === 'exam' && !item.start_time && item.source !== 'local') return '时间待公布';
+    if (!item.at) return '时间待定';
     return (item.event_type === 'deadline' ? '截止 ' : '') + clock(item.at) + (item.ends_at ? '–' + clock(item.ends_at) : '');
   }
   function card(item) {
-    return `<button type="button" class="calendar-event kind-${item.event_type}${item.submitted ? ' is-complete' : ''}" data-event="${e(item.id)}"><span class="calendar-event-meta">${kinds[item.event_type]} · ${e(when(item))}</span><strong>${e(item.title)}</strong>${item.location || item.course_title ? '<span>' + e(item.location || item.course_title) + '</span>' : ''}${item.submitted ? '<span>已提交</span>' : ''}</button>`;
+    return `<button type="button" class="calendar-event kind-${item.event_type}${item.submitted ? ' is-complete' : ''}${['leave','cancel','moved'].includes(item.status) ? ' is-inactive' : ''}" data-event="${e(item.id)}"><span class="calendar-event-meta">${kinds[item.event_type]} · ${e(when(item))}</span><strong>${e(item.title)}</strong>${statuses[item.status] ? '<span class="calendar-status">' + statuses[item.status] + (item.moved_to ? ' · 至 ' + e(item.moved_to) : '') + '</span>' : ''}${item.location || item.course_title ? '<span>' + e(item.location || item.course_title) + '</span>' : ''}${item.submitted ? '<span>已提交</span>' : ''}</button>`;
   }
   const groups = [['timed','定时安排'],['deadline','截止事项'],['untimed','全天与时间待定']];
   function weekView(cal, selected, dayClass, title, header) {
@@ -37,7 +40,7 @@ export async function mount(container, context) {
     return `<div class="calendar-desktop">${courseTable}${otherTable}</div>`;
   }
   function mobileDay(day, selected) {
-    return [['class','课程'],...groups].map(([kind,label]) => {
+    return [['class','按节次安排'],...groups].map(([kind,label]) => {
       const items = day.events.filter(item => selected(item) && eventGroup(item) === kind).sort(compareEvents);
       return items.length ? `<h4>${label}</h4>${items.map(card).join('')}` : '';
     }).join('') || '<p>暂无安排</p>';
@@ -55,12 +58,12 @@ export async function mount(container, context) {
   function draw() {
     const today = dayOf(Date.now()), tomorrow = shift(today,1), cal = snapshot.calendar;
     const dayClass = day => day.date === today ? 'is-today' : day.date === tomorrow ? 'is-tomorrow' : '';
-    const selected = item => filter === 'all' || (filter === 'study' ? ['class','deadline','quiz','presentation','exam'].includes(item.event_type) : ['activity','lecture'].includes(item.event_type));
+    const selected = item => filter === 'all' || (filter === 'study' ? ['class','deadline','quiz','tutorial','study','presentation','exam'].includes(item.event_type) : ['activity','lecture'].includes(item.event_type));
     const title = `${cal.week_start.slice(5).replace('-','月')}日 — ${cal.week_end.slice(5).replace('-','月')}日`;
     const note = cal.week_one_source === 'inferred' ? '（按学期名称推定）' : '';
     const week = cal.teaching_week > 0 && cal.teaching_week <= (snapshot.data.metadata.week_count || 18) ? '第 ' + cal.teaching_week + ' 教学周' + note : cal.week_one ? '教学周以外' + note : '尚未设置教学周';
     const header = cal.days.map((day,i) => `<th scope="col" class="${dayClass(day)}"><span>周${'一二三四五六日'[i]}</span><strong>${day.date.slice(5).replace('-',' / ')}</strong>${day.date === today ? '<em>今天</em>' : day.date === tomorrow ? '<em>明天</em>' : ''}</th>`).join('');
-    container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div><div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div>${weekView(cal,selected,dayClass,title,header)}<div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.undated ? '<p class="field-hint">另有 ' + snapshot.data.undated + ' 项未提供日期，可在作业页查看；确定的 Quiz、展示、活动和讲座可手动添加。</p>' : ''}${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
+    container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div><div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div>${conflictNotice(cal.conflicts)}${weekView(cal,selected,dayClass,title,header)}<div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.undated ? '<p class="field-hint">另有 ' + snapshot.data.undated + ' 项未提供日期，可在作业页查看；确定的 Quiz、展示、活动和讲座可手动添加。</p>' : ''}${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
     applyLessonPositions(container);
     container.querySelectorAll('[data-shift]').forEach(button => button.onclick = act(button,async () => {current = shift(current,Number(button.dataset.shift));await refresh();}));
     container.querySelector('[data-today]').onclick = act(container.querySelector('[data-today]'),async () => {current = today;await refresh();});
@@ -73,7 +76,7 @@ export async function mount(container, context) {
     container.querySelector('[data-set-anchor]')?.addEventListener('click',semesterSettings,{signal:context.signal});
     container.querySelectorAll('[data-event]').forEach(button => button.onclick = () => {
       const item = cal.days.flatMap(day => day.events).find(item => item.id === button.dataset.event);
-      if (item.source === 'local') edit(item); else detail(item);
+      if (item.source === 'local') edit(item); else if (item.event_type === 'class') adjustClass(item); else detail(item);
     });
   }
   const act = (control, action) => context.ui.safeAction(control,action);
@@ -82,25 +85,81 @@ export async function mount(container, context) {
     body.innerHTML = `<p>${e(kinds[item.event_type])} · ${e(when(item))}</p><p>${e([item.course_title,item.location,item.teacher].filter(Boolean).join(' · '))}</p>${item.event_type === 'class' ? '<p class="field-hint">第 ' + item.period_start + '–' + item.period_end + ' 节</p>' : ''}${item.notes ? '<p>' + e(item.notes) + '</p>' : ''}${item.url ? link(item.url,'打开原始来源',e) : ''}`;
     context.ui.dialog(item.title,body);
   }
+  function conflictNotice(value) {
+    if (!value) return '';
+    const items = value.items || [];
+    return (items.length ? `<details class="planner-conflicts"><summary>发现 ${items.length} 处时间重叠</summary><ul>${items.slice(0,12).map(item => '<li>' + e(item.date + ' · ' + item.first_title + ' / ' + item.second_title) + '</li>').join('')}</ul></details>` : '') + (value.message ? '<p class="field-hint">' + e(value.message) + '</p>' : '');
+  }
+  function timingFields(item = {}) {
+    const localTime = value => value ? dayOf(value) + 'T' + clock(value) : '';
+    const day = item.date || (item.at ? dayOf(item.at) : current);
+    return `<label>时间方式<select name="timing"><option value="clock" ${!isLesson(item) ? 'selected' : ''}>具体钟点</option><option value="period" ${isLesson(item) ? 'selected' : ''}>日期与节次</option></select></label><fieldset data-clock-fields class="planner-form-row"><label>开始时间（北京时间）<input name="starts_at" type="datetime-local" value="${localTime(item.starts_at || item.at) || day + 'T09:00'}"></label><label>结束时间（可选）<input name="ends_at" type="datetime-local" value="${localTime(item.ends_at)}"></label></fieldset><fieldset data-period-fields class="planner-form-row"><label>日期<input name="date" type="date" value="${e(day)}"></label><label>开始节次<input name="period_start" type="number" min="1" max="30" value="${item.period_start || 1}"></label><label>结束节次<input name="period_end" type="number" min="1" max="30" value="${item.period_end || item.period_start || 1}"></label></fieldset>`;
+  }
+  function bindTiming(form) {
+    const update = () => {
+      const period = form.elements.timing.value === 'period';
+      form.querySelector('[data-clock-fields]').hidden = period;
+      form.querySelector('[data-clock-fields]').disabled = period;
+      form.querySelector('[data-period-fields]').hidden = !period;
+      form.querySelector('[data-period-fields]').disabled = !period;
+      form.elements.starts_at.required = !period;
+      for (const name of ['date','period_start','period_end']) form.elements[name].required = period;
+    };
+    form.elements.timing.onchange = update;update();
+  }
+  function timingData(form) {
+    if (form.elements.timing.value === 'period') return {date:form.elements.date.value,period_start:Number(form.elements.period_start.value),period_end:Number(form.elements.period_end.value),starts_at:null,ends_at:null};
+    return {date:null,period_start:null,period_end:null,starts_at:form.elements.starts_at.value + ':00+08:00',ends_at:form.elements.ends_at.value ? form.elements.ends_at.value + ':00+08:00' : null};
+  }
   function edit(item) {
     const form = document.createElement('form');
     form.className = 'campus-form planner-event-form';
-    const localTime = value => value ? dayOf(value) + 'T' + clock(value) : '';
-    form.innerHTML = `<label>事项名称<input name="title" maxlength="200" required value="${e(item?.title || '')}" placeholder="例如：概率论 Quiz 2"></label><div class="planner-form-row"><label>类型<select name="event_type">${['quiz','presentation','activity','lecture'].map(type => '<option value="' + type + '">' + kinds[type] + '</option>').join('')}</select></label><label>关联课程<input name="course_title" maxlength="200" value="${e(item?.course_title || '')}"></label></div><div class="planner-form-row"><label>开始时间（北京时间）<input name="starts_at" type="datetime-local" value="${localTime(item?.starts_at) || current + 'T09:00'}" required></label><label>结束时间（可选）<input name="ends_at" type="datetime-local" value="${localTime(item?.ends_at)}"></label></div><label>地点<input name="location" maxlength="200" value="${e(item?.location || '')}"></label><label>备注<textarea name="notes" rows="2" maxlength="2000">${e(item?.notes || '')}</textarea></label><p class="danger-text" data-error role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">保存安排</button>${item ? '<button class="text-button danger-text" data-delete type="button">删除安排</button>' : ''}</div>`;
+    form.innerHTML = `<label>事项名称<input name="title" maxlength="200" required value="${e(item?.title || '')}" placeholder="例如：概率论 Quiz 2"></label><div class="planner-form-row"><label>类型<select name="event_type">${personalKinds.map(type => '<option value="' + type + '">' + kinds[type] + '</option>').join('')}</select></label><label>关联课程<input name="course_title" maxlength="200" value="${e(item?.course_title || '')}"></label></div>${timingFields(item)}<label>地点<input name="location" maxlength="200" value="${e(item?.location || '')}"></label><label>备注<textarea name="notes" rows="2" maxlength="2000">${e(item?.notes || '')}</textarea></label><p class="danger-text" data-error role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">保存安排</button>${item ? '<button class="text-button danger-text" data-delete type="button">删除安排</button>' : ''}</div>`;
     form.elements.event_type.value = item?.event_type || 'activity';
+    bindTiming(form);
     const dialog = context.ui.dialog(item ? '编辑安排' : '添加安排',form);
+    const requestId = crypto.randomUUID(), owner = snapshot.account_revision;
+    context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
     form.onsubmit = act(form.querySelector('[type=submit]'),async () => {
       if (!form.reportValidity()) return;
-      const data = Object.fromEntries(new FormData(form));
-      data.starts_at += ':00+08:00';
-      data.ends_at = data.ends_at ? data.ends_at + ':00+08:00' : null;
-      try {await context.api('/events' + (item ? '/' + encodeURIComponent(item.id) : ''),{method:item ? 'PUT' : 'POST',body:data});dialog.close();await refresh();}
+      const data = {...Object.fromEntries(new FormData(form)),...timingData(form)};delete data.timing;
+      try {await context.api('/commands',{method:'POST',body:{action:item?'update':'create',record_id:item?.id || '',expected_revision:item ? item.revision || '' : undefined,account_revision:owner,request_id:requestId,event:data}});dialog.close();await refresh();}
       catch (error) {if (!context.signal.aborted) form.querySelector('[data-error]').textContent = error.message;}
     });
     form.querySelector('[data-delete]')?.addEventListener('click',act(form.querySelector('[data-delete]'),async () => {
       if (!await context.ui.confirmDialog('删除安排','删除这条手动添加的安排？','删除')) return;
-      await context.api('/events/' + encodeURIComponent(item.id),{method:'DELETE'});await refresh();
+      await context.api('/commands',{method:'POST',body:{action:'delete',record_id:item.id,expected_revision:item.revision || '',account_revision:owner,request_id:crypto.randomUUID()}});dialog.close();await refresh();
     }),{signal:context.signal});
+  }
+  function adjustClass(item) {
+    const form = document.createElement('form');
+    form.className = 'campus-form planner-event-form';
+    form.innerHTML = `<p>${e(item.original_date + ' · ' + when(item))}<br>${e(item.location || '')}</p><p class="field-hint">记录在本地时间表中。请假审批及学校统一调课仍以学校系统为准。</p><label>调整方式<select name="action" required><option value="">选择要执行的调整</option><option value="leave">请假</option><option value="cancel">取消上课</option><option value="move">调课／修改地点</option><option value="restore">恢复教务原安排</option></select></label><label>影响范围<select name="scope"><option value="once">仅这一次</option><option value="following">本次及本学期后续同一排课</option></select></label><label data-until>调整到哪天（可选，默认学期结束）<input name="until_date" type="date"></label><fieldset data-move-fields>${timingFields(item)}<label>调整后地点<input name="location" maxlength="200" value="${e(item.location || '')}"></label></fieldset><label>备注<textarea name="notes" rows="2" maxlength="2000"></textarea></label><p class="danger-text" data-error role="alert"></p><button class="button button-primary" type="submit">保存课程调整</button>`;
+    bindTiming(form);
+    const update = () => {
+      const moving = form.elements.action.value === 'move';
+      form.querySelector('[data-move-fields]').hidden = !moving;
+      form.querySelector('[data-move-fields]').disabled = !moving;
+      const following = form.elements.scope.value === 'following';
+      form.querySelector('[data-until]').hidden = !following;form.elements.until_date.disabled = !following;
+    };
+    form.elements.action.onchange = update;form.elements.scope.onchange = update;update();
+    const dialog = context.ui.dialog(item.title,form);
+    const requestId = crypto.randomUUID(), owner = snapshot.account_revision;
+    context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
+    form.onsubmit = act(form.querySelector('[type=submit]'),async () => {
+      if (!form.reportValidity()) return;
+      const adjustment = {lesson_id:item.lesson_id,on_date:item.original_date,action:form.elements.action.value,scope:form.elements.scope.value,notes:form.elements.notes.value};
+      if (adjustment.scope === 'following' && form.elements.until_date.value) adjustment.until_date = form.elements.until_date.value;
+      if (adjustment.action === 'move') {
+        const timing = timingData(form);adjustment.to_date = timing.date;delete timing.date;
+        Object.assign(adjustment,timing,{location:form.elements.location.value});
+      }
+      try {
+        await context.api('/commands',{method:'POST',body:{action:'adjust_class',record_id:item.id,expected_revision:item.revision || '',account_revision:owner,request_id:requestId,adjustment}});
+        dialog.close();await refresh();
+      } catch (error) {if (!context.signal.aborted) form.querySelector('[data-error]').textContent = error.message;}
+    });
   }
   async function semesterSettings() {
     const settings = await context.api('/calendar-settings');
