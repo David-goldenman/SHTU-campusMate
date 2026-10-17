@@ -246,11 +246,11 @@ export async function mount(container, context) {
         button.setAttribute('aria-label',show ? '隐藏密码' : '显示密码');
         button.setAttribute('aria-pressed',String(show));
       } else if (button.hasAttribute('data-generate-password')) {
-        const lengthRaw = window.prompt('密码长度（12-64，默认 16）：','16');
+        const lengthRaw = window.prompt('密码长度（12-32，默认 16）：','16');
         if (lengthRaw === null) return;
         const length = Number(lengthRaw.trim() || 16);
-        if (!Number.isInteger(length) || length < 12 || length > 64) {
-          feedback.textContent = '请输入 12 到 64 之间的整数。';
+        if (!Number.isInteger(length) || length < 12 || length > 32) {
+          feedback.textContent = '请输入 12 到 32 之间的整数。';
           feedback.classList.add('danger-text');
           return;
         }
