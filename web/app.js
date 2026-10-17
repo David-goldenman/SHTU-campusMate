@@ -128,10 +128,16 @@ async function syncBackground() {
   await Promise.all(modules.map(module=>mountModule(module,root,scope,true)));
 }
 
-async function render() {
+async function render(refreshMetadata = false) {
   const current = ++revision;
   await dispose();
   if (current !== revision) return;
+  if (refreshMetadata) {
+    const latest = await api('/bootstrap');
+    if (current !== revision) return;
+    state = latest;
+    setToken(state.csrf_token);
+  }
   await syncBackground();
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
@@ -237,7 +243,7 @@ async function start() {
   await render();
 }
 
-window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
+window.addEventListener('hashchange',() => { if (state) render(true).catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
 window.addEventListener('pagehide',() => { void dispose();void stopBackground(); });
 
 try { await start(); }

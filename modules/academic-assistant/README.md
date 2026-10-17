@@ -2,6 +2,8 @@
 
 首页在空对话时显示紧凑概览，开始聊天或恢复已有消息后扩大对话区域，“首页概览”可随时恢复。回复区适应视口高度和可用宽度，输入保持在底部。历史面板区分进行中与已归档，支持新建、切换、归档、恢复与删除，学习档案独立保留。归档可阅读，恢复后继续发送。
 
+Enter 发送，Shift + Enter 换行；兼容 Ctrl／Command + Enter，中文输入法确认候选词不会触发发送。主动点击“新对话”或“历史对话”展开聊天区域，空会话也可重新打开。离开页面会停止当前请求；旧模型仍在完成初始化或清理时，新建与选择会话立即可用，迟到的旧回复不会改变当前选择。
+
 ## 多会话接口
 
 `GET /conversations` 返回 `{items:[{id,title,created_at,updated_at,archived}],active_id}`；`POST /conversations` 新建并选中，201；`POST /conversations/{id}/select` 返回 `{conversation,messages}`；`PUT /conversations/{id}` 接收 `{archived?,title?}`；`DELETE /conversations/{id}` 删除本地对话及消息。标识为 32 位十六进制，账号外的记录返回 404。`GET /chat` 继续返回当前选中记录，新增 `conversation_id`；`POST /chat` 和 `/chat/stream` 可带 `conversation_id`，省略时使用当前对话或创建首段对话。向已归档对话发送返回 409。

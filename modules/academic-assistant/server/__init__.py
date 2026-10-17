@@ -70,13 +70,12 @@ def create_router(context):
 
     @router.post('/conversations', status_code=201)
     async def new_conversation():
-        async with agent.lock:
-            return agent.conversations.create()
+        # Navigation is synchronous local state; it must not wait for AI shutdown.
+        return agent.conversations.create()
 
     @router.post('/conversations/{identity}/select')
     async def select_conversation(identity: str):
-        async with agent.lock:
-            return agent.conversations.select(identity)
+        return agent.conversations.select(identity)
 
     @router.put('/conversations/{identity}')
     async def update_conversation(identity: str, body: ConversationUpdate):
