@@ -123,6 +123,30 @@ async def check():
         assert any(i['source'] == 'mail' for i in service.public()['items'])
         assert any(path == '/sync' and method == 'POST' for _,path,method in calls)
         assert all(module_id == 'mail' for module_id,_,_ in calls)
+        calls.clear()
+        async def login_required(module_id, path='/snapshot', **kwargs):
+            calls.append(path)
+            if path == '/sync':
+                return httpx.Response(202, json={})
+            return httpx.Response(200, json={'status':'verification_required','data':{'messages':[
+                {'id':'mail:waiting','title':'合成封路通知','received_at':today.isoformat()}]}})
+        context.api = login_required
+        await service.scan(owner, 0)
+        assert service.public()['sources']['mail']['needs_auth']
+        assert service.public()['sources']['mail']['waiting_login'] == 1
+        assert not any(path.startswith('/message') for path in calls)
+        async def batch(module_id, path='/snapshot', **kwargs):
+            if path == '/sync':
+                return httpx.Response(202,json={})
+            if path.startswith('/message'):
+                return httpx.Response(200,json={'body_text':'这是普通合成邮件，不含通行信息。'})
+            return httpx.Response(200,json={'status':'ready','data':{'messages':[
+                {'id':f'mail:batch-{index}','title':'普通合成资料','received_at':today.isoformat()} for index in range(25)]}})
+        context.api = batch
+        await service.scan(owner, 0)
+        assert service.public()['sources']['mail']['deferred'] == 5
+        assert service.public()['sources']['mail']['failed'] == 0
+        assert not service.public()['sources']['mail']['needs_auth']
         before = json.dumps(service.public()['items'], ensure_ascii=False)
         async def missing(*args, **kwargs):
             return httpx.Response(404, json={})

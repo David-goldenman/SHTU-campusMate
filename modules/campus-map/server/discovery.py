@@ -62,7 +62,7 @@ class Discovery:
             return {key: value for key, value in state.items() if key != 'seen'} | {
                 'account_revision': owner, 'running': self.running_owner == owner,
                 'interval_minutes': 30, 'notice_url': NOTICE_LIST,
-                'coverage': '校方公告首页近 90 天的文字；邮箱最近 100 封，每轮最多补读 20 封正文。附件与图片不识别。'}
+                'coverage': '校方公告首页与最近 100 封邮件中近 90 天的文字；每轮最多补读 20 封邮件正文。附件与图片不识别。'}
 
     def capture(self, body):
         owner = self.owner(); state = self.read(owner)
@@ -167,7 +167,8 @@ class Discovery:
                         break
                     await asyncio.sleep(1)
                 messages = snapshot.get('data', {}).get('messages', [])[:100]
-                read = fetched = missed = 0
+                read = fetched = deferred = failed = waiting_login = 0
+                needs_auth = snapshot.get('status') in {'verification_required', 'login_required', 'not_connected'}
                 for message in messages:
                     self.check(owner, generation)
                     source_id = str(message.get('id', ''))
@@ -178,13 +179,15 @@ class Discovery:
                     if not text and seen:
                         continue
                     if not text:
+                        if needs_auth:
+                            waiting_login += 1; continue
                         if fetched >= 20:
-                            missed += 1; continue
+                            deferred += 1; continue
                         fetched += 1
                         detail = await self.context.api('mail', '/message?message_id=' + quote(source_id, safe=''), timeout=10)
                         self.check(owner, generation)
                         if detail.status_code != 200:
-                            missed += 1; continue
+                            failed += 1; continue
                         text = detail.json().get('body_text', '')
                     received = str(message.get('received_at') or '')
                     try:
@@ -197,11 +200,23 @@ class Discovery:
                         'title': str(message.get('title') or '无主题邮件')[:160], 'text': str(text)[:40000],
                         'source_date': received_date.isoformat() if received_date else '',
                         'url': 'https://mail.shanghaitech.edu.cn/coremail/'}]); read += 1
-                partial = missed or sync.status_code not in {200, 202} or snapshot.get('status') not in {'ready', 'success'}
-                results['mail'] = {'status': 'partial' if partial else 'ready', 'read': read,
+                partial = deferred or failed or waiting_login or sync.status_code not in {200, 202} or snapshot.get('status') != 'ready'
+                message = f'最近 {len(messages)} 封缓存，本轮筛查 {read} 封。'
+                if needs_auth:
+                    message += f'校园邮箱需要重新登录并导入会话，{waiting_login} 封正文待连接后读取。'
+                else:
+                    if deferred:
+                        message += f'本轮补读上限 20 封，{deferred} 封将在后续检查继续读取。'
+                    if failed:
+                        message += f'{failed} 封正文读取失败，稍后重试。'
+                    if sync.status_code not in {200, 202} or snapshot.get('status') != 'ready':
+                        message += '同步尚未完成或存在问题，当前使用可用缓存。'
+                    if not partial:
+                        message += '已请求同步；正文读取不标为已读。'
+                results['mail'] = {'status': 'attention' if needs_auth else 'partial' if partial else 'ready', 'read': read,
+                    'deferred': deferred, 'failed': failed, 'waiting_login': waiting_login, 'needs_auth': needs_auth,
                     'updated_at': snapshot.get('updated_at'),
-                    'message': f'最近 {len(messages)} 封缓存，本轮筛查 {read} 封、待补读 {missed} 封。' +
-                               ('同步或部分正文暂不可用，已读取可用缓存；请检查邮箱连接。' if partial else '已请求同步；正文读取不标为已读。')}
+                    'message': message}
             except (httpx.HTTPError, ValueError, KeyError) as error:
                 results['mail'] = {'status': 'error', 'message': str(error) if isinstance(error, ValueError) else '邮箱读取失败，请检查邮箱模块与连接。'}
         with self.lock:
