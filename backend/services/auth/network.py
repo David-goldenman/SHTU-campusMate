@@ -105,6 +105,10 @@ async def probe(url, client):
 def diagnosis(dns, direct, proxy):
     state = direct["status"]
     if direct["reachable"]:
+        if proxy and proxy["status"] == "configuration_error":
+            return {"code": "proxy_configuration", "confidence": "confirmed", "title": "校园入口可达，代理配置需要修正",
+                    "message": "匿名直连已收到响应，但代理客户端无法初始化；这类配置也可能阻止同步客户端启动。",
+                    "actions": ["修正本机代理配置的协议、地址和端口，重启工作台后重新检测与同步。"]}
         if state in {"service_error", "http_error"}:
             return {"code": "service", "confidence": "confirmed", "title": "网络已连通，服务响应异常",
                     "message": f"已收到 HTTP {direct['http_status']}，问题发生在服务响应阶段。",
@@ -116,10 +120,22 @@ def diagnosis(dns, direct, proxy):
         if proxy and not proxy["reachable"]:
             return {"code": "proxy", "confidence": "confirmed", "title": "校园服务可达，代理路径失败",
                     "message": "同一入口直连成功，通过已配置代理的对照请求失败；工作台已绕过该代理。",
-                    "actions": ["可继续同步。其他浏览器若仍失败，将 shanghaitech.edu.cn 及其子域名设为直连。"]}
+                    "actions": (["匿名检测返回 HTTP 401；若尚未连接账号，请先完成登录，再同步。"] if state == "login_required" else [])
+                               + ["其他浏览器若仍失败，将 shanghaitech.edu.cn 及其子域名设为直连；工作台可通过直连访问。"]}
         return {"code": "reachable", "confidence": "confirmed", "title": "校园服务可达",
                 "message": "已收到服务响应；此检测不代表账号已登录或所有资料接口都可用。",
                 "actions": ["需要登录时，前往账号连接完成验证，再重新同步。"] if state == "login_required" else []}
+    # An actual request's configuration/TLS error is stronger evidence than a
+    # separate DNS probe that may have timed out or observed different results.
+    if state == "configuration_error":
+        return {"code": "configuration", "confidence": "confirmed", "title": "网络客户端配置异常",
+                "message": "检测连接未能初始化，可能是本机证书文件或代理配置无效。",
+                "actions": ["检查本机代理与证书环境配置，修正后重启工作台再检测。"]}
+    if state == "tls_error":
+        return {"code": "tls", "confidence": "confirmed", "title": "安全连接握手失败",
+                "message": "实际请求发生 HTTPS 握手或证书验证失败；不能据此判断 VPN 未连接。",
+                "actions": ["核对系统日期时间；检查代理 HTTPS 检查、证书配置或 TUN 干扰。",
+                            "保持证书校验开启；若官方网页也失败，请联系学校服务支持。"]}
     if "synthetic" in dns["kinds"]:
         return {"code": "dns_proxy", "confidence": "suspected", "title": "疑似代理 DNS 或 TUN 冲突",
                 "message": "域名解析到常见 Fake-IP 使用的保留地址段，且直连失败；仅凭地址不能确定是哪款代理。",
@@ -130,15 +146,6 @@ def diagnosis(dns, direct, proxy):
                 "message": "系统未能及时解析校园域名。可能与当前 DNS、网络或 VPN 的 DNS 配置有关。",
                 "actions": ["确认网络已连接；校外先连接学校 VPN，再重新检测。",
                             "已连接 VPN 时，检查校园域名是否仍被代理 DNS / Fake-IP 接管，改用系统或校园 DNS。"]}
-    if state == "tls_error":
-        return {"code": "tls", "confidence": "confirmed", "title": "安全连接握手失败",
-                "message": "DNS 已解析，但 HTTPS 握手或证书验证失败；不能据此判断 VPN 未连接。",
-                "actions": ["核对系统日期时间；检查代理 HTTPS 检查、证书配置或 TUN 干扰。",
-                            "保持证书校验开启；若官方网页也失败，请联系学校服务支持。"]}
-    if state == "configuration_error":
-        return {"code": "configuration", "confidence": "confirmed", "title": "网络客户端配置异常",
-                "message": "检测连接未能初始化，可能是本机证书文件或代理配置无效。",
-                "actions": ["检查本机代理与证书环境配置，修正后重启工作台再检测。"]}
     if proxy and proxy["reachable"]:
         return {"code": "direct_route", "confidence": "suspected", "title": "直连路径不可用，代理路径可达",
                 "message": "同一入口通过代理收到响应，但系统直连失败；需要检查直连使用的 DNS 和校园路由。",

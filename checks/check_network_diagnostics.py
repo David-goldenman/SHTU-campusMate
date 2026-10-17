@@ -1,6 +1,7 @@
 """Synthetic diagnostics: evidence, no credentials, deadlines, coalescing and local API."""
 import asyncio
 import json
+import os
 import socket
 import ssl
 import sys
@@ -15,7 +16,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 from backend.core.store import Store
 from backend.main import create_app
-from backend.services.auth import network
+from backend.services.auth import network, protocols
 
 
 DNS = {"status": "ok", "addresses": ["10.15.1.1"], "kinds": ["private"]}
@@ -38,6 +39,21 @@ async def checks():
     assert network.address_kind("127.0.0.1") == "special"
     assert network.address_kind("2001:4860:4860::8888") == "public"
     assert network.diagnosis(DNS, OK, FAIL)["code"] == "proxy"
+    # A successful anonymous probe must not promise sync when the application
+    # cannot initialize its configured environment proxy.
+    with patch.dict(os.environ, {"HTTPS_PROXY": "invalid-proxy://127.0.0.1:9"}):
+        try:
+            with protocols.http_client():
+                raise AssertionError("Invalid proxy scheme unexpectedly initialized")
+        except ValueError:
+            pass
+        assert network.probe_client("invalid-proxy://127.0.0.1:9") is None
+    finding = network.diagnosis(DNS, OK, {**FAIL, "status": "configuration_error"})
+    assert finding["code"] == "proxy_configuration" and "可继续同步" not in " ".join(finding["actions"])
+    finding = network.diagnosis(DNS, {**OK, "status": "login_required", "http_status": 401}, FAIL)
+    assert "登录" in " ".join(finding["actions"])
+    for status, code in (("tls_error", "tls"), ("configuration_error", "configuration")):
+        assert network.diagnosis({**DNS, "status": "dns_timeout"}, {**FAIL, "status": status}, None)["code"] == code
     finding = network.diagnosis(DNS, FAIL, None)
     assert finding["code"] == "campus_route" and finding["confidence"] == "suspected"
     assert "无法" in finding["message"] and "服务故障" in " ".join(finding["actions"])

@@ -19,6 +19,8 @@ Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账�
 
 设置 → 网络检测会在首次进入时检查统一认证、教务、Blackboard、ELRC 和邮箱入口，可在切换网络或连接 VPN 后重新检测。每个服务显示系统 DNS、工作台直连和已配置 HTTPS/ALL 代理的匿名对照结果；实际校园同步仍默认绕过普通代理。返回 401 表示服务已响应但需要登录，403 表示访问受限，5xx 表示网络已连通但服务响应异常，不把这些状态当成 VPN 未连接。
 
+无效代理配置可能在同步客户端初始化时阻止请求，即使匿名直连探测成功也应先修正配置。代理路径失败的同时返回 401 时保留登录提示；实际请求的 TLS/配置错误优先于独立 DNS 探测的超时，避免将已观察到的连接错误误判为 VPN 或 DNS 问题。
+
 `GET /api/v1/auth/network` 只读取本进程最近检测（首次为 `{checked_at:null,services:[]}`）；`POST /api/v1/auth/network/check` 使用框架 CSRF 发起固定入口检测，无请求参数，不允许自定义 URL。响应包含 `checked_at,summary,scope,reachable_count,total,proxy_configured,campus_location,vpn_status,services`；每个 service 包含 `id,name,host,port,dns{status,addresses,kinds},direct{status,reachable,http_status?,elapsed_ms},proxy,diagnosis{code,confidence,title,message,actions}`。`proxy` 未配置时为 null；不返回代理地址、用户名、密码、响应正文、Cookie 或跳转票据。
 
 检测仅发送匿名 HTTPS GET，读取响应头后关闭，不跟随跳转、不读取 Vault、不改变账号或网络配置。系统 DNS 等待最多 3 秒，单次 HTTP 探测总限时 6 秒，所有固定入口并发检查；同一进程合并并发检测并在完成后 5 秒内复用结果，界面注明时间。切页取消界面请求，已发出的服务端检查仍有上述上限；不启动后台定时检测。结果仅保存在内存，重启清除。
