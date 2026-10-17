@@ -93,6 +93,31 @@ def activity(html):
     return result
 
 
+def announcements(html, course):
+    """Parse one course's announcement page.
+
+    Return None when the page is unreadable or its container is gone, so the
+    caller can silently keep the previous announcements. Rows that miss the
+    title or id elements are skipped instead of being invented.
+    """
+    tree = BeautifulSoup(html, "html.parser")
+    if tree.select_one("#announcementList, #announcementForm") is None:
+        return None
+    result = []
+    for row in tree.select("#announcementList > li[id]"):
+        try:
+            title = row.select_one("h3.item")
+            text = title.get_text(" ", strip=True) if title else ""
+            if not text:
+                continue
+            body = row.select_one(".details .vtbegenerated")
+            result.append({"id": identity("blackboard", course["source_id"] + ":" + row["id"]), "source": "blackboard", "course_id": course["id"], "title": text, "body_text": body.get_text(" ", strip=True) if body else "", "url": course["url"]})
+        except Exception:
+            # 单条公告结构异常时默认忽略，不影响同一课程的其他公告。
+            continue
+    return result
+
+
 def materials(nodes, course_id):
     result = []
     for node in nodes:
@@ -174,17 +199,13 @@ def fetch(remote, previous):
                     is_submitted = True
                 state, open_now = availability(node.get("availability"))
                 result["assignments"].append({"id": identity("blackboard", cid + ":" + node["id"]), "source": "blackboard", "course_id": item["id"], "source_id": node["id"], "title": node["title"], "body_text": node["body_text"], "url": item["url"], "submitted": is_submitted, "score": display.get("score"), "max_score": (column.get("score") or {}).get("possible"), "due_at": timestamp((column.get("grading") or {}).get("due")), "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
+            previous_announcements = [old for old in previous.get("announcements", []) if old.get("course_id") == item["id"]]
             try:
-                html = remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid}))
-                tree = BeautifulSoup(html, "html.parser")
-                if tree.select_one("#announcementList, #announcementForm") is None:
-                    raise SourceError("Blackboard 公告页面结构已变化。")
-                for row in tree.select("#announcementList > li[id]"):
-                    title, body = row.select_one("h3.item"), row.select_one(".details .vtbegenerated")
-                    result["announcements"].append({"id": identity("blackboard", cid + ":" + row["id"]), "source": "blackboard", "course_id": item["id"], "title": title.get_text(" ", strip=True) if title else "课程公告", "body_text": body.get_text(" ", strip=True) if body else "", "url": item["url"]})
-            except HTTPException:
-                result["issues"].append(item["title"] + " 的公告暂时不可读。")
-                result["announcements"].extend(old for old in previous.get("announcements", []) if old.get("course_id") == item["id"])
+                fresh = announcements(remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid})), item)
+            except Exception:
+                # 公告是附加信息：页面不可读、请求失败或结构变化时默认忽略，保留上次公告。
+                fresh = None
+            result["announcements"].extend(previous_announcements if fresh is None else fresh)
         except HTTPException:
             result["issues"].append("一门 Blackboard 课程暂时不可读，保留上次数据。")
             for kind in ("courses", "assignments", "materials", "announcements"):
