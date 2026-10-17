@@ -68,6 +68,14 @@ with sandbox("sync-network", respond) as context:
             result = source.snapshot()
             assert "network_failure" not in result
             assert result["status"] == ("error" if mode == "permission" else "login_required" if mode == "login" else "ready")
+        with patch.object(context.auth, "read_with_recovery", side_effect=httpx.ConnectError("Synthetic auth failure", request=httpx.Request("GET", "https://ids.shanghaitech.edu.cn/authserver/login"))):
+            source.run()
+            assert source.snapshot()["network_failure"]["host"] == "ids.shanghaitech.edu.cn"
+        with patch.object(context.auth, "read_with_recovery", side_effect=ValueError("Synthetic parser failure")):
+            source.run()
+            assert "network_failure" not in source.snapshot() and source.snapshot()["data"]["courses"] == original["courses"]
+        mode = "success"
+        source.run()
         mode = "account"
         source.run()
         assert source.snapshot()["data"]["courses"] == [] and "network_failure" not in source.snapshot()
