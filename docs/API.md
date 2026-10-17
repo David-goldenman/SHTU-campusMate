@@ -58,6 +58,8 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 | 方法 | 路径 | 请求或响应 |
 | --- | --- | --- |
 | GET | `/auth/providers` | `{providers:[ProviderStatus]}` |
+| GET | `/auth/network` | 最近的校园网络检测；首次 `{checked_at:null,services:[]}`，不发起外部请求 |
+| POST | `/auth/network/check` | 无参数；匿名检测五个固定校园入口，返回 DNS、直连、代理对照和处理建议；详见 AUTH.md |
 | GET | `/auth/<provider>/status` | 单个 `ProviderStatus`；读取已保存状态 |
 | PUT | `/auth/<provider>/credentials` | `{username,password}` → `ProviderStatus` |
 | POST | `/auth/<provider>/login` | 可选 `{target}`，登录或验证会话，返回状态 |
