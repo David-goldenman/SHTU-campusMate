@@ -4,6 +4,8 @@
 
 前缀为 `/api/v1/modules/timetable`。
 
+课程网格的动态节次、跨节长度和重叠列通过 CSSOM 属性设置，遵循框架 `style-src 'self'` 的内容安全策略；HTML 模板不使用会被该策略阻止的内联 `style` 属性。
+
 | 接口 | 用途 |
 | --- | --- |
 | `GET /snapshot`、`POST /sync` | 原始课程与上课活动；同步返回 202 |

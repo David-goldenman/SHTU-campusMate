@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {compareEvents, eventGroup, lessonLayout, periodsFor} from '../web/planner.js';
+import {applyLessonPositions, compareEvents, eventGroup, lessonLayout, periodsFor} from '../web/planner.js';
 
 const lessons = [
   {id:'a',event_type:'class',period_start:10,period_end:11,at:null},
@@ -25,3 +25,13 @@ assert.equal(eventGroup({...early,event_type:'deadline'}),'deadline');
 assert.equal(eventGroup({...early,all_day:true}),'untimed');
 assert.equal(eventGroup({...early,event_type:'exam',start_time:''}),'untimed');
 console.log('PASS: legacy lesson placement, numeric ordering, overlap lanes, period clocks and event groups');
+
+const axis = {dataset:{periodCount:'13'},style:{setProperty(name,value) {this[name]=value;}}};
+const day = {dataset:{periodCount:'13',lessonLanes:'2'},style:{setProperty(name,value) {this[name]=value;}}};
+const block = {dataset:{lessonStart:'10',lessonSpan:'2',lessonLane:'2'},style:{}};
+applyLessonPositions({querySelectorAll(selector) {return {'[data-period-count]':[axis,day],'[data-lesson-lanes]':[day],'[data-lesson-start]':[block]}[selector];}});
+assert.equal(axis.style['--period-count'],'13');
+assert.equal(day.style['--lesson-lanes'],'2');
+assert.equal(block.style.gridRow,'10 / span 2');
+assert.equal(block.style.gridColumn,'2');
+console.log('PASS: course axis, span and overlap lane positions use CSP-compatible CSSOM properties');
