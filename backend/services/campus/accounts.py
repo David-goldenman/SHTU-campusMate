@@ -27,7 +27,7 @@ class AccountCache:
             context.store.write("library_owner", self.owner())
 
     def owner(self):
-        return digest(self.context.auth.get_status(self.provider)["account_revision"])
+        return digest(self.context.auth.get_account_revision(self.provider))
 
     def capture(self):
         owner = self.owner()
