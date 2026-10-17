@@ -1,6 +1,7 @@
 import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
 import {sendOnEnter, fitComposer} from './composer.js';
+import {chatSession} from './session.js';
 
 const icons = {
   history:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
@@ -18,16 +19,17 @@ export async function mount(container, context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const card = container.closest('.module-card');
   const title = card.querySelector('.module-card-heading');
-  let busy = false, profileDirty = false, currentRequest, frame, observer, follow = true;
-  const cleanup = () => {currentRequest?.abort();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
+  let busy = false, profileDirty = false, frame, observer, follow = true, saveDraft = () => {};
+  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai, presets, conversations;
   try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
   catch (error) {cleanup();throw error;}
   if (context.signal.aborted) return cleanup;
   const configured = ai.enabled && ai.key_saved;
+  chatSession.bindOwner(history.owner);
   let activeId = history.conversation_id, archived = false, showArchived = false;
-  const drafts = new Map();
+  const drafts = chatSession.drafts;
   container.classList.add('academic-chat');
   card.classList.add('study-chat-card');
   title.hidden = true;
@@ -60,9 +62,17 @@ export async function mount(container, context) {
   const newChat = container.querySelector('[data-new-chat]');
   const conversation = container.querySelector('.study-conversation');
   const input = form.elements.message;
+  input.value = drafts.get(activeId || '') || '';
+  saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
   const retry = container.querySelector('[data-retry]');
+  const returnRunning = document.createElement('button');
+  returnRunning.type='button';returnRunning.className='text-button';returnRunning.textContent='返回正在生成的对话';returnRunning.hidden=true;
+  returnRunning.dataset.returnRunning='';
+  container.querySelector('.study-error-row').append(returnRunning);
+  returnRunning.onclick=context.ui.safeAction(returnRunning,()=>openConversation(chatSession.current.conversationId));
   const search = container.querySelector('[data-history-search]');
-  function resizeInput() {fitComposer(input);send.disabled=!configured||archived||!input.value.trim();}
+  const generating = () => chatSession.current?.status==='running';
+  function resizeInput() {fitComposer(input);send.disabled=!configured||archived||generating()||!input.value.trim();}
   input.addEventListener('input',resizeInput,{signal:context.signal});
   search.addEventListener('input',drawConversations,{signal:context.signal});
   retry.onclick = () => form.requestSubmit();
@@ -74,22 +84,25 @@ export async function mount(container, context) {
   container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
   async function refreshConversations() {conversations=await context.api('/conversations');if (!context.signal.aborted) drawConversations();}
   async function openConversation(identity) {
-    if (busy) return;
-    drafts.set(activeId || '',form.elements.message.value);
+    if(!busy)drafts.set(activeId || '',form.elements.message.value);
     const value=await context.api('/conversations/'+identity+'/select',{method:'POST'});
     if (context.signal.aborted) return;
-    activeId=identity;archived=value.conversation.archived;messages.replaceChildren();
+    activeId=identity;archived=value.conversation.archived;busy=false;displayedTurn=undefined;
+    cancelAnimationFrame(frame);frame=null;container.querySelector('.study-composer').prepend(progress);messages.replaceChildren();
+    history = {...history,messages:value.messages,conversation_id:identity};
     if(value.messages.length)value.messages.forEach(append);else empty();
     form.elements.message.value=drafts.get(identity)||'';resizeInput();retry.hidden=true;
     errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
     focusChat(true);scrollToLatest();drawConversations();showHistory(false);
+    restoreTurn(chatSession.current);
   }
   function drawConversations() {
-    const selected=conversations.items.find(item=>item.id===activeId);
+    const items=conversations.items.map(item=>item.title==='新对话'&&item.id===chatSession.current?.conversationId ? {...item,title:chatSession.current.message.replace(/\s+/g,' ').slice(0,36)} : item);
+    const selected=items.find(item=>item.id===activeId);
     container.querySelector('[data-chat-title]').textContent=selected?.title && selected.title!=='新对话' ? selected.title : '学习助手';
     container.querySelectorAll('[data-history-filter]').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.historyFilter==='archived')===showArchived)));
     const query=search.value.trim().toLocaleLowerCase();
-    container.querySelector('[data-conversations]').innerHTML=conversations.items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''} ${busy?'disabled':''}><strong>${e(item.title)}</strong><span>${e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu"><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${busy?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${busy?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
+    container.querySelector('[data-conversations]').innerHTML=items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''}><strong>${e(item.title)}</strong><span>${generating()&&item.id===chatSession.current.conversationId?'正在生成…':e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu"><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
     container.querySelectorAll('[data-open-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,()=>openConversation(button.dataset.openChat)));
     container.querySelectorAll('[data-archive-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,async()=>{
       const item=conversations.items.find(item=>item.id===button.dataset.archiveChat);
@@ -100,10 +113,10 @@ export async function mount(container, context) {
   }
   async function deleteConversation(identity) {
     if (!await context.ui.confirmDialog('删除对话','删除这段对话及其本地消息，学习档案继续保留。','删除对话')) return;
-    await context.api('/conversations/'+identity,{method:'DELETE'});drafts.delete(identity);await refreshConversations();
-    if(activeId===identity){form.elements.message.value='';const next=conversations.active_id;activeId=null;if(next)await openConversation(next);else{archived=false;empty();resizeInput();focusChat(true);}}
+    await context.api('/conversations/'+identity,{method:'DELETE'});drafts.delete(identity);chatSession.forget(identity);await refreshConversations();
+    if(activeId===identity){form.elements.message.value='';history.messages=[];const next=conversations.active_id;activeId=null;if(next)await openConversation(next);else{archived=false;empty();resizeInput();focusChat(true);}}
   }
-  newChat.onclick=context.ui.safeAction(newChat,async()=>{if(busy)return;const item=await context.api('/conversations',{method:'POST'});await refreshConversations();await openConversation(item.id);form.elements.message.focus({preventScroll:true});});
+  newChat.onclick=context.ui.safeAction(newChat,async()=>{const item=await context.api('/conversations',{method:'POST'});await refreshConversations();await openConversation(item.id);form.elements.message.focus({preventScroll:true});});
   observer = new ResizeObserver(() => {container.style.setProperty('--study-top',Math.max(0,card.getBoundingClientRect().top + window.scrollY) + 'px');resizeInput();});
   observer.observe(card.parentElement);
   function showProfile(open) {
@@ -169,63 +182,73 @@ export async function mount(container, context) {
   }
   fillProfile(profile);
   profileForm.oninput = () => {profileDirty = true;};
-  stop.onclick = () => {stop.disabled = true;currentRequest?.abort();};
-  form.onsubmit = async event => {
+  let displayedTurn, pending, draft, controlsKey;
+  function syncControls() {
+    const key=[activeId,busy,chatSession.current?.conversationId,chatSession.current?.status].join(':');
+    if(key===controlsKey)return;
+    controlsKey=key;
+    input.disabled=busy;profileForm.querySelector('fieldset').disabled=generating();clearChat.disabled=generating();profileToggle.disabled=generating();
+    send.hidden=busy;stop.hidden=!busy;progress.hidden=!busy;returnRunning.hidden=!generating()||busy;
+    form.setAttribute('aria-busy',String(busy));drawConversations();resizeInput();
+  }
+  function restoreTurn(value) {
+    if(context.signal.aborted)return;
+    if(!value){syncControls();return;}
+    if (!activeId && value.conversationId) activeId = value.conversationId;
+    if (value.conversationId !== activeId) {
+      syncControls();
+      if(value.status==='complete')refreshConversations().catch(error=>{if(!context.signal.aborted)context.ui.toast(error.message);});
+      return;
+    }
+    const completedLive = busy;
+    if (displayedTurn !== value) {
+      displayedTurn=value;messages.replaceChildren();value.messages.forEach(append);
+      pending=append({role:'user',text:value.message});draft=append({role:'assistant',text:''});
+      draft.querySelector('.study-text').before(progress);draft.classList.add('study-streaming');
+      input.value=value.message;retry.hidden=true;errorNode.textContent='';showProfile(false);
+      container.querySelector('[data-announcement]').textContent='';
+      progress.open=false;scrollToLatest();
+    }
+    busy=value.status==='running';
+    stop.disabled=value.controller.signal.aborted;syncControls();
+    if (busy) {
+      const steps=value.steps;
+      progressText.textContent=value.text ? '正在撰写回答…' : steps.length ? steps.at(-1).label+(steps.at(-1).status==='running'?'…':' · 已完成') : '正在准备学习工具…';
+      container.querySelector('[data-steps]').innerHTML=steps.map(step=>'<li>'+e(step.label)+'<span>'+({running:'处理中',done:'完成',error:'需补充资料'})[step.status]+'</span></li>').join('');
+      if (!frame) frame=requestAnimationFrame(()=>{
+        frame=null;if(context.signal.aborted)return;
+        renderBody(draft.querySelector('.study-text'),value.text);
+        if(follow)scrollToLatest();else latest.hidden=false;
+      });
+      return;
+    }
+    cancelAnimationFrame(frame);frame=null;
+    container.querySelector('.study-composer').prepend(progress);draft.remove();
+    if (value.status==='complete') {
+      append(value.answer);input.value='';
+      history.messages=[...value.messages,{role:'user',text:value.message,created_at:value.answer.created_at},value.answer];
+      refreshConversations().catch(error=>{if(!context.signal.aborted)context.ui.toast(error.message);});
+      container.querySelector('[data-announcement]').textContent='回答已完成，参考资料可在回答下方展开。';
+      if(completedLive && value.answer.navigation)context.navigate(value.answer.navigation);
+      else context.api('/profile').then(current=>{if(!context.signal.aborted)fillProfile(current);}).catch(error=>{if(!context.signal.aborted)container.querySelector('[data-profile-error]').textContent=error.message;});
+    } else {
+      pending.remove();if(!messages.children.length)empty();
+      input.value=value.message;errorNode.textContent=value.error;retry.hidden=value.status==='stopped';
+    }
+    chatSession.forget(activeId);
+    displayedTurn=undefined;resizeInput();
+    if(follow)scrollToLatest();else latest.hidden=false;
+  }
+  chatSession.subscribe(restoreTurn,context.signal);
+  restoreTurn(chatSession.current);
+  stop.onclick=()=>{stop.disabled=true;chatSession.stop();};
+  form.onsubmit=event=>{
     event.preventDefault();
-    if (busy || archived || !configured || !form.reportValidity()) return;
-    const message = form.elements.message.value.trim();
-    if (!message) return;
-    busy = true;retry.hidden=true;newChat.disabled=true;showHistory(false);drawConversations();focusChat(true);errorNode.textContent = '';send.hidden = true;stop.hidden = false;stop.disabled = false;
-    form.elements.message.disabled = true;profileForm.querySelector('fieldset').disabled = true;clearChat.disabled = true;profileToggle.disabled = true;showProfile(false);
-    container.querySelector('.study-prompts').open = false;form.setAttribute('aria-busy','true');
-    progress.hidden = false;progress.open = false;progressText.textContent = '正在准备学习工具…';container.querySelector('[data-steps]').replaceChildren();
-    const pending = append({role:'user',text:message});
-    let draft = append({role:'assistant',text:''}), text = '', answer;
-    draft.querySelector('.study-text').before(progress);
-    draft.classList.add('study-streaming');scrollToLatest();
-    currentRequest = new AbortController();
-    function paint() {
-      frame = null;if (context.signal.aborted) return;
-      renderBody(draft.querySelector('.study-text'),text);
-      if (follow) scrollToLatest();else latest.hidden = false;
-    }
-    try {
-      if(!activeId)activeId=(await context.api('/conversations',{method:'POST'})).id;
-      await context.api('/chat/stream',{method:'POST',body:{message,conversation_id:activeId},signal:currentRequest.signal,onEvent(value) {
-        if (context.signal.aborted) return;
-        if (value.type === 'error') throw new Error(value.detail);
-        if (value.type === 'activity') {
-          const steps = value.steps;
-          progressText.textContent = steps.length ? steps.at(-1).label + (steps.at(-1).status === 'running' ? '…' : ' · 已完成') : '正在准备学习工具…';
-          container.querySelector('[data-steps]').innerHTML = steps.map(step => '<li>' + e(step.label) + '<span>' + ({running:'处理中',done:'完成',error:'需补充资料'})[step.status] + '</span></li>').join('');
-        }
-        if (value.type === 'reset') {text='';if (!frame) frame=requestAnimationFrame(paint);}
-        if (value.type === 'delta') {text+=value.text;if (progressText.textContent !== '正在撰写回答…') progressText.textContent='正在撰写回答…';if (!frame) frame=requestAnimationFrame(paint);}
-        if (value.type === 'complete') answer = value.message;
-      }});
-      if (context.signal.aborted) return;
-      if (!answer) throw new Error('回复连接中断，请重试。');
-      cancelAnimationFrame(frame);frame=null;
-      draft.remove();draft = append(answer);
-      if (follow) scrollToLatest();else latest.hidden = false;
-      form.elements.message.value = '';
-      resizeInput();
-      refreshConversations().catch(error=>context.ui.toast(error.message));
-      container.querySelector('[data-announcement]').textContent = '回答已完成，参考资料可在回答下方展开。';
-      if (answer.navigation) context.navigate(answer.navigation);
-      else context.api('/profile').then(current => {if (!context.signal.aborted) fillProfile(current);}).catch(error => {if (!context.signal.aborted) container.querySelector('[data-profile-error]').textContent=error.message;});
-    } catch (error) {
-      if (context.signal.aborted) return;
-      cancelAnimationFrame(frame);frame=null;draft.remove();pending.remove();
-      if (!messages.children.length) empty();
-      errorNode.textContent = error.name === 'AbortError' ? '已停止生成，问题保留在输入框中。' : error.message;
-      retry.hidden=error.name==='AbortError';
-    } finally {
-      busy = false;newChat.disabled=false;drawConversations();currentRequest=null;progress.hidden=true;stop.hidden=true;send.hidden=false;
-      form.elements.message.disabled=false;profileForm.querySelector('fieldset').disabled=false;clearChat.disabled=false;profileToggle.disabled=false;form.removeAttribute('aria-busy');
-      container.querySelector('.study-composer').prepend(progress);resizeInput();
-      if (!context.signal.aborted && [document.body,stop,form.elements.message].includes(document.activeElement)) form.elements.message.focus({preventScroll:true});
-    }
+    if(generating()||archived||!configured||!form.reportValidity())return;
+    const message=input.value.trim();if(!message)return;
+    showHistory(false);focusChat(true);container.querySelector('.study-prompts').open=false;
+    try {chatSession.start(activeId,message,history.messages);}
+    catch(error) {errorNode.textContent=error.message;}
   };
   form.elements.message.addEventListener('keydown',event => sendOnEnter(event,form),{signal:context.signal});
   container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');resizeInput();container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
