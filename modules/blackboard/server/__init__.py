@@ -9,9 +9,19 @@ from .reader import BASE, checked, fetch
 _source = None
 
 
+class BlackboardSource(Source):
+    def snapshot(self):
+        value = super().snapshot()
+        # Existing cached nulls follow the same meaning as newly synced records.
+        for item in value['data']['assignments']:
+            if item.get('submitted') is None:
+                item['submitted'] = False
+        return value
+
+
 def create_router(context):
     global _source
-    _source = Source(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard")
+    _source = BlackboardSource(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard")
     router = _source.router()
 
     @router.get("/file")
