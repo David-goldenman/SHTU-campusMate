@@ -928,7 +928,16 @@
       "aliases": [
         "体育馆"
       ],
-      "source_url": "https://map.shanghaitech.edu.cn/?id=df290f76befc4c1eb3ba2cedb6c985c1typebuilding|22f2832a4e894959954f838da53632c1"
+      "source_url": "https://map.shanghaitech.edu.cn/?id=df290f76befc4c1eb3ba2cedb6c985c1typebuilding|22f2832a4e894959954f838da53632c1",
+      "walking_approach": {
+        "side": "west",
+        "label": "西侧入口附近",
+        "precision": "building_side",
+        "note": "西侧（地图左侧）有两个入口；右侧入口不常开。步行路线优先从西侧到达，具体门位以现场指引为准。",
+        "source_type": "user_feedback",
+        "source_label": "使用者反馈",
+        "reported_at": "2026-10-17"
+      }
     },
     {
       "id": "6b98ac6446604b2ea213ed8bf0a1e54b",

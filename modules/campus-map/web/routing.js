@@ -48,6 +48,9 @@ export function buildWalkingGraph(network) {
 export function snapPlace(graph,place,maxGap=60) {
   if(!place?.polygon?.length)return null;
   const polygon=place.polygon,center=polygon.reduce((a,p)=>[a[0]+p[0]/polygon.length,a[1]+p[1]/polygon.length],[0,0]);
+  const side=place.walking_approach?.side;
+  const west=Math.min(...polygon.map(p=>p[0])),east=Math.max(...polygon.map(p=>p[0]));
+  const south=Math.min(...polygon.map(p=>p[1])),north=Math.max(...polygon.map(p=>p[1]));
   let best;
   for(const edge of graph.edges) {
     const options=polygon.map(p=>projection(p,edge.p,edge.q));
@@ -56,6 +59,9 @@ export function snapPlace(graph,place,maxGap=60) {
       options.push({point,t,gap:Math.min(...gaps)});
     }
     for(const option of options) {
+      // A reported entrance side takes precedence over geometric proximity.
+      // This is an approach area, not a surveyed door coordinate; never fall back to the opposite side.
+      if(side==='west'&&option.point[0]>west||side==='east'&&option.point[0]<east||side==='north'&&option.point[1]<north||side==='south'&&option.point[1]>south)continue;
       // Official footprints and OSM roads are independently surveyed; do not draw across the building.
       if(inside(option.point,polygon)&&option.gap>.5)continue;
       const score=option.gap+distance(center,option.point)*.015;
