@@ -1,4 +1,5 @@
 import {link, time} from '/assets/campus.js';
+import {bindSyncNetwork} from '/assets/sync-network.js';
 import {applyLessonPositions, compareEvents, eventGroup, isLesson, lessonLayout, periodsFor} from './planner.js';
 
 const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',tutorial:'习题课',study:'学习',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
@@ -16,6 +17,9 @@ export async function mount(container, context) {
   let current = dayOf(Date.now()), snapshot, timer, request = 0, filter = 'all';
   const cleanup = () => {clearTimeout(timer);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
+  const networkHost = document.createElement('div');
+  networkHost.hidden = true;
+  const diagnose = bindSyncNetwork(networkHost,context,async () => {await context.api('/schedule/sync',{method:'POST'});await refresh();});
 
   function when(item) {
     if (item.all_day) return '全天';
@@ -64,6 +68,8 @@ export async function mount(container, context) {
     const header = cal.days.map((day,i) => `<th scope="col" class="${dayClass(day)}"><span>周${'一二三四五六日'[i]}</span><strong>${day.date.slice(5).replace('-',' / ')}</strong>${day.date === today ? '<em>今天</em>' : day.date === tomorrow ? '<em>明天</em>' : ''}</th>`).join('');
     container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div><div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div>${conflictNotice(cal.conflicts)}${weekView(cal,selected,dayClass,title,header)}<div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.undated ? '<p class="field-hint">另有 ' + snapshot.data.undated + ' 项未提供日期，可在作业页查看；确定的 Quiz、展示、活动和讲座可手动添加。</p>' : ''}${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
     applyLessonPositions(container);
+    container.prepend(networkHost);
+    diagnose.update(snapshot.network_failures || []);
     container.querySelectorAll('[data-shift]').forEach(button => button.onclick = act(button,async () => {current = shift(current,Number(button.dataset.shift));await refresh();}));
     container.querySelector('[data-today]').onclick = act(container.querySelector('[data-today]'),async () => {current = today;await refresh();});
     container.querySelector('[data-date]').onchange = event => {if (event.target.value) {current = event.target.value;void refresh().catch(error => context.ui.toast(error.message));}};
