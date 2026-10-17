@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-const catalog={items:['default','observatory','star-notes'].map(id=>({id,name:id,styles:[],views:{},backgrounds:{}}))};
+import {readFile} from 'node:fs/promises';
+const enabledEntry='data:text/javascript,'+encodeURIComponent('export const openingLines=true;');
+const catalog={items:['default','observatory','star-notes'].map(id=>({id,name:id,styles:[],views:{},backgrounds:{},...(id==='default'?{}:{entry:enabledEntry})}))};
 function environment(saved,blocked=false) {
   const data = new Map(saved ? [['campus.appearance.v1',JSON.stringify(saved)]] : []);
   globalThis.localStorage = {getItem:key=>{if(blocked)throw Error('blocked');return data.get(key)||null;},setItem:(key,value)=>{if(blocked)throw Error('blocked');data.set(key,value);}};
@@ -13,6 +15,7 @@ const data = environment({theme:'observatory',companions:{observatory:'female','
 const ui = await import('../web/themes/appearance.js?test=normal');
 await ui.initializeThemes(catalog);
 assert.equal(document.documentElement.dataset.theme,'observatory');
+assert.equal(document.documentElement.dataset.openingLines,'enabled');
 let events=0;
 window.addEventListener('campus:appearance',()=>events++);
 ui.setAppearance({theme:'star-notes'});
@@ -35,10 +38,12 @@ assert(reloaded,'Another tab selecting a theme reopens the current page');
 ui.setAppearance({theme:'future-theme'});
 assert(await ui.initializeThemes(catalog));
 assert.equal(document.documentElement.dataset.theme,'default');
+assert.equal(document.documentElement.dataset.openingLines,'hidden','Unavailable choices must not keep the previous theme opening lines');
 assert.equal(JSON.parse(data.get('campus.appearance.v1')).theme,'future-theme','Unavailable themes retain the saved choice');
 const custom={id:'future-theme',name:'Custom',styles:[],entry:'data:text/javascript,'+encodeURIComponent('export function renderSlot(name){if(name === "sample")return "sample markup";}'),views:{mail:'/assets/themes/future-theme/mail.js'},backgrounds:{}};
 await ui.initializeThemes({items:[...catalog.items,custom]});
 assert.equal(document.documentElement.dataset.theme,'future-theme');
+assert.equal(document.documentElement.dataset.openingLines,'hidden','Custom entries without opt-in stay hidden');
 assert.equal(ui.viewURL('mail'),custom.views.mail);
 assert.equal(ui.themeContext().renderSlot('sample',{}),'sample markup');
 assert.equal(ui.themeContext().renderSlot('missing',{},'original'),'original');
@@ -61,10 +66,29 @@ const ctx=ui.themeContext();ctx.savePreferences({...ctx.preferences(),rotation:{
 assert.equal(ui.getCampusPreferences('star-notes').rotation.seconds,60);
 assert.equal(ui.getCampusPreferences('observatory').rotation.seconds,10);
 assert.deepEqual(ui.getAppearance().options.arknights,{density:'compact'});
+// Entry opt-in belongs to the active theme, never a global saved preference.
+const minimal=id=>({id,name:id,styles:[],views:{},backgrounds:{}});
+const prts={...minimal('arknights'),entry:'data:text/javascript,'+encodeURIComponent('export const themeColor=()=>"#171b1e";')};
+const customTruthy={...minimal('custom-truthy'),entry:'data:text/javascript,'+encodeURIComponent('export const openingLines="true";')};
+const customEnabled={...minimal('custom-enabled'),entry:enabledEntry};
+const broken={...minimal('broken-theme'),entry:'data:text/javascript,'+encodeURIComponent('throw new Error("Synthetic missing theme entry");')};
+const gatedCatalog={items:[...catalog.items,prts,customTruthy,customEnabled,broken]};
+for(const [theme,expected] of [['default','hidden'],['observatory','enabled'],['arknights','hidden'],['custom-enabled','enabled'],['custom-truthy','hidden'],['star-notes','enabled'],['broken-theme','hidden']]){
+  ui.setAppearance({theme});await ui.initializeThemes(gatedCatalog);
+  assert.equal(document.documentElement.dataset.openingLines,expected,theme+' must apply its own opening-line gate');
+}
+assert.equal(document.documentElement.dataset.theme,'default','A failed entry uses Default and its closed gate');
+assert.equal(ui.getAppearance().theme,'broken-theme','Fallback must retain the unavailable choice');
+assert.deepEqual(ui.getAppearance().options.arknights,{density:'compact'},'Gate switching must not discard other theme preferences');
+const html=await readFile(new URL('../web/index.html',import.meta.url),'utf8');
+const openingCSS=await readFile(new URL('../web/opening-lines.css',import.meta.url),'utf8');
+assert.match(html,/<html[^>]+data-opening-lines="hidden"/,'Initial HTML must hide opening lines before themes load');
+assert.ok(openingCSS.includes(':root:not([data-opening-lines="enabled"]) :is(.opening-line,.study-opening-line) { display:none!important; }'),'The opt-out gate covers both responsive placements');
 environment(null,true);
 const fallback=await import('../web/themes/appearance.js?test=blocked');
 await fallback.initializeThemes(catalog);
 assert.equal(fallback.getAppearance().theme,'default');
+assert.equal(document.documentElement.dataset.openingLines,'hidden','Default without an entry stays hidden');
 assert.equal(fallback.setAppearance({theme:'star-notes'}),false);
 assert.equal(document.documentElement.dataset.theme,'default');
-console.log('appearance: default selection, remembered choices, theme views/slots, custom preferences, legacy companions, cross-tab sync and unavailable themes passed');
+console.log('appearance: default selection, remembered choices, theme views/slots, custom preferences, legacy companions, cross-tab sync, unavailable themes and explicit opening-line opt-in passed');

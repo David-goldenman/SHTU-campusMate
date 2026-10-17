@@ -20,7 +20,17 @@
 }
 ```
 
-只有 `id` 和 `name` 必填，`id` 与目录一致；当前接口版本为 1。`styles` 是有顺序的 CSS 列表；`preview` 是设置页预览。`entry` 可导出 `renderSlot(name, props)`，返回展示用 HTML；未实现的区域返回 `undefined`，使用模块原界面。当前区域为 `assistant.welcome`。主题可导出 `icon` 和 `themeColor(id)` 设置标记与浏览器颜色。
+只有 `id` 和 `name` 必填，`id` 与目录一致；当前接口版本为 1。`styles` 是有顺序的 CSS 列表；`preview` 是设置页预览。`entry` 可导出 `renderSlot(name, props)`，返回展示用 HTML；未实现的区域返回 `undefined`，使用模块原界面。各模块声明可替换区域，当前学习助手区域见下表。主题可导出 `icon` 和 `themeColor(id)` 设置标记与浏览器颜色。
+
+开场白默认隐藏。主题入口可主动导出 `export const openingLines = true`，启用顶部及聊天区原有短句；只有布尔值 `true` 生效。HTML 初始使用 `data-opening-lines="hidden"`，加载主题后由框架根据实际入口导出设置为 `enabled` 或 `hidden`，避免主题初始化时闪字。未导出此选项的 Default、PRTS、自定义及未来主题保持隐藏；主题缺失或加载失败回退时使用回退主题的选择。此选项属于入口导出，不增加清单字段。启用后沿用原桌面、聚焦及窄屏位置规则，不会同时强制显示两处短句。
+
+| 插槽与参数 | 展示范围 |
+| --- | --- |
+| `assistant.welcome` | 进入对话后的空记录欢迎区 |
+| `assistant.home({presets})` | 首页紧凑欢迎区，接收模块提供的常用问题列表 |
+| `assistant.footer({topic})` | 聊天输入区下方的中英双语短句；未实现时使用空字符串作为 fallback |
+
+插槽仍由学习助手模块声明并决定出现的场景，主题只负责展示。`topic` 为 `general / grades / deadlines / timetable / documents`，由模块在本机根据用户明确输入的文字分类；不从真实成绩或后台数据猜测话题。主题未实现的区域使用调用方指定的 fallback，不能替换模块的业务判断。
 
 `views` 以模块 ID 指定完整界面入口，`settings` 代表全局设置。`backgrounds` 用于常驻组件。入口统一导出 `mount(container, context)`，与原模块共用 API、模块启停及账号版本；只有可用模块才会加载对应视图。未指定的页面使用原界面。主题可以改变信息布局、组件结构、字体、色彩和交互组织，通用 UI helper 作为可选工具使用。
 
