@@ -132,6 +132,8 @@ def create_router(context):
 
 ## 校园数据模块
 
+来源可通过 `Source(..., network_target=共享认证目标)` 选择网络失败诊断；SDK 不选择具体业务目标。网络请求失败的 error/partial 快照附带 `network_failure:{id,target,kind,at,host?}`，重试启动或成功时清除；解析、登录和权限失败不携带该标记。标记按账号版本隔离，不保存原始异常或完整 URL。`Remote.network_error` 仅在内存保留最后一次重试仍失败的 RequestError，供 Source 识别局部失败。聚合页转发 `network_failures` 数组。共享 `sourcePanel` 自动显示，其他页面可用 `/assets/sync-network.js` 的 `bindSyncNetwork(host,context,retry?)`，调用返回对象的 `update(failures)`；同一故障去重，切页中止，恢复后清除。它通过 `context.services.auth.explainNetwork(failures)` 调用公开诊断 API；详见 [AUTH.md](AUTH.md)。结构化 HTTP 错误的 `detail.message` 显示为消息，原公开 detail 保存在前端 Error 的 `details`。
+
 公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。日期带时区，页面以 Asia/Shanghai 展示。
 
 时间表分类保持 `timetable` ID 与 `#timetable` 路由。`timetable` 模块的 `/snapshot`、`/sync` 提供教务上课数据；页面使用 `/schedule`、`/schedule/sync` 汇总 Blackboard、Gradescope 和教务考试。聚合只调用各模块公开 API，停用的来源退出时间表，账号变化时丢弃在途结果。数据格式见 [时间表接口](../modules/timetable/README.md)。

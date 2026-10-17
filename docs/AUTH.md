@@ -17,6 +17,10 @@ Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账�
 
 ### 网络检测
 
+教务、Blackboard、ELRC 同步遇到网络错误时，时间表、课程中心及来源页直接自动检测并显示原因、处理建议和重试入口。ELRC 的更新目录和逐课同步也显示同类提示；登录、权限和解析错误保留原有提示，不触发网络诊断。同步成功后清除旧故障提示，失败保留已有缓存。后台失败在页面读到新故障标记时诊断，不持续轮询网络。
+
+`POST /api/v1/auth/network/explain` 接收 `{failures:[{id,target,kind,at,host?}]}`（1–6 项），同样要求框架 CSRF。target 仅为 timetable/blackboard/elrc，kind 仅为 `dns_error/tls_error/timeout/proxy_error/protocol_error/configuration_error/connection_error`。返回 `{reports:[{failure_id,target,name,failed_at,checked_at,diagnosis,entry,vpn_guide}]}`；使用固定入口，不访问传入 host，只用它匹配已知学校入口。故障标记不含请求路径、参数、异常原文或账号信息。实际同步的 DNS/TLS/配置错误优先；当前入口可达时明确说明无法证明失败的资料接口恢复，不把单独代理对照失败当成本次直连同步失败的原因。新故障不复用早于故障发生时间的检测。
+
 设置 → 网络检测会在首次进入时检查统一认证、教务、Blackboard、ELRC 和邮箱入口，可在切换网络或连接 VPN 后重新检测。每个服务显示系统 DNS、工作台直连和已配置 HTTPS/ALL 代理的匿名对照结果；实际校园同步仍默认绕过普通代理。返回 401 表示服务已响应但需要登录，403 表示访问受限，5xx 表示网络已连通但服务响应异常，不把这些状态当成 VPN 未连接。
 
 无效代理配置可能在同步客户端初始化时阻止请求，即使匿名直连探测成功也应先修正配置。代理路径失败的同时返回 401 时保留登录提示；实际请求的 TLS/配置错误优先于独立 DNS 探测的超时，避免将已观察到的连接错误误判为 VPN 或 DNS 问题。

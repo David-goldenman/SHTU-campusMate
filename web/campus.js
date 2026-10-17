@@ -1,3 +1,5 @@
+import {bindSyncNetwork} from './sync-network.js';
+
 export function link(url, label, escape) {
   try {
     const target = new URL(url, location.origin);
@@ -19,6 +21,10 @@ export async function sourcePanel(container, context, render) {
   let timer;
   container.innerHTML = '<div class="campus-toolbar source-toolbar"><span data-status role="status"></span><div><a class="text-button" href="#settings" data-connect hidden>连接账号</a><button class="button button-secondary" data-sync type="button">同步</button></div></div><div data-issues role="status"></div><div data-content></div>';
   const button = container.querySelector('[data-sync]');
+  const networkHost = document.createElement('div');
+  networkHost.hidden = true;
+  container.querySelector('[data-issues]').after(networkHost);
+  const diagnose = bindSyncNetwork(networkHost,context,async () => {await context.api('/sync',{method:'POST'});await refresh();});
   const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'正在同步', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
   async function refresh() {
     clearTimeout(timer);
@@ -28,6 +34,7 @@ export async function sourcePanel(container, context, render) {
     container.querySelector('[data-connect]').hidden = !['not_connected','login_required','verification_required'].includes(snapshot.status);
     container.querySelector('[data-status]').textContent = (labels[snapshot.status] || snapshot.status) + (snapshot.updated_at ? ' · 上次成功同步 ' + time(snapshot.updated_at) : ' · 暂无成功同步记录');
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
+    diagnose.update(snapshot.network_failure ? [snapshot.network_failure] : snapshot.network_failures || []);
     await render(container.querySelector('[data-content]'), snapshot, context, refresh);
     if (snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
   }

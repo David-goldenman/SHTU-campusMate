@@ -25,7 +25,7 @@ class BlackboardSource(Source):
 
 def create_router(context):
     global _source
-    _source = BlackboardSource(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard")
+    _source = BlackboardSource(context, "ids", ["elearning.shanghaitech.edu.cn"], fetch, target="blackboard", network_target="blackboard")
     router = _source.router()
 
     @router.get("/file")

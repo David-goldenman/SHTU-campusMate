@@ -2,9 +2,11 @@
 import asyncio
 import threading
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from backend.services.campus.accounts import AccountCache
+from backend.services.auth.network import failure_context
 
 from .catalog import ELRC
 from .content import ContentLibrary, now
@@ -54,6 +56,10 @@ def create_router(context):
                 asyncio.run(ELRC(current.data_dir, client).discover_courses(body.semester))
             accounts.check(current)
             return offline.catalog(body.semester)
+        except httpx.RequestError as error:
+            accounts.check(current)
+            raise HTTPException(502, {"message": "ELRC 目录网络请求失败，已保留缓存。",
+                                      "network_failure": failure_context(error, "elrc")}) from None
         finally:
             lock.release()
 
@@ -93,11 +99,18 @@ def create_router(context):
             accounts.check(current)
             current.store.write("sync", {**state, "status": result["status"], "finished_at": now()})
             return result
-        except Exception:
-            current.store.write("sync", {**state, "status": "error", "message": "同步未完成，已缓存内容保留，可重试。"})
+        except Exception as error:
+            accounts.check(current)
+            failure = failure_context(error, "elrc")
+            failed = {**state, "status": "error", "message": "同步未完成，已缓存内容保留，可重试。"}
+            if failure:
+                failed["network_failure"] = failure
+            current.store.write("sync", failed)
             manifest = library.read(course_id)
             if manifest.get("status") == "syncing":
                 library.write(course_id, {**manifest, "status": "partial", "error": "同步中断，请重试。"})
+            if failure:
+                raise HTTPException(502, {"message": failed["message"], "network_failure": failure}) from None
             raise
         finally:
             lock.release()
