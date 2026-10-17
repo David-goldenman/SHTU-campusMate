@@ -63,6 +63,28 @@ class RequirementsCheck(unittest.TestCase):
             with self.subTest(requirement=requirement), self.assertRaises(RuntimeError):
                 check([requirement], {name: distribution(version)})
 
+    def test_comma_ranges_enforce_both_bounds(self):
+        for requirement, package, accepted, rejected in [
+            ("pillow>=11,<13", "pillow", ("11", "11.0.0", "12.4.1"), ("10.9", "13", "13.0.0", "14")),
+            ("pypdfium2>=5,<6", "pypdfium2", ("5", "5.8.0"), ("4.9", "6", "6.0.0")),
+        ]:
+            for version in accepted:
+                with self.subTest(requirement=requirement, version=version):
+                    check([requirement], {package: distribution(version)})
+            for version in rejected:
+                with self.subTest(requirement=requirement, version=version), self.assertRaisesRegex(RuntimeError, "缺少依赖或版本不符"):
+                    check([requirement], {package: distribution(version)})
+        check(["pillow>=11, <13"], {"pillow": distribution("12.0")})
+        check(["pillow>11,<=12"], {"pillow": distribution("12.0.0")})
+
+    def test_unknown_range_syntax_is_explicit(self):
+        for requirement in ("pillow~=11", "pillow>=11,!=12", "pillow>=11,", "pillow>=11,<13.*",
+                            "pillow>>11", "pillow===12", "pillow>=11rc1,<13"):
+            with self.subTest(requirement=requirement), self.assertRaisesRegex(RuntimeError, "依赖声明已变化"):
+                check([requirement], {"pillow": distribution("12")})
+        with self.assertRaisesRegex(RuntimeError, "缺少依赖或版本不符"):
+            check(["pillow>=11,<13"], {"pillow": distribution("11rc1")})
+
     def test_windows_dependency_marker(self):
         requirement = "tzdata>=2025.2; sys_platform == 'win32'"
         with patch.object(launcher.sys, "platform", "win32"):

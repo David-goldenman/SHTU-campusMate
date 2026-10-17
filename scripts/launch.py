@@ -139,6 +139,17 @@ def timezone_environment():
     raise RuntimeError("当前环境缺少 IANA 时区数据，请自行补装 tzdata；启动器不会下载。")
 
 
+
+def release_version(value):
+    """Compare the numeric release ranges declared by this project."""
+    if not re.fullmatch(r"\d+(?:\.\d+)*", value):
+        return None
+    parts = tuple(int(part) for part in value.split("."))
+    while len(parts) > 1 and parts[-1] == 0:
+        parts = parts[:-1]
+    return parts
+
+
 def check_runtime():
     if sys.version_info < (3, 12):
         raise RuntimeError("需要已有的 Python 3.12 或以上版本。")
@@ -162,8 +173,15 @@ def check_runtime():
                     missing.append("socksio==1.* (httpx[socks])")
             except importlib.metadata.PackageNotFoundError:
                 missing.append("socksio==1.* (httpx[socks])")
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)(>=|==)([^ ,;]+)", requirement)
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)((?:>=|<=|==|>|<).+)", requirement)
         git = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*@\s*git\+(https://[^\s#]+)@([a-fA-F0-9]{40})", requirement)
+        bounds = []
+        if match:
+            for clause in match[2].split(","):
+                bound = re.fullmatch(r"(>=|<=|==|>|<)\s*(\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?)", clause.strip())
+                if not bound or (bound[1] != "==" and release_version(bound[2]) is None):
+                    raise RuntimeError("依赖声明已变化，请维护者更新启动检查：" + requirement)
+                bounds.append(bound.groups())
         if not match and not git:
             raise RuntimeError("依赖声明已变化，请维护者更新启动检查：" + requirement)
         package = (match or git)[1]
@@ -184,11 +202,22 @@ def check_runtime():
             if not matches_source:
                 missing.append(requirement)
             continue
-        _, operator, expected = match.groups()
         installed = distribution.version
-        version = lambda text: tuple(int(part) for part in re.match(r"\d+(?:\.\d+)*", text)[0].split("."))
-        if operator == "==" and installed != expected or operator == ">=" and version(installed) < version(expected):
-            missing.append(requirement)
+        installed_release = release_version(installed)
+        for operator, expected in bounds:
+            if operator == "==":
+                satisfies = installed == expected
+            elif installed_release is None:
+                satisfies = False
+            else:
+                expected_release = release_version(expected)
+                satisfies = {">=": installed_release >= expected_release,
+                             "<=": installed_release <= expected_release,
+                             ">": installed_release > expected_release,
+                             "<": installed_release < expected_release}[operator]
+            if not satisfies:
+                missing.append(requirement)
+                break
     if missing:
         raise RuntimeError(
             "当前环境缺少依赖或版本不符：\n  " + "\n  ".join(missing) +
