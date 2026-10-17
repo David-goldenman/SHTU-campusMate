@@ -16,7 +16,7 @@
 .week-planner .calendar-table { width:100%; table-layout:fixed; border-collapse:collapse; }
 .week-planner .calendar-table th,.week-planner .calendar-table td { border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
 .week-planner .calendar-table thead th { padding:14px 5px; font-size:13px; font-weight:500; background:var(--surface); }
-.week-planner .calendar-table th:first-child { width:57px; }
+.week-planner .calendar-table th:first-child { width:76px; }
 .week-planner .calendar-table tbody th { font-size:12px; font-weight:500; color:var(--muted); padding:14px 5px; }
 .week-planner .calendar-table tbody td { padding:6px; vertical-align:top; height:88px; }
 .week-planner .calendar-table tr:last-child>* { border-bottom:0; }
@@ -44,12 +44,28 @@
 .planner-event-form textarea { min-height:80px; }
 .planner-form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .calendar-mobile { display:none; }
+.week-planner .planner-section-title { font-size:17px; margin:20px 0 10px; }
+.week-planner .planner-empty { padding:20px; background:var(--surface); color:var(--muted); border-radius:8px; }
+.week-planner .lesson-table { min-width:1000px; }
+.week-planner .lesson-table tbody th,.week-planner .lesson-table tbody td { padding:0; }
+.week-planner .lesson-periods,.week-planner .lesson-day { display:grid; grid-template-rows:repeat(var(--period-count),56px); }
+.week-planner .lesson-day { grid-template-columns:repeat(var(--lesson-lanes),minmax(0,1fr)); background:repeating-linear-gradient(to bottom,transparent 0,transparent 55px,var(--border) 55px,var(--border) 56px); }
+.week-planner .lesson-period { display:flex; flex-direction:column; justify-content:center; border-bottom:1px solid var(--border); line-height:1.25; }
+.week-planner .lesson-period:last-child { border-bottom:0; }
+.week-planner .lesson-table .lesson-period strong { font-size:12px; font-weight:500; }
+.week-planner .lesson-period span { font-size:10px; color:var(--muted); margin-top:3px; }
+.week-planner .lesson-block { min-height:0; min-width:0; padding:3px; }
+.week-planner .lesson-block .calendar-event { display:flex; flex-direction:column; align-items:stretch; height:100%; min-height:0; margin:0; padding:6px; overflow:auto; }
+.week-planner .lesson-block .calendar-event>* { flex-shrink:0; }
+.week-planner .lesson-block .calendar-event strong { order:-1; margin:0 0 2px; line-height:1.4; }
+.week-planner .lesson-block .calendar-event span { font-size:11px; line-height:1.35; }
 @media (min-width:761px) and (max-width:1150px) { .week-planner .calendar-table { min-width:830px; } }
 @media (max-width:760px) {
-  .week-planner .calendar-table-wrap { display:none; }
+  .week-planner .calendar-desktop { display:none; }
   .week-planner .calendar-mobile { display:grid; gap:12px; }
   .week-planner .calendar-mobile section { padding:14px; border:1px solid var(--border); border-radius:8px; }
   .week-planner .calendar-mobile h3 { font-size:16px; margin-bottom:12px; }
+  .week-planner .calendar-mobile h4 { font-size:12px; color:var(--muted); font-weight:500; margin:14px 0 7px; }
   .week-planner .calendar-mobile section>p { font-size:14px; color:var(--muted); }
   .week-planner .calendar-event strong { font-size:15px; }
   .week-planner .calendar-event span { font-size:13px; }

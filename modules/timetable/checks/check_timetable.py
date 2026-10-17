@@ -1,4 +1,7 @@
 import asyncio
+import copy
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -28,12 +31,40 @@ item = result["timetable"][0]
 assert (item["weekday"], item["period_start"], item["period_end"], item["weeks"], item["teacher"]) == (2, 5, 6, [1, 2], "合成教师")
 clock_html = html + '<table><tr><td>第一节<br>8:15 - 9:00</td><td id="TD0_0"></td></tr></table>'
 assert parse(clock_html, '合成学期')['metadata']['periods'] == [{'period': 1, 'start': '08:15', 'end': '09:00'}]
+partial_clock = html + '''<table>
+<tr><td>第一节（未公布时间）</td><td id="TD0_0"></td></tr>
+<tr><th>第二节 9：10 - 9：55</th><td id="TD0_1"></td></tr>
+<tr><td>第三节 25:00 - 26:00</td><td id="TD0_2"></td></tr>
+<tr><td>第四节 11:10 - 11:55</td><td id="TD0_3"></td></tr></table>'''
+assert parse(partial_clock, '合成学期')['metadata']['periods'] == [
+    {'period': 2, 'start': '09:10', 'end': '09:55'}, {'period': 4, 'start': '11:10', 'end': '11:55'}]
+assert parse('<table><tr><td>' + partial_clock + '</td></tr></table>', '合成学期')['metadata']['periods'] == parse(partial_clock, '合成学期')['metadata']['periods']
 calendar_parser = module.SchoolCalendar.refresh.__globals__['parse']
 official_terms = calendar_parser('秋 学 期 （2026．9．14—2027．1．17）10月28日校运动会，全校停课。春学期（2027.2.15-2027.6.20）暑学期（2027.6.21-2027.7.18）')
 assert official_terms['2026-fall']['week_one'] == '2026-09-14'
 assert official_terms['2026-fall']['closures'] == [{'date': '2026-10-28', 'title': '校运动会（全校停课）'}]
 assert official_terms['2026-spring']['week_one'] == '2027-02-15'
 from datetime import date
+legacy = {'metadata': {'units': 13}, 'timetable': [
+    {**item, 'id': 'a-evening', 'period_start': 10, 'period_end': 11},
+    {**item, 'id': 'z-morning', 'period_start': 3, 'period_end': 4},
+    {**item, 'id': 'b-afternoon', 'period_start': 7, 'period_end': 8}], 'events': [
+        {'id': 'earlier', 'event_type': 'activity', 'at': '2026-10-20T09:00:00+09:00'},
+        {'id': 'later', 'event_type': 'activity', 'at': '2026-10-20T08:30:00+08:00'}]}
+original = copy.deepcopy(legacy)
+legacy_week = module.calendar(legacy, date(2026, 10, 19), '2026-10-19')
+assert [row['period'] for row in legacy_week['periods']] == list(range(1, 14))
+assert all(row['start'] is None and row['end'] is None for row in legacy_week['periods'])
+assert [row['id'].split(':')[0] for row in legacy_week['days'][1]['events']] == ['z-morning', 'b-afternoon', 'a-evening', 'earlier', 'later']
+assert all(row['at'] is None for row in legacy_week['days'][1]['events'][:3])
+assert legacy == original, 'Reading a legacy snapshot must not overwrite saved data'
+legacy['metadata']['periods'] = [{'period': 3, 'start': '10:15', 'end': '11:00'}, {'period': 4, 'start': '11:10', 'end': '11:55'}]
+recovered = module.calendar(legacy, date(2026, 10, 19), '2026-10-19')['days'][1]['events']
+assert recovered[0]['at'] == '2026-10-20T10:15:00+08:00' and recovered[0]['ends_at'] == '2026-10-20T11:55:00+08:00'
+assert recovered[1]['at'] is None, 'Missing period clocks must not use another lesson clock'
+legacy['metadata']['periods'] = []
+assert module.calendar(legacy, date(2026, 10, 19), '2026-10-19')['periods'] == legacy_week['periods']
+subprocess.run([shutil.which('node') or shutil.which('node.exe'), str(Path(__file__).with_name('check_planner.mjs'))], check=True)
 dated = {'metadata': {'periods': [{'period': 5, 'start': '13:00', 'end': '13:45'}, {'period': 6, 'start': '13:50', 'end': '14:35'}]},
          'timetable': [{**item, 'weekday': 3, 'weeks': [7]}], 'events': []}
 open_day = module.calendar(dated, date(2026, 10, 26), '2026-09-14')['days'][2]

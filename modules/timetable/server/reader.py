@@ -1,7 +1,7 @@
 import ast
 import json
 import re
-from datetime import date
+from datetime import date, time
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -84,12 +84,23 @@ def parse(html, term):
     activities = list(re.finditer(r"\bactivity\s*=\s*new\s+TaskActivity\s*\(", script))
     result = {"courses": list(courses.values()), "timetable": [], "metadata": {"semester": term, "week_count": end, "units": units}}
     periods = []
-    for row in soup.select('tr'):
-        cell = row.find('td')
-        if cell and row.select_one('td[id^="TD"]'):
-            times = re.findall(r'\b(\d{1,2}:\d{2})\b', cell.get_text(' ', strip=True))
-            if len(times) == 2:
-                periods.append({'period': len(periods) + 1, 'start': times[0].zfill(5), 'end': times[1].zfill(5)})
+    rows = [row for row in soup.select('tr') if any(str(cell.get('id', '')).startswith('TD')
+            for cell in row.find_all('td', recursive=False))]
+    for number, row in enumerate(rows, 1):
+        # Count every lesson row, including a row whose time is missing.
+        labels = []
+        for cell in row.find_all(['th', 'td'], recursive=False):
+            if str(cell.get('id', '')).startswith('TD'):
+                break
+            labels.append(cell.get_text(' ', strip=True))
+        times = re.findall(r'\b(\d{1,2}:\d{2})\b', ' '.join(labels).replace('：', ':'))
+        if len(times) == 2:
+            try:
+                start_time, end_time = (time.fromisoformat(value.zfill(5)) for value in times)
+            except ValueError:
+                continue
+            if start_time < end_time:
+                periods.append({'period': number, 'start': start_time.strftime('%H:%M'), 'end': end_time.strftime('%H:%M')})
     result['metadata']['periods'] = periods
     for number, match in enumerate(activities):
         fields, position = js_arguments(script, match.end())

@@ -1,6 +1,6 @@
 # 时间表
 
-`timetable` 页面采用每周七天表格，按上午、下午、晚上、截止事项与其他事项分行，标注今天与明天。移动端显示逐日安排。课程卡片展示该次上课时间和地点；点击查看详情。时间表整合教务课程、Blackboard／Gradescope 的作业与 Quiz 截止、教务考试，以及用户添加的 Quiz、展示、活动和讲座。来源中的 Quiz 时间仍按其截止时刻解释；用户可为实际开始时刻另建安排。
+`timetable` 页面采用每周七天课程表，纵轴为教务节次，课程跨越其实际节数；同一节次的重叠课程并列显示。钟点可用时显示在节次旁，旧缓存只有节次时仍立即正确排列，不编造钟点，也不把课程放进“其他”。定时安排、截止事项、全天与时间待定事项在独立周表分行显示，各行按实际时间排序。移动端显示逐日安排，课程按节次排列，其他事项按类型和时间排列。页面标注今天与明天，课程卡片展示节次、可用钟点和地点；点击查看详情。时间表整合教务课程、Blackboard／Gradescope 的作业与 Quiz 截止、教务考试，以及用户添加的 Quiz、展示、活动和讲座。来源中的 Quiz 时间仍按其截止时刻解释；用户可为实际开始时刻另建安排。
 
 前缀为 `/api/v1/modules/timetable`。
 
@@ -16,7 +16,7 @@
 | `GET /events`、`POST /events` | 查询与创建个人安排，创建返回 201 |
 | `PUT /events/{id}`、`DELETE /events/{id}` | 修改与删除自己添加的安排 |
 
-`/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/teaching_week/days`；每个 day 为 `{date,events}`，其中已按教学周展开的课程使用 `event_type:class`。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。考试仅公布日期时明确标注时间待公布。
+`/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
 个人安排请求为 `{title,event_type,starts_at,ends_at?,course_title?,location?,notes?}`，时间必须含时区，结束晚于开始；类型限 `quiz/presentation/activity/lecture`。安排按 IDS 账号版本隔离。课程与来源事项通过对应模块维护；本模块只编辑个人安排。
 
