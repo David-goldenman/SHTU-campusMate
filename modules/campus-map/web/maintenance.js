@@ -1,10 +1,10 @@
 import {today,shiftDay,buildingLabel} from './locations.js';
 import {conditionPhase,phaseLabels,conditionHitsEdge,conditionPlaceIds} from './conditions.js';
 
-const sourceLabels={official:'校方通知',onsite:'现场核实',report:'使用者线索'};
-export function createMaintenance({context,host,statusHost,data,graph,getDay,onUpdate,focusMap,redraw}) {
+const sourceLabels={official:'校方通知',onsite:'现场核实',report:'使用者线索',mail:'校园邮件（人工核实）'};
+export function createMaintenance({context,host,statusHost,data,graph,getDay,onUpdate,focusMap,redraw,onSaved}) {
   const e=context.ui.escape,on=(node,type,fn)=>node.addEventListener(type,fn,{signal:context.signal});
-  let snapshot,ready=false,loading=false,busy=false,draft,editing,mode,corner,showRetired=false,message='',controller,ticket=0;
+  let snapshot,ready=false,loading=false,busy=false,draft,editing,mode,corner,review,showRetired=false,discovered=0,message='',controller,ticket=0;
   context.signal.addEventListener('abort',()=>controller?.abort(),{once:true});
   const place=id=>data.buildings.find(b=>b.id===id);
   const fields=['title','state','effect','scope','place_id','edge_keys','bounds','starts_on','expected_end','review_on','source_kind','source_title','source_date','source_url','note'];
@@ -16,18 +16,20 @@ export function createMaintenance({context,host,statusHost,data,graph,getDay,onU
     const rows=snapshot.items.map(item=>({item,phase:conditionPhase(item,getDay())}));
     const confirmed=rows.filter(r=>['confirmed','review_due'].includes(r.phase)&&r.item.effect==='blocked').length;
     const pending=rows.filter(r=>r.phase.startsWith('pending')).length,due=rows.filter(r=>r.phase.endsWith('due')).length;
-    statusHost.innerHTML=`<p><strong>通行信息 · ${e(getDay())}</strong><span>已确认限制 ${confirmed} · 待核实 ${pending}${due?' · 需复核 '+due:''}</span><button type="button" data-condition-open>维护 / 复核 ↗</button></p><small>依据已收录信息规划；没有记录不代表已确认畅通。</small>`;
+    statusHost.innerHTML=`<p><strong>通行信息 · ${e(getDay())}</strong><span>已确认限制 ${confirmed} · 待核实 ${pending}${due?' · 需复核 '+due:''}${discovered?' · 新发现待阅 '+discovered:''}</span><button type="button" data-condition-open>维护 / 复核 ↗</button></p><small>依据已收录信息规划；没有记录不代表已确认畅通。</small>`;
   }
   function editor() {
     if(!draft)return '<button class="button" type="button" data-condition-new>＋ 记录施工或通行情况</button>';
+    const reviewHeader=review?`<section class="map-review-lead"><strong>核实自动发现：${e(review.lead.title)}</strong><blockquote>${e(review.lead.evidence)}</blockquote><p>请阅读原文，核对行人影响、具体范围与生效日期；这里的选择由你确认。</p>${`<label>${review.lead.action==='reopening'?'关联要恢复的已确认限制':'关联现有维护记录（可选）'}<select aria-label="关联现有维护记录" data-review-target><option value="">${review.lead.action==='reopening'?'请选择待解除的限制':'创建新的维护记录'}</option>${snapshot.items.filter(i=>i.state==='confirmed'||(review.lead.action!=='reopening'&&i.state==='pending')).map(i=>`<option value="${e(i.id)}"${i.id===editing?' selected':''}>${e(i.title)} · ${e(targetLabel(i))}</option>`).join('')}</select></label>`}</section>`:'';
+    if(review?.lead.action==='reopening'&&!editing)return reviewHeader+'<p class="map-condition-hint">选择已确认的限制后，再核实恢复依据。没有对应限制时可以保留线索或忽略。</p><button type="button" data-condition-cancel>取消核实</button>';
     const impacts=draft.scope==='place'?0:graph.edges.filter(edge=>conditionHitsEdge(draft,edge)).length;
     const affectedPlaces=conditionPlaceIds(draft,data.buildings).length;
     const input=(name,label,type='text',extra='')=>`<label>${label}<input name="${name}" type="${type}" value="${e(draft[name]||'')}" ${extra}></label>`;
-    return `<form data-condition-form><fieldset ${busy?'disabled':''}><legend>${editing?'编辑 / 复核记录':'新增通行记录'}</legend><div class="map-condition-fields">${input('title','标题','text','required maxlength="80"')}<label>状态<select aria-label="状态" name="state">${selectOptions({pending:'待核实线索',confirmed:'已确认限制',resolved:'已确认恢复',withdrawn:'撤回错误记录'},draft.state)}</select></label><label>步行影响<select aria-label="步行影响" name="effect">${selectOptions({blocked:'封闭 / 不能步行通行',caution:'提醒注意，仍可通行'},draft.effect)}</select></label><label>影响范围<select aria-label="影响范围" name="scope">${selectOptions({place:'校门或建筑',edges:'地图选择路段',area:'地图圈选区域'},draft.scope)}</select></label></div>
+    return `${reviewHeader}<form data-condition-form><fieldset ${busy?'disabled':''}><legend>${editing?'编辑 / 复核记录':'新增通行记录'}</legend><div class="map-condition-fields">${input('title','标题','text','required maxlength="80"')}<label>状态<select aria-label="状态" name="state">${selectOptions({pending:'待核实线索',confirmed:'已确认限制',resolved:'已确认恢复',withdrawn:'撤回错误记录'},draft.state)}</select></label><label>步行影响<select aria-label="步行影响" name="effect">${selectOptions({blocked:'封闭 / 不能步行通行',caution:'提醒注意，仍可通行'},draft.effect)}</select></label><label>影响范围<select aria-label="影响范围" name="scope">${selectOptions({place:'校门或建筑',edges:'地图选择路段',area:'地图圈选区域'},draft.scope)}</select></label></div>
       ${draft.scope==='place'?`<label>选择校门 / 建筑<select aria-label="选择校门 / 建筑" name="place_id" required><option value="">请选择</option>${data.buildings.map(b=>`<option value="${e(b.id)}"${b.id===draft.place_id?' selected':''}>${e(buildingLabel(b))}</option>`).join('')}</select></label><p class="map-condition-hint">限制该地点作为起终点；周边道路施工请选路段或圈选区域。</p>`:`<div class="map-condition-pick"><button type="button" data-condition-pick>${draft.scope==='edges'?'在地图选择路段':'在地图圈选区域'}</button><button type="button" data-condition-finish>结束选取</button><button type="button" data-condition-clear-target>清空范围</button><span>${draft.scope==='edges'?`已选 ${draft.edge_keys.length} 段道路`:draft.bounds.length?'已圈选区域':'尚未圈选'} · 影响 ${impacts} 段道路 / ${affectedPlaces} 处地点</span></div>`}
       <p class="map-condition-hint">${mode==='edges'?'点选地图中的道路，可再次点击取消；完成后点“结束选取”。':mode==='area'?(corner?'再点选矩形范围的另一角。':'在地图点击施工范围的两个对角点。'):'保存后才会影响路线。只记录对行人的影响，不把机动车管制当作步行封闭。'}</p>
       <div class="map-condition-fields">${input('starts_on','开始日期','date','required')}${input('expected_end','预计结束（可空）','date')}${input('review_on','下次复核日期','date','required')}<label>依据类型<select aria-label="依据类型" name="source_kind">${selectOptions(sourceLabels,draft.source_kind)}</select></label>${input('source_title','通知标题 / 核实说明','text','required maxlength="160"')}${input('source_date','来源日期','date','required')}${input('source_url','原文链接（校方通知必填）','url','maxlength="1500"')}</div>
-      <label>位置、行人影响与复核依据<textarea aria-label="位置、行人影响与复核依据" name="note" rows="3" maxlength="800" required>${e(draft.note)}</textarea></label><p class="map-condition-hint">预计结束日不会自动解除已确认封闭；确认恢复时填写新的现场或通知依据。</p><div class="map-condition-actions"><button class="button" type="submit">${busy?'正在保存…':'保存记录'}</button><button type="button" data-condition-cancel>取消编辑</button></div></fieldset></form>`;
+      <label>位置、行人影响与复核依据<textarea aria-label="位置、行人影响与复核依据" name="note" rows="3" maxlength="800" required>${e(draft.note)}</textarea></label><p class="map-condition-hint">预计结束日不会自动解除已确认封闭；确认恢复时填写新的现场或通知依据。</p>${review?`<label class="map-review-confirm"><input type="checkbox" data-review-confirm required ${review.confirmed?'checked':''}>我已阅读原文，并核实位置、日期及对行人的影响</label>`:''}<div class="map-condition-actions"><button class="button" type="submit">${busy?'正在保存…':review?'确认并应用到路线':'保存记录'}</button><button type="button" data-condition-cancel>取消编辑</button></div></fieldset></form>`;
   }
   function render() {
     status();
@@ -37,7 +39,8 @@ export function createMaintenance({context,host,statusHost,data,graph,getDay,onU
       return `<article class="map-condition-item is-${color}"><div><strong>${e(item.title)}</strong><span>${e(phase==='review_due'&&item.effect==='caution'?'需复核 · 保持提醒':phaseLabels[phase])}</span></div><p>${e(targetLabel(item))} · ${item.effect==='blocked'?(item.state==='pending'?'疑似步行限制':'步行限制'):'通行提醒'} · 开始 ${e(item.starts_on)} · 复核 ${e(item.review_on)}${item.expected_end?' · 预计结束 '+e(item.expected_end):''}</p><p>${e(item.note)}</p><small>${e(sourceLabels[item.source_kind])} · ${e(item.source_title)} · ${e(item.source_date)}${item.source_url?` · <a href="${e(item.source_url)}" target="_blank" rel="noopener noreferrer">查看原文 ↗</a>`:''}</small><button type="button" data-condition-edit="${e(item.id)}" ${busy?'disabled':''}>编辑 / 复核</button></article>`;
     }).join('')||'<p>暂无通行记录；这不代表校园各处已经核实开放。</p>'}</div><details class="map-condition-history"><summary>修改记录（最近 ${snapshot?.history.length||0} 次，最多保留 200 次）</summary><ol>${(snapshot?.history||[]).map(h=>`<li>${e(h.at.slice(0,16).replace('T',' '))} · ${e(h.action)} · ${e(h.title)}</li>`).join('')}</ol></details>`;
   }
-  async function load() {
+  async function load(reset=false) {
+    if(reset){draft=editing=mode=corner=review=undefined;snapshot=undefined;}
     controller?.abort();controller=new AbortController();const current=++ticket;loading=true;ready=false;render();onUpdate();
     try {const value=await context.api('/conditions',{signal:controller.signal});if(context.signal.aborted||current!==ticket)return;snapshot=value;ready=true;message=draft?'记录已刷新，当前表单已保留；请对照新记录确认后再保存。':'';}
     catch(error){if(context.signal.aborted||current!==ticket)return;message=error.message||'维护记录读取失败。';}
@@ -46,20 +49,20 @@ export function createMaintenance({context,host,statusHost,data,graph,getDay,onU
   async function write(path,method,item) {
     if(!ready||busy)return;busy=true;message='';render();
     try {
-      const value=await context.api(path,{method,body:{version:snapshot.version,account_revision:snapshot.account_revision,...(item?{item}:{})}});
-      if(context.signal.aborted)return;snapshot=value;draft=editing=mode=corner=undefined;message='已保存，路线已按最新通行记录更新。';
+      const value=await context.api(path,{method,body:{version:snapshot.version,account_revision:snapshot.account_revision,...(item?{item}:{}),...(item&&review?{discovery_id:review.lead.id,discovery_account:review.account,evidence_confirmed:review.confirmed}:{})}});
+      if(context.signal.aborted)return;snapshot=value;draft=editing=mode=corner=review=undefined;message='已保存，路线已按最新通行记录更新。';onSaved?.();
     } catch(error){if(context.signal.aborted)return;message=(error.message||'保存失败。')+' 当前表单已保留；版本冲突时请先刷新记录。';}
     if(context.signal.aborted)return;busy=false;render();onUpdate();
   }
   function finish() {mode=corner=undefined;render();redraw();host.querySelector('form')?.scrollIntoView({block:'start'});}
-  function open() {host.closest('details').open=true;host.scrollIntoView({block:'start'});}
+  function open() {host.closest('details').open=true;host.closest('details').scrollIntoView({block:'start'});}
   async function click(event) {
     const button=event.target.closest('button');if(!button)return;
     if(button.hasAttribute('data-condition-open'))open();
     if(button.hasAttribute('data-condition-reload'))void load();
-    if(button.hasAttribute('data-condition-new')){draft=newDraft();editing=mode=corner=undefined;message='';render();}
-    if(button.dataset.conditionEdit){const item=snapshot.items.find(i=>i.id===button.dataset.conditionEdit);draft=Object.fromEntries(fields.map(key=>[key,structuredClone(item[key])]));editing=item.id;mode=corner=undefined;message='';render();host.querySelector('form').scrollIntoView({block:'start'});}
-    if(button.hasAttribute('data-condition-cancel')){draft=editing=mode=corner=undefined;message='';render();redraw();}
+    if(button.hasAttribute('data-condition-new')){draft=newDraft();editing=mode=corner=review=undefined;message='';render();}
+    if(button.dataset.conditionEdit){const item=snapshot.items.find(i=>i.id===button.dataset.conditionEdit);draft=Object.fromEntries(fields.map(key=>[key,structuredClone(item[key])]));editing=item.id;mode=corner=review=undefined;message='';render();host.querySelector('form').scrollIntoView({block:'start'});}
+    if(button.hasAttribute('data-condition-cancel')){draft=editing=mode=corner=review=undefined;message='';render();redraw();}
     if(button.hasAttribute('data-condition-pick')&&draft){mode=draft.scope;corner=undefined;if(mode==='area')draft.bounds=[];render();redraw();focusMap();}
     if(button.hasAttribute('data-condition-finish'))finish();
     if(button.hasAttribute('data-condition-clear-target')&&draft){draft.edge_keys=[];draft.bounds=[];corner=undefined;render();redraw();}
@@ -71,6 +74,8 @@ export function createMaintenance({context,host,statusHost,data,graph,getDay,onU
     draft[field]=field==='expected_end'?(event.target.value||null):event.target.value;
   });
   on(host,'change',event=>{
+    if(event.target.hasAttribute('data-review-confirm')&&review){review.confirmed=event.target.checked;return;}
+    if(event.target.hasAttribute('data-review-target')&&review){prepareReview(event.target.value);render();return;}
     if(event.target.hasAttribute('data-condition-retired')){showRetired=event.target.checked;render();return;}
     if(!draft)return;
     if(event.target.name==='scope'){draft.scope=event.target.value;draft.place_id='';draft.edge_keys=[];draft.bounds=[];mode=corner=undefined;render();redraw();}
@@ -96,6 +101,22 @@ export function createMaintenance({context,host,statusHost,data,graph,getDay,onU
     if(corner){const [x,y]=projection.point(corner);html+=`<circle class="map-condition-corner" cx="${x}" cy="${y}" r="6"/>`;}
     return html;
   }
+  function prepareReview(target='') {
+    const lead=review.lead,base=snapshot.items.find(i=>i.id===target&&(i.state==='confirmed'||(review.lead.action!=='reopening'&&i.state==='pending')));
+    editing=base?.id;mode=corner=undefined;review.confirmed=false;
+    draft=base?Object.fromEntries(fields.map(key=>[key,structuredClone(base[key])])):newDraft();
+    Object.assign(draft,{title:base?.title||lead.title,state:lead.action==='reopening'?'resolved':'confirmed',
+      effect:base?.effect||(lead.action==='caution'?'caution':'blocked'),starts_on:base?.starts_on||'',
+      source_kind:lead.source==='mail'?'mail':'official',source_title:lead.source_title,
+      source_date:lead.date_unknown?'':lead.source_date,source_url:lead.source_url,note:lead.evidence,
+      review_on:shiftDay(today(),7)});
+    if(!base&&lead.place_ids.length===1)draft.place_id=lead.place_ids[0];
+  }
+  async function reviewLead(lead,account) {
+    await load(true);if(!ready||context.signal.aborted)return;
+    if(snapshot.account_revision!==account){message='账号已变化，请刷新自动发现列表。';render();return;}
+    review={lead,account,confirmed:false};prepareReview();message='请核对原文并补全生效日期、实际范围。';render();open();host.scrollIntoView({block:'start'});
+  }
   render();
-  return {load,render,status,overlay,mapClick,open,finish,get mode(){return mode;},get ready(){return ready;},get snapshot(){return snapshot;}};
+  return {setDiscovered(count){discovered=count;status();},load,render,status,overlay,mapClick,open,finish,reviewLead,get mode(){return mode;},get ready(){return ready;},get snapshot(){return snapshot;}};
 }

@@ -7,6 +7,9 @@ from fastapi import APIRouter, HTTPException
 
 from backend.services.campus.analysis import account_revision
 from .conditions import create_conditions_router
+from .discovery import Discovery
+
+_discovery = None
 
 ZONE = ZoneInfo('Asia/Shanghai')
 FIELDS = ('id', 'title', 'course_title', 'event_type', 'source', 'start_time', 'at', 'starts_at', 'ends_at',
@@ -14,12 +17,15 @@ FIELDS = ('id', 'title', 'course_title', 'event_type', 'source', 'start_time', '
 
 
 def create_router(context):
+    global _discovery
     router = APIRouter()
     places = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'places.json').read_text(encoding='utf-8'))
     places['basemap'] = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'osm-basemap.json').read_text(encoding='utf-8'))
     walking = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'walking-network.json').read_text(encoding='utf-8'))
     leads = json.loads((Path(__file__).resolve().parents[1] / 'data' / 'condition-leads.json').read_text(encoding='utf-8'))
-    router.include_router(create_conditions_router(context, places, walking, leads))
+    _discovery = Discovery(context, places)
+    router.include_router(create_conditions_router(context, places, walking, leads, _discovery))
+    router.include_router(_discovery.router())
 
     @router.get('/places')
     def public_places():
@@ -50,3 +56,13 @@ def create_router(context):
                 'week_one': calendar.get('week_one')}
 
     return router
+
+
+def start(context):
+    if _discovery:
+        _discovery.start()
+
+
+def stop(context):
+    if _discovery:
+        _discovery.close()

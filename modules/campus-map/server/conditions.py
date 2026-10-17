@@ -1,4 +1,4 @@
-"""Account-scoped, versioned local road-condition maintenance; no background jobs."""
+"""Versioned condition maintenance. Discovery cannot activate conditions by itself."""
 from copy import deepcopy
 from datetime import date, datetime
 from threading import RLock
@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.services.campus.accounts import AccountCache
+from backend.services.campus.analysis import account_revision
 
 ZONE = ZoneInfo('Asia/Shanghai')
 
@@ -27,7 +28,7 @@ class Condition(BaseModel):
     starts_on: date
     expected_end: date | None = None
     review_on: date
-    source_kind: Literal['official', 'onsite', 'report'] = 'report'
+    source_kind: Literal['official', 'onsite', 'report', 'mail'] = 'report'
     source_title: str = Field(min_length=2, max_length=160)
     source_date: date
     source_url: str = Field(default='', max_length=1500)
@@ -43,7 +44,7 @@ class Condition(BaseModel):
             url = urlsplit(self.source_url)
             if url.scheme not in {'http', 'https'} or not url.hostname or url.username or url.password:
                 raise ValueError('来源链接须为不含登录信息的 HTTP(S) 地址。')
-        if self.source_kind == 'official' and not self.source_url:
+        if self.source_kind in {'official', 'mail'} and not self.source_url:
             raise ValueError('校方通知需要填写原文链接。')
         if self.state in {'confirmed', 'resolved'} and self.source_kind == 'report':
             raise ValueError('确认限制或恢复通行需要校方通知或现场核实依据；转述线索请保留待核实。')
@@ -64,34 +65,49 @@ class Version(BaseModel):
 
 class Change(Version):
     item: Condition
+    discovery_id: str = Field(default='', max_length=100)
+    discovery_account: str = Field(default='', max_length=100)
+    evidence_confirmed: bool = False
 
 
 def edge_key(way, a, b):
     return str(way) + ':' + ':'.join(sorted((str(a), str(b))))
 
 
-def create_conditions_router(context, places, network, seeds):
-    router, cache, lock = APIRouter(), AccountCache(context, 'ids'), RLock()
+def create_conditions_router(context, places, network, seeds, discovery=None):
+    router, cache = APIRouter(), AccountCache(context, 'ids')
+    lock = discovery.lock if discovery else RLock()
     place_ids = {b['id'] for b in places['buildings']}
     keys = {edge_key(w['id'], a, b) for w in network['ways'] for a, b in zip(w['refs'], w['refs'][1:])}
     points = places['campus']['polygon']
     campus_box = (min(p[0] for p in points) - .001, min(p[1] for p in points) - .001,
                   max(p[0] for p in points) + .001, max(p[1] for p in points) + .001)
 
+    def current():
+        captured = cache.capture()
+        captured.condition_owner = account_revision(context)
+        return captured
+
     def read(captured):
-        return deepcopy(captured.store.read('conditions', {'version': 0, 'items': seeds, 'history': []}))
+        legacy = captured.store.read('conditions', {'version': 0, 'items': seeds, 'history': []})
+        return deepcopy(captured.store.read('conditions:' + captured.condition_owner, legacy))
+
+    def check(captured):
+        cache.check(captured)
+        if captured.condition_owner != account_revision(context):
+            raise HTTPException(409, '学校或邮箱账号已切换，请刷新维护记录。')
 
     def output(captured, state):
-        cache.check(captured)
-        return {'version': state['version'], 'account_revision': captured.account_owner,
+        check(captured)
+        return {'version': state['version'], 'account_revision': captured.condition_owner,
                 'items': state['items'], 'history': [{k: h[k] for k in ('version', 'id', 'title', 'action', 'at')} for h in reversed(state['history'])],
                 'checked_at': datetime.now(ZONE).isoformat(), 'history_limit': 200,
                 'undo_available': any(h['action'] != '撤销上次修改' and not h.get('undone') for h in state['history']),
                 'baseline': network.get('retrieved_at'), 'local_only': True}
 
     def capture(body):
-        captured = cache.capture()
-        if captured.account_owner != body.account_revision:
+        captured = current()
+        if captured.condition_owner != body.account_revision:
             raise HTTPException(409, '账号已切换，请刷新维护记录后重试。')
         state = read(captured)
         if state['version'] != body.version:
@@ -118,14 +134,23 @@ def create_conditions_router(context, places, network, seeds):
         state['history'].append({'version': state['version'], 'id': item['id'], 'title': item['title'],
                                  'action': action, 'at': now, 'before': before, 'undoes': undoes})
         state['history'] = state['history'][-200:]
-        cache.check(captured)
-        captured.store.write('conditions', state)
+        check(captured)
+        captured.store.write('conditions:' + captured.condition_owner, state)
         return output(captured, state)
+
+    def review(body, state, before=None):
+        if not body.discovery_id:
+            return None
+        if not discovery:
+            raise HTTPException(409, '自动发现暂不可用。')
+        if any(body.discovery_id in old.get('discovery_ids', []) for old in state['items']):
+            raise HTTPException(409, '该线索已应用到维护记录，不能重复应用。')
+        return discovery.review(body, body.item, before)
 
     @router.get('/conditions')
     def list_conditions():
         with lock:
-            captured = cache.capture()
+            captured = current()
             return output(captured, read(captured))
 
     @router.post('/conditions', status_code=201)
@@ -135,9 +160,15 @@ def create_conditions_router(context, places, network, seeds):
             if sum(v['state'] in {'pending', 'confirmed'} for v in state['items']) >= 300:
                 raise HTTPException(409, '进行中的记录已达 300 条，请先复核并结束旧记录。')
             validate_target(body.item)
+            checked = review(body, state)
             item = body.item.model_dump(mode='json')
             item.update(id=uuid4().hex, created_at=datetime.now(ZONE).isoformat())
-            return save(captured, state, item, None, '新增')
+            if checked:
+                item['discovery_ids'] = [body.discovery_id]
+            result = save(captured, state, item, None, '核实自动发现线索' if checked else '新增')
+            if checked:
+                discovery.reviewed(checked, item['id'])
+            return result
 
     @router.put('/conditions/{identity}')
     def update_condition(identity: str, body: Change):
@@ -153,8 +184,14 @@ def create_conditions_router(context, places, network, seeds):
                     for key in ('note', 'source_title', 'source_date', 'source_url')):
                 raise HTTPException(422, '确认恢复前请补充新的核实说明或恢复通行依据。')
             validate_target(body.item)
+            checked = review(body, state, before)
             item = {**body.item.model_dump(mode='json'), 'id': identity, 'created_at': before['created_at']}
-            return save(captured, state, item, before, '修改 / 复核')
+            if before.get('discovery_ids') or checked:
+                item['discovery_ids'] = [*before.get('discovery_ids', []), *([body.discovery_id] if checked else [])]
+            result = save(captured, state, item, before, '核实恢复 / 更新线索' if checked else '修改 / 复核')
+            if checked:
+                discovery.reviewed(checked, item['id'])
+            return result
 
     @router.post('/conditions/undo')
     def undo_condition(body: Version):

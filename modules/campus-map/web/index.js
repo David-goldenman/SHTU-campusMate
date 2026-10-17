@@ -3,6 +3,7 @@ import {today, shiftDay, validDay, matchLocation, eventTime, projectCampus, buil
 import {buildWalkingGraph, planWalk} from './routing.js';
 import {compileConditions,routeConditionWarnings} from './conditions.js';
 import {createMaintenance} from './maintenance.js';
+import {createDiscovery} from './discovery.js';
 
 const kinds = {class:'课程', deadline:'作业截止', exam:'考试', quiz:'Quiz', tutorial:'习题课', study:'学习', presentation:'展示', activity:'活动', lecture:'讲座', calendar:'校历'};
 const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在图上标记', ambiguous:'包含多个建筑，请选择具体地点'};
@@ -16,7 +17,7 @@ export async function mount(container, context) {
   container.classList.add('campus-map');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   let day = validDay(params.get('date')) ? params.get('date') : today();
-  let view, graph, route, startId='', endId='', routeEvent, networkRequest, maintenance, conditionState;
+  let view, graph, route, startId='', endId='', routeEvent, networkRequest, maintenance, discovery, conditionState;
   context.signal.addEventListener('abort',()=>networkRequest?.abort(),{once:true});
   container.innerHTML = `<header class="map-heading"><div><span class="map-eyebrow">SHANGHAITECH · CAMPUS</span><h2>今天，去哪儿</h2><p>把每天的安排，放回校园里。</p></div><a class="button" href="https://map.shanghaitech.edu.cn/" target="_blank" rel="noopener noreferrer">学校官方地图 ↗</a></header>
     <div class="map-layout"><section class="map-panel" aria-label="校园建筑地图"><div class="map-tools"><div class="map-layers" aria-label="地图图层"><button type="button" data-layer="day" aria-pressed="true">当天地点</button><button type="button" data-layer="elevators" aria-pressed="false">电梯位置</button><button type="button" data-layer="gates" aria-pressed="false">出入口</button><button type="button" data-layer="conditions" aria-pressed="false">施工 / 通行</button></div><label class="map-search-label"><span class="map-sr-only">搜索建筑或教室</span><input data-search type="search" placeholder="搜索建筑 / 教室，如信息学院1D-102" autocomplete="off"></label></div><div data-results class="map-search-results" hidden></div>
@@ -138,7 +139,10 @@ export async function mount(container, context) {
     try {
       const network=await context.api('/walking-network',{signal:networkRequest.signal});if(context.signal.aborted)return;
       graph=buildWalkingGraph(network);
-      maintenance=createMaintenance({context,host:container.querySelector('[data-maintenance]'),statusHost:container.querySelector('[data-condition-status]'),data,graph,getDay:()=>day,onUpdate:()=>calculateRoute(),focusMap:()=>container.querySelector('.map-canvas').scrollIntoView({block:'center'}),redraw:drawMap});
+      const discoveryHost=document.createElement('div');discoveryHost.className='map-discovery';discoveryHost.dataset.discovery='';container.querySelector('.map-maintenance>summary').after(discoveryHost);
+      maintenance=createMaintenance({context,host:container.querySelector('[data-maintenance]'),statusHost:container.querySelector('[data-condition-status]'),data,graph,getDay:()=>day,onUpdate:()=>calculateRoute(),focusMap:()=>container.querySelector('.map-canvas').scrollIntoView({block:'center'}),redraw:drawMap,onSaved:()=>void discovery?.load()});
+      discovery=createDiscovery({context,host:discoveryHost,onReview:(lead,account)=>maintenance.reviewLead(lead,account),onAccountChange:()=>void maintenance.load(true),onUpdate:count=>maintenance.setDiscovered(count)});
+      void discovery.load();
       const options='<option value="">请选择地点</option>'+['gate','building'].map(kind=>`<optgroup label="${kind==='gate'?'校门':'校园建筑'}">${data.buildings.filter(b=>(b.kind||'building')===kind).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')).map(b=>`<option value="${e(b.id)}">${e(buildingLabel(b))}</option>`).join('')}</optgroup>`).join('');
       for(const select of [routeStart,routeEnd]){select.innerHTML=options;select.disabled=false;}
       await maintenance.load();if(context.signal.aborted)return;calculateRoute();
