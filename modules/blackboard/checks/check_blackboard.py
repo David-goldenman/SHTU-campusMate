@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from backend.services.campus import SourceError, course
 from backend.services.campus.data import validate_bundle
 from checks.module_support import load, sandbox
@@ -21,6 +21,8 @@ assert {key: value['submitted'] for key, value in reader.activity('<div id="grad
 for term in ['2026秋季学期', '2026-2027学年秋季学期', '2026 秋', '2026秋', '2026年秋季']:
     courses = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">PHYS1183 普通物理II-' + term + '</a></div>')
     assert courses['_9_1']['term'] == term
+english = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">EE115B 数字电路 【2026 Spring】</a></div>')
+assert english['_9_1']['term'] == '2026 Spring'
 
 
 class Tree:
@@ -34,11 +36,52 @@ assert len(nodes) == 2 and issues
 items = reader.materials(nodes,'_9_1')
 assert len(items) == 1 and items[0]['download_url'].startswith('/api/v1/modules/blackboard/file?')
 
+course_item = {'id':'blackboard:_9_1','source_id':'_9_1','url':'https://elearning.shanghaitech.edu.cn:8443/webapps/blackboard/execute/launcher?type=Course&id=_9_1'}
+page = '<div id="announcementList"><li id="_11_1"><h3 class="item">开学通知</h3><div class="details"><div class="vtbegenerated">第一周停课。</div></div></li><li id="_12_1"><div class="details"><div class="vtbegenerated">缺少标题</div></div></li></div>'
+announcements = reader.announcements(page,course_item)
+assert len(announcements) == 1 and announcements[0]['id'] == 'blackboard:_9_1:_11_1' and announcements[0]['title'] == '开学通知' and announcements[0]['body_text'] == '第一周停课。'
+assert reader.announcements('<html><body>系统维护</body></html>',course_item) is None
+assert reader.announcements('<div id="announcementForm"></div>',course_item) == []
+
+
+class Remote:
+    def __init__(self,announcement):
+        self.announcement = announcement
+
+    def pages(self,url):
+        if '/terms' in url:
+            return iter([{'id':'_113_1','name':'2026-2027学年秋季学期'},{'id':'_114_1','name':'2026-2027学年春季学期'},{'id':'_115_1'}])
+        return iter([{'courseId':'_9_1'}]) if url.endswith('/users/me/courses') else iter([])
+
+    def json(self,method,url,**kwargs):
+        return {'name':'数字电路 【2026 Spring】','courseId':'EE123','termId':'_113_1'}
+
+    def html(self,url):
+        if 'announcement' in url:
+            if isinstance(self.announcement,Exception):
+                raise self.announcement
+            return self.announcement
+        return '<div id="grades_wrapper"></div>' if 'mygrades' in url else '<html></html>'
+
+
+old = {'id':'blackboard:_9_1:_11_1','source':'blackboard','course_id':'blackboard:_9_1','title':'旧公告','body_text':'','url':course_item['url']}
+unreadable = reader.fetch(Remote(HTTPException(403,'forbidden')),{'announcements':[old],'courses':[]})
+assert unreadable['announcements'] == [old] and not unreadable['issues'] and unreadable['courses'][0]['title'] == '数字电路 【2026 Spring】'
+changed = reader.fetch(Remote('<html><body>系统维护</body></html>'),{'announcements':[old],'courses':[]})
+assert changed['announcements'] == [old] and not changed['issues']
+broken = reader.fetch(Remote(RuntimeError('unexpected page')),{'announcements':[old],'courses':[]})
+assert broken['announcements'] == [old] and not broken['issues']
+readable = reader.fetch(Remote(page),{'announcements':[old],'courses':[]})
+assert [item['title'] for item in readable['announcements']] == ['开学通知'] and not readable['issues']
+assert readable['courses'][0]['term'] == '2026-2027学年秋季学期' and readable['courses'][0]['semester'] == '2026-fall'
+
 
 class Submissions:
     def pages(self, url):
         if url.endswith('/users/me/courses'):
             return [{'courseId': '_9_1'}]
+        if '/terms' in url:
+            return []
         if url.endswith('/contents'):
             return [{'id': f'_{number}_1', 'title': f'合成作业{number}', 'contentHandler': {'id': 'resource/x-bb-assignment'}, 'availability': {'available': 'Yes'}} for number in (11, 12, 13)]
         if url.endswith('/gradebook/columns'):
@@ -159,7 +202,8 @@ async def check_cached_submissions():
                 pending = (await client.get('/courses/catalog/assignments?current=true&pending=true')).json()['items']
                 assert {item['id'] for item in pending} == {'blackboard:null', 'blackboard:false'}
                 overview = (await client.get('/assignments/snapshot')).json()
-                assert {item['id'] for item in overview['pending']} == {'blackboard:null', 'blackboard:false'}
+                actual_pending = {item['id'] for item in overview['pending']}
+                assert actual_pending == {'blackboard:null', 'blackboard:false', 'gradescope:unknown'}, actual_pending
                 source_counts = overview['summary']['by_source']['blackboard']
                 assert {key: source_counts[key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 8, 'unsubmitted': 4, 'pending': 2}
                 assert sum(source_counts['submission_states'].values()) == 8
@@ -179,4 +223,4 @@ async def check_cached_submissions():
 
 
 asyncio.run(check_cached_submissions())
-print('blackboard: grade and submission-history evidence, unknown fallback, sync/cache/catalog/pending/AI context, availability, account isolation and file paths passed')
+print('blackboard: grade and submission-history evidence, unknown fallback, sync/cache/catalog/pending/AI context, availability, silently skipped announcements and file paths passed')

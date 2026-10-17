@@ -12,6 +12,7 @@ from backend.services.campus.source import snapshots
 from .reader import fetch
 from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
+from .homework import homework_window, overview_weeks
 from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
@@ -190,10 +191,12 @@ def create_router(context):
         if missing:
             issues.append(str(len(missing)) + ' 项课程调整暂时无法匹配最新教务课表，原调整记录仍保留。')
         plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
+        reminders = homework_window(values)
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
-                'calendar': {**plan, 'week_one_source': dates['source']},
+                'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': reminders,
+                'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)
