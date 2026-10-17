@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import json
 import os
 import secrets
@@ -9,6 +10,7 @@ from typing import Literal
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Security
+from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import FileResponse, JSONResponse
@@ -67,14 +69,15 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @asynccontextmanager
     async def lifespan(app):
-        modules.reload()
+        modules.loop = asyncio.get_running_loop()
+        await run_in_threadpool(modules.reload)
         try:
             yield
         finally:
             try:
-                modules.close()
+                await run_in_threadpool(modules.close)
             finally:
-                auth.close()
+                await run_in_threadpool(auth.close)
                 store.close()
 
     app = FastAPI(title="Campus Framework · 共享接口", version=VERSION, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json", lifespan=lifespan, exception_handlers=errors,
@@ -138,17 +141,19 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     @app.post("/api/v1/data/clear", tags=["设置"], summary="清除项目本地凭据或模块数据")
     def clear_data(body: ClearData):
         with modules.lifecycle_lock:
-            if body.scope in {"modules", "all"}:
-                modules.clear_data()
-            else:
-                modules.close()
-            if body.scope in {"credentials", "all"}:
-                auth.clear_all()
-                vault.clear()
-                store.write("ai:settings", {"enabled": False, "model": ai.settings()["model"]})
-            if body.scope == "all":
-                store.clear()
-            modules.reload()
+            try:
+                if body.scope in {"modules", "all"}:
+                    modules.clear_data()
+                else:
+                    modules.close()
+                if body.scope in {"credentials", "all"}:
+                    auth.clear_all()
+                    vault.clear()
+                    store.write("ai:settings", {"enabled": False, "model": ai.settings()["model"]})
+                if body.scope == "all":
+                    store.clear()
+            finally:
+                modules.reload()
         return {"cleared": body.scope}
 
     @app.get("/module-assets/{module_id}/{revision}/web/{path:path}", include_in_schema=False)

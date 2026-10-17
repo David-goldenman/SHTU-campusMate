@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
+import {cleanupAll} from '../web/lifecycle.js';
 
 for (const [keys, sends, prevents] of [
   [{},1,1], [{ctrlKey:true},1,1], [{metaKey:true},1,1],
@@ -64,3 +65,35 @@ await moduleApi('study',life.signal)('/chat/stream',{method:'POST',body:{message
 assert.deepEqual(chunks,events);request.abort();assert(aborted);
 await assert.rejects(()=>api('/test',{onEvent:()=>{throw new Error('synthetic stream error');}}),/synthetic stream error/);
 console.log('frontend: safe Markdown, tables/code, UTF-8 streamed boundaries, CSRF and composed cancellation passed');
+
+let cleaned=false;
+const cleanupResults=await cleanupAll([()=>{throw new Error('synthetic cleanup failure');},()=>new Promise(()=>{}),()=>{cleaned=true;}],10);
+assert(cleaned);assert.deepEqual(cleanupResults.map(value=>value.status),['rejected','rejected','fulfilled']);
+for(const [response,expected] of [[new Response('<html>private diagnostic</html>',{status:500}),/500/],[new Response('malformed'),/无法读取/]]) {
+  globalThis.fetch=async()=>response;
+  await assert.rejects(()=>api('/test'),error=>expected.test(error.message)&&!error.message.includes('private diagnostic'));
+}
+globalThis.fetch=async()=>new Response(null,{status:204});assert.equal(await api('/test'),null);
+globalThis.fetch=async()=>{throw new TypeError('fetch failed');};
+await assert.rejects(()=>api('/test'),/无法连接本地服务/);
+globalThis.fetch=async(url,options)=>new Promise((resolve,reject)=>{
+  if(options.signal.aborted)reject(options.signal.reason);
+  else options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
+});
+await assert.rejects(()=>api('/test',{timeoutMs:10}),error=>error.name==='TimeoutError');
+const cancelled=new AbortController();cancelled.abort();
+await assert.rejects(()=>api('/test',{signal:cancelled.signal}),error=>error.name==='AbortError');
+globalThis.fetch=async(url,options)=>new Response(new ReadableStream({start(controller){
+  options.signal.addEventListener('abort',()=>controller.error(options.signal.reason),{once:true});
+}}),{headers:{'Content-Type':'application/x-ndjson'}});
+await assert.rejects(()=>api('/test',{onEvent:()=>{},timeoutMs:200,idleTimeoutMs:10}),error=>error.name==='TimeoutError');
+globalThis.fetch=async()=>new Response(new ReadableStream({start(controller){
+  for(let index=1;index<=4;index++)setTimeout(()=>{
+    controller.enqueue(new TextEncoder().encode('{"type":"activity"}\n'));
+    if(index===4)controller.close();
+  },index*20);
+}}),{headers:{'Content-Type':'application/x-ndjson'}});
+const activity=[];
+await api('/test',{onEvent:event=>activity.push(event),timeoutMs:300,idleTimeoutMs:60});
+assert.equal(activity.length,4,'Stream progress renews only the inactivity deadline');
+console.log('frontend resilience: cleanup failures/hangs isolated, safe non-JSON errors, connection failures, deadlines, idle streams and manual abort passed');

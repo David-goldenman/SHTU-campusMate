@@ -6,38 +6,66 @@ export function escape(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 }
 
-export async function api(path, {onEvent, ...options} = {}) {
+export async function api(path, {onEvent, timeoutMs, idleTimeoutMs = 240000, ...options} = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('接口路径需要以 / 开头。');
   const url = new URL('/api/v1' + path, location.origin);
   if (url.origin !== location.origin || !url.pathname.startsWith('/api/v1/')) throw new Error('接口路径超出工作台范围。');
   const headers = new Headers(options.headers);
   headers.set('X-Framework-Token', token);
-  const request = {...options, headers};
-  if (options.body !== undefined) {
-    headers.set('Content-Type', 'application/json');
-    request.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-  }
-  const response = await fetch(url, request);
-  if (response.ok && onEvent) {
-    if (!response.headers.get('Content-Type')?.startsWith('application/x-ndjson')) throw new Error('回复格式不正确，请重试。');
-    const reader = response.body.getReader(), decoder = new TextDecoder();
-    let buffer = '';
-    try {
-      while (true) {
-        const {value, done} = await reader.read();
-        buffer += decoder.decode(value,{stream:!done});
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
-        if (done) break;
-      }
-      if (buffer.trim()) onEvent(JSON.parse(buffer));
-    } finally { await reader.cancel(); reader.releaseLock(); }
-    return;
-  }
-  const value = await response.json();
-  if (!response.ok) throw new Error(typeof value.detail === 'string' ? value.detail : '请求失败，请检查设置后重试。');
-  return value;
+  const deadline = new AbortController();
+  const reading = !options.method || ['GET','HEAD'].includes(options.method.toUpperCase());
+  const request = {...options, headers, signal:options.signal ? AbortSignal.any([options.signal,deadline.signal]) : deadline.signal};
+  const expired = () => deadline.abort(new DOMException('请求等待超时，请先检查结果再重试。','TimeoutError'));
+  const timer = setTimeout(expired,timeoutMs ?? (onEvent ? 600000 : reading ? 30000 : 120000));
+  let idle;
+  const progress = () => {clearTimeout(idle);if(onEvent)idle=setTimeout(expired,idleTimeoutMs);};
+  try {
+    if (options.body !== undefined) {
+      headers.set('Content-Type', 'application/json');
+      request.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+    }
+    progress();
+    let response;
+    try {response=await fetch(url, request);}
+    catch(error) {if(error.name==='TypeError'&&!request.signal.aborted)throw new Error('无法连接本地服务，请检查服务是否仍在运行。');throw error;}
+    if (response.ok && onEvent) {
+      if (!response.headers.get('Content-Type')?.startsWith('application/x-ndjson')) throw new Error('回复格式不正确，请重试。');
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      let buffer = '';
+      try {
+        while (true) {
+          const {value, done} = await reader.read();
+          buffer += decoder.decode(value,{stream:!done});
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+          for (const line of lines) if (line.trim()) {
+            let event;
+            try {event=JSON.parse(line);} catch {throw new Error('回复数据不完整，请重试。');}
+            progress();onEvent(event);
+          }
+          if (done) break;
+        }
+        if (buffer.trim()) {
+          let event;
+          try {event=JSON.parse(buffer);} catch {throw new Error('回复数据不完整，请重试。');}
+          onEvent(event);
+        }
+      } finally { void reader.cancel().catch(()=>{}); reader.releaseLock(); }
+      return;
+    }
+    if(response.status===204)return null;
+    let value;
+    try {value=await response.json();}
+    catch(error) {
+      if(request.signal.aborted)throw error;
+      throw new Error(response.ok ? '服务返回了无法读取的数据，请重试。' : '服务请求失败（'+response.status+'），请稍后重试。');
+    }
+    if (!response.ok) throw new Error(typeof value?.detail === 'string' ? value.detail : '请求失败，请检查设置后重试。');
+    return value;
+  } catch(error) {
+    if(deadline.signal.aborted)throw deadline.signal.reason;
+    throw error;
+  } finally {clearTimeout(timer);clearTimeout(idle);}
 }
 
 export function moduleApi(id, signal) {
