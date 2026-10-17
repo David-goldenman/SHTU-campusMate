@@ -93,6 +93,26 @@ def activity(html):
     return result
 
 
+def submission_history(html):
+    tree = BeautifulSoup(html, "html.parser")
+    title = tree.select_one("#pageTitleText")
+    attempt = tree.select_one("#currentAttempt")
+    if title and attempt and title.get_text(" ", strip=True).casefold().startswith(("复查提交历史记录", "review submission history")):
+        header = attempt.select_one(".attemptHeader")
+        if header and any(value in header.get_text(" ", strip=True).casefold() for value in ("草稿", "draft", "进行中", "in progress")):
+            return False
+        date = attempt.select_one(".dateStamp")
+        submission = attempt.select_one("#currentAttempt_submission")
+        if date and date.get_text(strip=True) and submission:
+            for label in submission.select("h4"):
+                label.decompose()
+            if submission.get_text(" ", strip=True):
+                return True
+    if tree.select_one("form#uploadAssignmentFormId"):
+        return False
+    raise SourceError("Blackboard 作业提交历史无法确认，已保留为待核实状态。")
+
+
 def materials(nodes, course_id):
     result = []
     for node in nodes:
@@ -170,10 +190,20 @@ def fetch(remote, previous):
                 grade = grades.get(column.get("id"), {})
                 display = grade.get("displayGrade") if isinstance(grade.get("displayGrade"), dict) else {}
                 is_submitted = submitted.get(column.get("id")) is True
-                if display.get("score") is not None:
+                if display.get("score") is not None or grade.get("status") in {"NeedsGrading", "Graded"}:
                     is_submitted = True
+                evidence = "gradebook"
+                # Hidden grade columns can omit a submitted assignment from both grade APIs.
+                if node["kind"] == "assignment" and not column:
+                    try:
+                        history_url = BASE + "/webapps/assignment/uploadAssignment?" + urlencode({"course_id": cid, "content_id": node["id"], "mode": "view"})
+                        is_submitted = submission_history(remote.html(history_url))
+                        evidence = "submission_history"
+                    except HTTPException:
+                        is_submitted, evidence = None, "unavailable"
+                        result["issues"].append(node["title"] + " 的提交历史暂时无法核实，未计入未提交和待办。")
                 state, open_now = availability(node.get("availability"))
-                result["assignments"].append({"id": identity("blackboard", cid + ":" + node["id"]), "source": "blackboard", "course_id": item["id"], "source_id": node["id"], "title": node["title"], "body_text": node["body_text"], "url": item["url"], "submitted": is_submitted, "score": display.get("score"), "max_score": (column.get("score") or {}).get("possible"), "due_at": timestamp((column.get("grading") or {}).get("due")), "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
+                result["assignments"].append({"id": identity("blackboard", cid + ":" + node["id"]), "source": "blackboard", "course_id": item["id"], "source_id": node["id"], "title": node["title"], "body_text": node["body_text"], "url": item["url"], "submitted": is_submitted, "submission_evidence": evidence, "score": display.get("score"), "max_score": (column.get("score") or {}).get("possible"), "due_at": timestamp((column.get("grading") or {}).get("due")), "release_at": timestamp(node.get("created")), "availability": state, "actionable": open_now, "submission_available": None})
             try:
                 html = remote.html(BASE + "/webapps/blackboard/execute/announcement?" + urlencode({"method": "search", "context": "course", "course_id": cid}))
                 tree = BeautifulSoup(html, "html.parser")

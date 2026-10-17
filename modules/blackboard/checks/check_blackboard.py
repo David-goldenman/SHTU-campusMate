@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 import httpx
 from fastapi import FastAPI
-from backend.services.campus import course
+from backend.services.campus import SourceError, course
 from backend.services.campus.data import validate_bundle
 from checks.module_support import load, sandbox
 
@@ -65,6 +65,54 @@ assert [item['submitted'] for item in synced['assignments']] == [False, True, Tr
 assert synced['assignments'][2]['score'] == 0
 
 
+HISTORY = '''<span id="pageTitleText">复查提交历史记录: 合成报告</span>
+<div id="currentAttempt"><div class="attemptHeader"><span class="dateStamp">26-9-30 下午3:12</span></div>
+<div id="currentAttempt_submission"><h4>提交</h4><ul class="filesList"><li>synthetic.pdf</li></ul></div></div>'''
+assert reader.submission_history(HISTORY) is True
+assert reader.submission_history(HISTORY.replace('复查提交历史记录', 'Review Submission History')) is True
+assert reader.submission_history(HISTORY.replace('26-9-30 下午3:12', '草稿')) is False
+assert reader.submission_history('<form id="uploadAssignmentFormId"><input type="file"></form>') is False
+try:
+    reader.submission_history('<div>Unable to read assignment</div>')
+except SourceError:
+    pass
+else:
+    raise AssertionError('Unrecognized pages must not become unsubmitted records')
+
+
+class HiddenGradeColumns(Submissions):
+    def pages(self, url):
+        if url.endswith('/gradebook/columns') or url.endswith('/gradebook/users/me'):
+            return []
+        return super().pages(url)
+
+    def html(self, url):
+        if '/uploadAssignment?' in url:
+            assert 'mode=view' in url and 'course_id=_9_1' in url and 'action=submit' not in url
+            if 'content_id=_11_1' in url:
+                return HISTORY
+            if 'content_id=_12_1' in url:
+                return '<form id="uploadAssignmentFormId"></form>'
+            raise SourceError('Synthetic history unavailable')
+        return super().html(url)
+
+
+hidden = reader.fetch(HiddenGradeColumns(), {})
+assert [item['submitted'] for item in hidden['assignments']] == [True, False, None]
+assert [item['submission_evidence'] for item in hidden['assignments']] == ['submission_history', 'submission_history', 'unavailable']
+assert len(hidden['issues']) == 1
+
+
+class NeedsGrading(Submissions):
+    def pages(self, url):
+        if url.endswith('/gradebook/users/me'):
+            return [{'columnId': '_21_1', 'status': 'NeedsGrading'}, {'columnId': '_23_1', 'status': 'Graded'}]
+        return super().pages(url)
+
+
+assert all(item['submitted'] for item in reader.fetch(NeedsGrading(), {})['assignments'])
+
+
 async def check_cached_submissions():
     with sandbox('blackboard') as bb, sandbox('courses') as courses, sandbox('assignments') as assignments:
         app = FastAPI()
@@ -77,6 +125,8 @@ async def check_cached_submissions():
             'assignments': [{'id': 'blackboard:' + name, 'source': 'blackboard', 'title': name, 'course_id': 'blackboard:_9_1', 'submitted': submitted, 'actionable': actionable}
                             for name, submitted, actionable in [('null', None, True), ('false', False, True), ('submitted', True, True), ('closed', None, False), ('unknown_open', None, None)]],
         })
+        data['assignments'].append({'id': 'blackboard:unavailable', 'source': 'blackboard', 'title': '未能核实的历史',
+                                    'course_id': 'blackboard:_9_1', 'submitted': None, 'actionable': True, 'submission_evidence': 'unavailable'})
         bb.store.write('snapshot', {'owner': package._source.owner(), 'data': data, 'updated_at': '2026-10-17T00:00:00Z'})
         bb.store.write('sync', {'owner': package._source.owner(), 'status': 'ready'})
         try:
@@ -98,17 +148,19 @@ async def check_cached_submissions():
                 assert snapshot['courses'][0]['term'] == ''
                 assert snapshot['courses'][1]['semester'] == '2026-fall'
                 values = snapshot['assignments']
-                assert [item['submitted'] for item in values] == [False, False, True, False, False]
+                assert [item['submitted'] for item in values] == [False, False, True, False, False, None]
                 assert bb.store.read('snapshot')['data']['assignments'][0]['submitted'] is None, 'Reading normalizes the response without rewriting cached source data'
                 pending = (await client.get('/courses/catalog/assignments?current=true&pending=true')).json()['items']
                 assert {item['id'] for item in pending} == {'blackboard:null', 'blackboard:false'}
                 overview = (await client.get('/assignments/snapshot')).json()
                 assert {item['id'] for item in overview['pending']} == {'blackboard:null', 'blackboard:false'}
-                assert overview['summary']['by_source']['blackboard'] == {'total': 5, 'unsubmitted': 4, 'pending': 2}
+                assert overview['summary']['by_source']['blackboard'] == {'total': 6, 'unsubmitted': 4, 'pending': 2}
                 assert next(item for item in overview['data']['assignments'] if item['id'] == 'gradescope:unknown')['submitted'] is None
                 response = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:null']})
                 assert response.status_code == 200, response.text
                 assert response.json()['items'][0]['submitted'] is False
+                unknown = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:unavailable']})
+                assert unknown.json()['items'][0]['submitted'] is None
                 bb.auth.revision = 'different-account'
                 assert (await client.get('/blackboard/snapshot')).json()['data']['assignments'] == []
         finally:
@@ -116,4 +168,4 @@ async def check_cached_submissions():
 
 
 asyncio.run(check_cached_submissions())
-print('blackboard: null means unsubmitted in sync/cache/catalog/pending/AI context; submitted and zero-score evidence, availability, account isolation and file paths passed')
+print('blackboard: grade and submission-history evidence, unknown fallback, sync/cache/catalog/pending/AI context, availability, account isolation and file paths passed')
