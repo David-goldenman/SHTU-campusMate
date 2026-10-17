@@ -15,7 +15,7 @@ from .workspace import WorkCommand, Workspace
 
 
 def profile_owner(context):
-    return digest(context.auth.get_status("ids")["account_revision"])
+    return digest(context.auth.get_account_revision("ids"))
 
 
 def read_profile(context):

@@ -6,7 +6,7 @@ PROVIDERS = ("ids", "coremail", "gradescope", "piazza")
 
 
 def account_revision(context):
-    return digest([context.auth.get_status(provider)["account_revision"] for provider in PROVIDERS])
+    return digest([context.auth.get_account_revision(provider) for provider in PROVIDERS])
 
 
 def citations(ids, context):
