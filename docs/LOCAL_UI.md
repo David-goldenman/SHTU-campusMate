@@ -40,7 +40,7 @@
 
 Piazza 保持信息同步和新附件提醒，不自动下载附件。本地没有新增 QQ 接入。
 
-本次同步到 `56db61f`，包含 16 个模块：保留新版首页工作区、切页后台生成、日程与学习事务、账号隔离、网络诊断、模块错误隔离和本地数据恢复。后台入口、流式请求与操作回执采用团队主线契约；启动入口继续复用已有项目 Python。
+本次同步到 `7afff8d`，包含 16 个模块：保留新版首页工作区、切页后台生成、日程与学习事务、账号隔离、网络诊断、模块错误隔离和本地数据恢复。后台入口、流式请求与操作回执采用团队主线契约；启动入口继续复用已有项目 Python。
 
 ## 下次更新怎么做
 
@@ -102,7 +102,7 @@ git merge --no-commit origin/main
 
 ### 本次验证
 
-已同步主线 56db61f 并保留个人启动器和开场白。完整回归通过：41 项 Python 检查、3 项 JavaScript 检查、Windows 启动器及 47 个 JavaScript 文件语法检查。日志保存在 .codex/local-update-56db61f-checks.log。
+已同步主线 7afff8d 并保留个人启动器和开场白。完整回归通过：41 项 Python 检查、3 项 JavaScript 检查、Windows 启动器及 47 个 JavaScript 文件语法检查。日志保存在 .codex/local-update-7afff8d-checks.log。
 
 实际浏览器验证了 1280px 桌面与 375px 窄屏：首页对话、校园概览、设置页均只有一条可见开场白；刷新与切页保持同一句，无页面横向溢出，输入框正常可见，未发送聊天或调用付费模型。截图保存在 .codex/screenshots/opening-line-final-desktop-20261017.jpg 与 opening-line-final-mobile-20261017.jpg。
 

@@ -76,7 +76,7 @@ try {
         New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
         if ($options.Check) {
             & $uv --version
-            Write-Host "Native Windows and Node $nodeVersion ready. AI plugin installation also requires pnpm."
+            Write-Host "Native Windows and Node $nodeVersion ready. AI plugin installation uses pnpm, with a local Corepack fallback."
             exit 0
         }
         Push-Location $PSScriptRoot
