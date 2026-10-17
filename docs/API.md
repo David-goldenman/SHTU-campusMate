@@ -63,7 +63,7 @@ JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON�
 
 ## 时间表
 
-`GET /modules/timetable/schedule?week_start=YYYY-MM-DD` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试和个人安排，返回 `calendar{week_start,week_end,week_one,teaching_week,days:[{date,events}]}`；省略日期时使用北京时间本周。`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。`/calendar-settings` 的 GET/PUT/DELETE 读取、手动设置或恢复学期起始日期，`POST /calendar/refresh` 更新学校校历；手动值按账号与学期保存，自动更新保持同学期手动值。`/events` 提供本机 Quiz、展示、活动、讲座的增删改查。原始上课数据继续通过 `/snapshot`、`/sync` 提供；具体字段见 [时间表接口](../modules/timetable/README.md)。
+`GET /modules/timetable/schedule?week_start=YYYY-MM-DD` 汇总当前账号的上课安排、Blackboard／Gradescope 带时间的 quiz 与作业、教务考试和个人安排，返回 `calendar{week_start,week_end,week_one,week_one_source,teaching_week,days:[{date,events}]}`；省略日期时使用北京时间本周。`week_one_source` 说明 `week_one` 的来源：`manual` 为手动填写，`school` 为学校校历，`inferred` 为校历附件无法识别时按学期名称推定（秋学期 9 月第二个周一、春学期次年 2 月第二个周一、暑学期次年 7 月第一个周一），`null` 表示尚未确定；推定值只用于把课程放入日历，不替代学校校历，可在学期设置中改成真实日期。`POST /modules/timetable/schedule/sync` 启动对应来源同步（202）。来源停用时保留其他来源的显示，聚合期间账号切换返回 409。`/calendar-settings` 的 GET/PUT/DELETE 读取、手动设置或恢复学期起始日期（返回同名的 `source` 字段，取值与 `week_one_source` 一致），`POST /calendar/refresh` 更新学校校历；手动值按账号与学期保存，自动更新保持同学期手动值。`/events` 提供本机 Quiz、展示、活动、讲座的增删改查。原始上课数据继续通过 `/snapshot`、`/sync` 提供；具体字段见 [时间表接口](../modules/timetable/README.md)。
 
 ## 共享 AI
 

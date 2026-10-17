@@ -12,7 +12,7 @@ from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
 from .calendar import Event, SemesterSettings, ZONE, calendar
-from .school_calendar import SchoolCalendar, term_key
+from .school_calendar import SchoolCalendar, inferred_week_one, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "eams": "教务系统"}
 _source = None
@@ -53,7 +53,16 @@ def create_router(context):
         official = school.saved(metadata)
         automatic = official.get('terms', {}).get(term_key(metadata), {})
         manual = context.store.read(settings_key(), {})
-        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')), 'source': 'manual' if manual else 'school',
+        inferred = inferred_week_one(metadata)
+        if manual:
+            origin = 'manual'
+        elif automatic.get('week_one'):
+            origin = 'school'
+        elif inferred:
+            origin = 'inferred'
+        else:
+            origin = None
+        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')) or inferred, 'source': origin,
                 'url': official.get('url'), 'pdf_url': official.get('pdf_url'), 'checked_at': official.get('checked_at'), 'error': official.get('error')}
 
     @router.put('/calendar-settings')
@@ -155,8 +164,9 @@ def create_router(context):
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取时间表。")
         data = {**values['timetable']['data'], 'events': events, 'undated': undated, 'issues': issues}
+        plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'])
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
-                "updated_at": updated, "data": data, 'calendar': calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one']),
+                "updated_at": updated, "data": data, 'calendar': {**plan, 'week_one_source': dates['source']},
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)
