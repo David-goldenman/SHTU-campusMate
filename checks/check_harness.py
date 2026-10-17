@@ -36,6 +36,14 @@ async def check(directory):
         def log_message(self, *args):
             pass
 
+        def handle(self):
+            try:
+                super().handle()
+            except (ConnectionResetError, ConnectionAbortedError):
+                # Windows reports idle connections closed by the runtime as resets.
+                # Response content and completed requests are still asserted below.
+                pass
+
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == '/tools/query':

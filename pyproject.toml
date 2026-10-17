@@ -13,6 +13,7 @@ dependencies = [
   "shanghaitech-ids-passkey @ git+https://github.com/vvbbnn00/shanghaitech-ids-passkey.git@7c4df62716ceb3d94452d22f3d07f19ff1b8db8b",
   "deepseek-harness-sdk==0.1.5rc1",
   "pypdf>=6.20.1",
+  "tzdata>=2025.2; sys_platform == 'win32'",
 ]
 
 [tool.uv]
