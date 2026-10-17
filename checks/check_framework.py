@@ -96,7 +96,8 @@ async def check(root):
             assert (await client.get("/api/v1/health", headers={"Host": "other.example"})).status_code == 403
             assert initial["modules"] == []
             assert all(not item["has_password"] and not item["has_session"] for item in (await client.get("/api/v1/auth/providers")).json()["providers"])
-            assert (await client.get("/api/v1/ai/settings")).json() == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
+            ai = (await client.get('/api/v1/ai/settings')).json()
+            assert {key: ai[key] for key in ('enabled', 'model', 'key_saved')} == {"enabled": False, "model": "deepseek-flash", "key_saved": False}
             assert (await client.put("/api/v1/settings", json={"port": 17667})).status_code == 403
             assert (await client.get("/api/v1/bootstrap", headers={"Host": "untrusted.example"})).status_code == 403
             assert (await client.get("/api/v1/bootstrap", headers={"Origin": "https://untrusted.example"})).status_code == 403

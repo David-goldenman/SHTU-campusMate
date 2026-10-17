@@ -74,6 +74,7 @@ try {
   await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong')?.textContent==='12' && document.querySelector('.study-messages')");
+  await evaluate("document.querySelector('[data-home]').click()");
   assert(await evaluate("document.querySelector('.overview-columns').textContent.includes('合成课程日程')"),'Upstream agenda is preserved');
   await capture('ui-local-populated',1440,1060);
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['12px','12px','12px','12px'],'Compact overview uses consistent themed spacing');

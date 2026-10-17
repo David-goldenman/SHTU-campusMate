@@ -18,7 +18,8 @@ function browser(action) {
 function fixture(initial, categories) {
   const savedFetch = window.fetch.bind(window);
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
-  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,calls:[],unexpected:[],failLogin:true,localEvents:[]};
+  const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
+  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,ai,calls:[],unexpected:[],failLogin:true,localEvents:[]};
   const json = (body,status=200) => new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
   window.fetch = async (url,options={}) => {
     const path = new URL(url,location.origin).pathname.replace('/api/v1','');
@@ -27,7 +28,16 @@ function fixture(initial, categories) {
     state.calls.push({path,method,target:body.target});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
-    if (path === '/ai/settings') return json({model:'deepseek-flash',enabled:false,key_saved:false});
+    if (path === '/ai/catalog') return json({providers:[{id:'deepseek',name:'DeepSeek',models:['deepseek-flash','deepseek-v4-pro']},{id:'openai',name:'openai',models:['gpt-4']}],protocols:['openai-completions','openai-responses','anthropic-messages']});
+    if (path === '/ai/settings') {
+      if (method === 'PUT') {
+        const {api_key,...publicBody} = body;
+        const row = {...(ai.providers.find(row=>row.provider===body.provider)||{}),...publicBody,key_saved:Boolean(api_key)};
+        ai.providers = [...ai.providers.filter(item=>item.provider!==row.provider),row];
+        Object.assign(ai,row,{enabled:body.enabled});
+      }
+      return json(ai);
+    }
     if (path === '/auth/providers') return json({providers});
     if (path === '/modules' || path === '/modules/reload') return json({modules:state.modules,categories});
     const toggle = path.match(/^\/modules\/([^/]+)$/);
@@ -68,6 +78,9 @@ function fixture(initial, categories) {
       return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days}});
     }
     if (path === '/modules/timetable/calendar-settings') return json({week_one:'2026-09-14',source:'school'});
+    if (path === '/modules/timetable/commands' && method === 'POST') {
+      const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);return json({applied:true,event:item});
+    }
     if (path === '/modules/timetable/events' && method === 'POST') {
       const item = {...body,id:'local:test',source:'local',at:body.starts_at};state.localEvents.push(item);return json(item,201);
     }
@@ -133,6 +146,15 @@ try {
   assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile settings fit the viewport');
   assert(await evaluate(`document.querySelector('.sidebar').getBoundingClientRect().right<=0`),'Mobile sidebar starts closed');
   await writeFile(resolve('.codex/tmp/web-check-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  await evaluate(`document.querySelector('[data-settings-tab=ai]').click();document.querySelector('[data-ai-edit=deepseek]').click();waitFor(()=>document.querySelector('#ai-form')?.hidden === false)`);
+  await evaluate(`document.querySelector('#ai-form').elements.api_key.value='synthetic-saved-key';document.querySelector('#ai-form').requestSubmit();waitFor(()=>webCheck.ai.enabled && document.querySelector('#ai-form')?.hidden === true)`);
+  assert.equal(await evaluate(`webCheck.ai.enabled`),true,'Saving a key enables AI');
+  await evaluate(`document.querySelector('[data-ai-add]').click();waitFor(()=>document.querySelector('#ai-form')?.hidden === false)`);
+  await evaluate(`(()=>{const f=document.querySelector('#ai-form');f.querySelector('[name=mode][value=custom]').click();f.elements.provider_id.value='campus-gateway';f.elements.display_name.value='合成服务';f.elements.base_url.value='https://gateway.example/v1';f.elements.protocol.value='anthropic-messages';f.elements.model.value='synthetic-model';f.elements.api_key.value='synthetic-custom-key';f.requestSubmit();})()`);
+  await evaluate(`waitFor(()=>webCheck.ai.provider==='campus-gateway' && document.querySelector('#ai-form')?.hidden === true)`);
+  assert.equal(await evaluate(`webCheck.ai.protocol`),'anthropic-messages');
+  assert.equal(await evaluate(`document.querySelector('#ai-form').elements.api_key.value`),'','Saved secret is cleared from the form');
+  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile provider settings fit');
   await evaluate(`location.hash='timetable'; waitFor(()=>document.querySelector('[data-calendar]'))`);
   const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent};})()`);
   assert.match(timetable.content,/Quiz 1/);assert.match(timetable.content,/合成期末考试/);assert.match(timetable.content,/合成课程/);assert.match(timetable.content,/时间待公布/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);

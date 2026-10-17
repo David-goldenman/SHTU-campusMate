@@ -1,6 +1,6 @@
 # 共享 AI 与插件运行时
 
-共享服务提供基础对话、文本与 JSON 生成，以及基于 DeepSeek Harness 官方运行时的插件任务。基础接口调用 `https://api.deepseek.com/chat/completions`；插件入口通过 `deepseek-harness-sdk==0.1.5rc1` 启动官方 `sdk-minimal` 配置，由原生 Cordis 插件提供工具和业务能力。两种入口共用设置中的 `deepseek-flash` 或 `deepseek-v4-pro` 与 Vault 密钥。
+共享服务提供基础对话、文本与 JSON 生成，以及基于 DeepSeek Harness 官方运行时的插件任务。设置统一选择当前提供商和模型。DeepSeek 基础接口直接调用官方 Chat Completions；其他提供商的基础调用与插件任务均使用官方 Harness 的 `dsh-llm-pi-ai` 适配器。插件入口通过 `deepseek-harness-sdk==0.1.5rc1` 启动官方 `sdk-minimal`，由原生 Cordis 插件提供工具和业务能力。
 
 服务位于 `backend/services/ai/`，由框架启动时创建一个 `AIService(vault, store)` 实例，所有模块通过共享上下文使用该实例。模块负责挑选资料、组织提示和管理自己的结果；AI 服务仅处理调用方传入的内容。对话历史由对应模块决定如何保存，调用时通过 `messages` 显式传入。
 
@@ -12,9 +12,11 @@ AI 工具和工作流的统一扩展方式是独立的原生 Harness 插件模�
 
 ## 设置和凭据
 
-普通设置保存在 Store 的 `ai:settings`，内容是 `enabled` 与 `model`。API Key 交给 Vault，键名为 `ai:deepseek`，值为 `{"api_key": "..."}`，以 Windows 当前用户的 DPAPI 加密保存到 `.private/vault.dpapi`。`.private/` 由项目忽略规则统一排除；应用的 HTTP 响应只返回 `key_saved` 状态。新项目首次启动时 AI 处于关闭状态，需要用户在设置中填写自己的官方 API Key。
+普通设置保存在 Store 的 `ai:settings`（`enabled/provider/model`）和 `ai:providers`（按 ID 保存显示名称、模型、接入方式与地址）。DeepSeek API Key 沿用 Vault 的 `ai:deepseek`；其他提供商使用 `ai:provider:<id>`，值为 `{"api_key":"..."}`，以当前 Windows 用户的 DPAPI 加密。接口只返回 `key_saved`，不返回原密钥。已有 DeepSeek 配置兼容读取；新安装在完成配置前暂停 AI，保存有效密钥默认启用。用户可在设置顶部单独暂停服务。
 
-更新设置中的空白 `api_key` 表示沿用已保存的密钥。删除密钥时同时提交 `enabled: false` 和 `delete_key: true`。启用 AI 必须已有密钥；更新密钥和删除密钥使用独立请求。
+空白 `api_key` 沿用同一提供商已保存的密钥。内置第三方提供商可留空使用其原生环境认证；自定义本机服务也可不设密钥。删除密钥时提交 `enabled:false,delete_key:true`。地址改变时必须重新填写密钥，避免将已有密钥发送到其他地址；自定义 URL 使用 HTTPS，本机 localhost 允许 HTTP，不接受 URL 内的账号、查询参数与片段。提供商 ID 固定，修改 ID 通过新增和删除完成。
+
+模型设置参考 [官方 Models 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md)：区分内置提供商与自定义模型 API。`catalog.json` 为项目锁定的官方 `0.1.5-rc.1` 运行时导出的 39 个提供商及模型 ID，不在页面加载时联网获取目录。SDK 升级时重新导出并用本机合成模型验证。自定义 API 支持 `openai-completions`、`openai-responses` 和 `anthropic-messages`；协议转换由官方适配器完成。内置目录中的认证和环境要求仍由各提供商决定。
 
 ## HTTP 接口
 
@@ -22,8 +24,10 @@ AI 工具和工作流的统一扩展方式是独立的原生 Harness 插件模�
 
 | 方法与路径 | 请求 | 响应 |
 | --- | --- | --- |
-| `GET /ai/settings` | — | `{"enabled": false, "model": "deepseek-flash", "key_saved": false}` |
-| `PUT /ai/settings` | `enabled`、`model`，可选 `api_key`、`delete_key` | 与读取设置一致 |
+| `GET /ai/settings` | — | 当前 `enabled/provider/model/display_name/custom/base_url/protocol/key_saved` 与 `providers` 配置列表 |
+| `GET /ai/catalog` | — | `runtime_version/source/providers[{id,name,models}]/protocols`，只含公开元数据 |
+| `PUT /ai/settings` | 可选 `enabled/provider/model/display_name/custom/base_url/protocol/api_key/delete_key`；未传字段沿用相应提供商配置 | 保存并选择该提供商；未显式传 `enabled` 时有密钥的配置默认启用 |
+| `DELETE /ai/providers/{id}` | — | 删除配置与密钥；删除当前提供商会暂停 AI，返回设置 |
 | `POST /ai/generate` | `prompt`，可选 `context`、`format` | `content`、`model`、`usage` |
 | `POST /ai/chat` | `messages`，可选 `format` | `content`、`model`、`usage` |
 | `GET /ai/plugins` | — | `plugins`，包含模块 ID、启停与状态 |
@@ -83,7 +87,7 @@ answer = context.ai.chat(
 )
 ```
 
-前端模块通过共享 API 客户端调用同一组 HTTP 接口。API Key 的读写和官方请求统一经过本服务，模块只提交与自身职责相关的资料。发送前由模块决定内容范围，并在需要时告知用户数据将送往 DeepSeek；账号密码、Cookie 和会话令牌应留在认证服务中。引用来源、课程关联、分类规则、对话保存和结果呈现由使用该服务的模块实现。
+前端模块通过共享 API 客户端调用同一组 HTTP 接口。API Key 的读写和模型请求统一经过本服务，模块只提交与自身职责相关的资料。发送前由模块决定范围并告知用户所选模型提供商；账号密码、Cookie 和会话令牌留在认证服务。首页显示当前提供商，切换设置只影响下一次调用，执行中的任务保留开始时的配置。引用、业务规则、对话保存和结果呈现由使用该服务的模块实现。
 
 ## 原生 Harness 插件
 

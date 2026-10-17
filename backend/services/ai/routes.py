@@ -5,8 +5,13 @@ from pydantic import BaseModel, Field, SecretStr, model_validator
 
 
 class AISettings(BaseModel):
-    enabled: bool = False
-    model: Literal["deepseek-flash", "deepseek-v4-pro"] = "deepseek-flash"
+    enabled: bool | None = None
+    provider: str | None = Field(default=None, pattern=r'^[a-z][a-z0-9-]{0,63}$')
+    model: str | None = Field(default=None, min_length=1, max_length=200, pattern=r'^\S+$')
+    display_name: str | None = Field(default=None, min_length=1, max_length=80)
+    custom: bool | None = None
+    base_url: str | None = Field(default=None, max_length=2048)
+    protocol: Literal['openai-completions', 'openai-responses', 'anthropic-messages'] | None = None
     api_key: SecretStr | None = None
     delete_key: bool = False
 
@@ -52,9 +57,17 @@ def create_router(service):
     def settings():
         return service.settings()
 
-    @router.put("/settings", summary="设置 DeepSeek 与加密密钥")
+    @router.get('/catalog', summary='读取官方 Harness 的内置提供商和模型目录')
+    def catalog():
+        return service.catalog()
+
+    @router.put("/settings", summary="设置 AI 提供商、模型与加密密钥")
     def save_settings(body: AISettings):
         return service.save_settings(body)
+
+    @router.delete('/providers/{provider_id}', summary='删除本机保存的提供商配置和密钥')
+    def delete_provider(provider_id: str):
+        return service.delete_provider(provider_id)
 
     @router.post("/generate", summary="根据调用方提供的资料生成内容")
     def generate(body: GenerateRequest):

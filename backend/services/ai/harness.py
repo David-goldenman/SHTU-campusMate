@@ -14,6 +14,8 @@ from deepseek_harness.errors import HarnessError
 from deepseek_harness_runtime import resolve_bundled_launch_args
 from fastapi import HTTPException
 
+from .catalog import runtime_route
+
 
 def prepare(command, *, cwd, env, timeout, check_cancelled):
     """Poll only our preparation subprocess, so Stop also works before model startup."""
@@ -59,7 +61,7 @@ class Harness:
     def plugins(self):
         return {"plugins": [item for item in self.modules.list()["modules"] if item.get("harness")]}
 
-    def run(self, prompt, context, plugins, model, api_key, *, plugin_env=None, on_event=None, cancel_event=None):
+    def run(self, prompt, context, plugins, model, api_key, *, connection=None, plugin_env=None, on_event=None, cancel_event=None):
         deadline = time.monotonic() + self.run_timeout
         if any(not key.startswith("CAMPUS_PLUGIN_") or not isinstance(value, str) for key, value in (plugin_env or {}).items()):
             raise ValueError("插件环境只接受 CAMPUS_PLUGIN_ 前缀的字符串配置。")
@@ -85,10 +87,14 @@ class Harness:
                    "npm_config_auto_install_peers": "false", "npm_config_update_notifier": "false", **(plugin_env or {})}
             bypass = env.get("no_proxy", env.get("NO_PROXY", "")) + ",127.0.0.1,localhost"
             env.update(NO_PROXY=bypass, no_proxy=bypass)
+            config = connection or {'provider': 'deepseek', 'base_url': 'https://api.deepseek.com'}
+            route, adapter_rows = runtime_route(config)
+            env['CAMPUS_AI_API_KEY'] = api_key
             rows = [{"id": row, "disabled": True} for row in ("persistent-bash", "persistent-pwsh", "tool-fs", "tool-working-directory", "session-log-deepseek")]
             rows.append({"id": "system-prompt", "config": {"includeHarnessIdentity": False, "includeRuntimeContext": False,
                          "personaPrefix": '\n\n'.join(instructions)}})
             rows.append({'id': 'sandbox-policy', 'config': {'mode': 'workspace-write', 'workspaceRoot': str(workspace)}})
+            rows.extend(adapter_rows)
             if any((entry.harness['folder'] / 'skills').is_dir() for entry in entries):
                 rows.append({'insert': [{'id': 'campus-skills', 'name': '@deepseek-ai/dsh-skill'},
                                         {'id': 'campus-tool-skill', 'name': '@deepseek-ai/dsh-tool-skill'}]})
@@ -117,7 +123,10 @@ class Harness:
                         cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
                 check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),
-                                     model=model, api_key=api_key, base_url="https://api.deepseek.com", reasoning_effort="low", max_tokens=6000, request_timeout_seconds=90) as runtime:
+                                     provider=route, model=model, api_key=api_key if route == 'deepseek-official' else None,
+                                     base_url=config.get('base_url') if route == 'deepseek-official' else None,
+                                     reasoning_effort='low' if route == 'deepseek-official' else None,
+                                     max_tokens=6000, request_timeout_seconds=90) as runtime:
                     done = threading.Event()
 
                     def watch():
@@ -142,7 +151,7 @@ class Harness:
                 check_cancelled()
             except (HarnessError, OSError, TimeoutError, subprocess.SubprocessError):
                 check_cancelled()
-                raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、配置和 DeepSeek 服务后重试。") from None
+                raise HTTPException(502, "AI 插件运行失败，请检查插件依赖、模型配置和服务连接后重试。") from None
             if result.finish_reason != "completed":
                 logging.getLogger(__name__).warning('Harness task ended: reason=%s; tool_calls=%s', result.finish_reason,
                     [event.get('data', {}).get('name') for event in result.events if event.get('type') == 'tool/call'])

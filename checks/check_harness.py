@@ -212,6 +212,15 @@ async def check(directory):
                             plugin_env={f'CAMPUS_PLUGIN_{prefix}_URL':f'http://127.0.0.1:{server.server_port}', f'CAMPUS_PLUGIN_{prefix}_TOKEN':'synthetic-tool-token'})
                         assert result['tools'][0]['is_error'] is False, result
                         assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == tools
+                    configured = await client.put('/api/v1/ai/settings', json={'provider':'synthetic-gateway','custom':True,
+                        'model':'deepseek-flash','base_url':f'http://127.0.0.1:{server.server_port}',
+                        'protocol':'openai-completions','api_key':'synthetic-harness-key'})
+                    assert configured.status_code == 200, configured.text
+                    routed = await asyncio.to_thread(app.state.ai.run, prompt='验证自定义模型工具调用', plugins=['study'],
+                        plugin_env={'CAMPUS_PLUGIN_STUDY_URL': f'http://127.0.0.1:{server.server_port}', 'CAMPUS_PLUGIN_STUDY_TOKEN': 'synthetic-tool-token'})
+                    assert routed['content'] == '已读取合成作业' and not any(tool['is_error'] for tool in routed['tools']), routed
+                    assert requests[-1][1] == 'Bearer synthetic-harness-key'
+                    await client.put('/api/v1/ai/settings', json={'provider':'deepseek','enabled':True})
                     cancelling, cancelled = True, threading.Event()
 
                     def cancel_on_text(frame):

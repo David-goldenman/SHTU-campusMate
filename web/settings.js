@@ -1,4 +1,5 @@
 import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
+import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
 const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',timetable:'教务系统'};
@@ -41,7 +42,7 @@ export async function mount(container, context) {
     '<div class="settings-columns"><section class="panel settings-section"><h2>本地服务</h2><p class="field-hint">端口修改会在下次启动工作台时生效。</p><form id="port-form"><label>服务端口<input name="port" type="number" min="1024" max="65535" value="' + settings.port + '" required></label><p class="field-hint">当前运行端口：' + settings.active_port + '</p><button class="button button-primary" type="submit">保存端口</button></form>' + (settings.restart_required ? '<p class="notice">端口已更新，下次启动使用 ' + settings.port + '。</p>' : '') + '</section>' +
     '<section class="panel settings-section"><h2>本地数据</h2><p class="field-hint">保存位置 <code>' + escape(settings.storage.directory) + '</code><br>加密方式 ' + escape(settings.storage.encryption) + '</p><form id="data-form"><label>清除范围<select name="scope"><option value="credentials">账号、登录状态和 API Key</option><option value="modules">模块本地数据</option><option value="all">全部本地数据</option></select></label><p class="field-hint" id="clear-description"></p><button class="button button-danger" type="submit">清除所选数据</button></form></section></div>' +
     '<section class="panel settings-section"><div class="section-heading"><div><h2>账号与登录</h2><p>已保存的连接会在读取时复用。首次连接请使用官方窗口，或展开账号密码登录。</p></div></div><div class="provider-grid">' + auth.providers.map(providerCard).join('') + '</div></section>' +
-    '<section class="panel settings-section"><h2>统一 AI 服务</h2><p class="field-hint">各模块共用这个服务。API Key 加密保存在本机。</p><form id="ai-form" class="ai-form"><label>DeepSeek API Key<input name="api_key" type="password" autocomplete="off" placeholder="' + (ai.key_saved ? '已保存，填写可更新' : '填写 API Key') + '"></label><label>模型<select name="model">' + ['deepseek-flash','deepseek-v4-pro'].map(model => '<option value="' + model + '" ' + (ai.model === model ? 'selected' : '') + '>' + model + '</option>').join('') + '</select></label><label class="checkbox-label"><input name="enabled" type="checkbox" ' + (ai.enabled ? 'checked' : '') + '>启用统一 AI 服务</label><div class="form-actions"><button class="button button-primary" type="submit">保存 AI 设置</button>' + (ai.key_saved ? '<button class="text-button danger-text" id="delete-ai-key" type="button">删除 API Key</button>' : '') + '</div></form></section>';
+    aiSettingsPanel(ai);
 
   const groups = [
     ['accounts','账号连接',container.querySelector('.provider-grid').closest('section')],
@@ -200,23 +201,7 @@ export async function mount(container, context) {
     context.signal.addEventListener('abort',() => clearTimeout(deviceTimer),{once:true});
   });
 
-  const aiForm = container.querySelector('#ai-form');
-  aiForm.onsubmit = safeAction(aiForm.querySelector('[type=submit]'),async () => {
-    const fields = new FormData(aiForm);
-    const body = {enabled:fields.has('enabled'),model:fields.get('model')};
-    if (fields.get('api_key')) body.api_key = fields.get('api_key');
-    await request('/ai/settings',{method:'PUT',body});
-    aiForm.elements.api_key.value = '';
-    toast('AI 设置已保存。');
-    await context.refresh();
-  });
-  const deleteKey = container.querySelector('#delete-ai-key');
-  if (deleteKey) deleteKey.onclick = safeAction(deleteKey,async () => {
-    if (!await confirmDialog('删除 API Key','删除已保存的 API Key 并停用统一 AI 服务。','删除密钥')) return;
-    await request('/ai/settings',{method:'PUT',body:{enabled:false,model:aiForm.elements.model.value,delete_key:true}});
-    toast('API Key 已删除。');
-    await context.refresh();
-  });
+  mountAISettings(container.querySelector('.ai-settings'),ai,{request,refresh:context.refresh,signal:context.signal});
 
   const clearDescriptions = {
     credentials:'删除所有账号、登录状态和 API Key，并关闭登录窗口。',

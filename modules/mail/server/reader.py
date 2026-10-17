@@ -59,10 +59,12 @@ def presentation(content):
         comment.extract()
     for node in tree.select("script, style, iframe, object, embed, form, svg, math, template, head"):
         node.decompose()
-    allowed = set("p div span br hr b strong i em u s blockquote pre code ul ol li table thead tbody tfoot tr td th caption h1 h2 h3 h4 h5 h6 dl dt dd a".split())
+    allowed = set("p div span br hr b strong i em u s sup sub wbr blockquote pre code ul ol li table thead tbody tfoot tr td th caption h1 h2 h3 h4 h5 h6 dl dt dd a".split())
     for node in list(tree.find_all(True)):
         if not node.name:
             continue
+        if node.name == 'font':
+            node.name = 'span'
         if node.name == "img":
             node.replace_with("[图片：" + str(node.get("alt") or "邮件图片") + "]")
         elif node.name not in allowed:
@@ -71,14 +73,29 @@ def presentation(content):
             attrs = {}
             style = str(node.get('style', '')).lower()
             classes = []
-            if re.search(r'text-align\s*:\s*center', style):
-                classes.append('mail-align-center')
+            align = re.search(r'text-align\s*:\s*(left|right|center|justify)\b', style)
+            if align or str(node.get('align', '')).lower() in {'left', 'right', 'center', 'justify'}:
+                classes.append('mail-align-' + (align[1] if align else node['align'].lower()))
             if re.search(r'font-weight\s*:\s*(?:bold|[7-9]00)', style):
                 classes.append('mail-bold')
+            if re.search(r'font-style\s*:\s*italic', style):
+                classes.append('mail-italic')
+            if re.search(r'text-decoration(?:-line)?\s*:[^;]*underline', style):
+                classes.append('mail-underline')
+            size = re.search(r'font-size\s*:\s*(\d+(?:\.\d+)?)(px|pt)\b', style)
+            if size:
+                pixels = float(size[1]) * (4 / 3 if size[2] == 'pt' else 1)
+                classes.append('mail-font-' + ('small' if pixels < 14 else 'large' if pixels >= 19 else 'normal'))
+            color = re.search(r'(?:^|;)\s*color\s*:\s*([^;]+)', style)
+            value = (color[1] if color else str(node.get('color', ''))).strip().lower()
+            if value in {'red', '#ff0000', '#f00', 'rgb(255, 0, 0)'}:
+                classes.append('mail-important')
+            if re.search(r'font-family\s*:[^;]*(?:宋体|simsun|times|serif)', style) and 'sans-serif' not in style:
+                classes.append('mail-serif')
             if classes:
                 attrs['class'] = ' '.join(classes)
             href = str(node.get("href") or "").strip()
-            if node.name == "a" and urlsplit(href).scheme.lower() in {"http", "https"}:
+            if node.name == "a" and urlsplit(href).scheme.lower() in {"http", "https", "mailto"}:
                 attrs.update(href=href, target="_blank", rel="noopener noreferrer")
             if node.name in {"td", "th"}:
                 for key in ("colspan", "rowspan"):

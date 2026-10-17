@@ -26,6 +26,7 @@ function fixture(modules,categories){
   if(path==='/modules/mail/snapshot')return json({status:'ready',data:{messages,issues:[]}});
   if(path==='/modules/mail/intelligence')return json({messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
   if(path==='/modules/mail/message')return json({body_html:'<p>合成正文第一段<br>补充说明。</p><p>第二段单独说明活动安排。</p><ul><li>准备材料</li><li>阅读讲义</li></ul><table><tr><th>时间</th><th>地点</th></tr><tr><td>14:00</td><td>教学楼</td></tr></table>'});
+  if(path==='/modules/mail/digests')return json({start:'2026-10-17',end:'2026-10-17',counts:{focus:0,recommend:1,digest:0,filter:0},coverage:{included_count:1,cached_count:1,inbox_total:1},entries:messages.map(item=>({...item,bucket:item.classification.bucket,category:item.classification.category,summary:item.classification.summary})),report:method==='POST'?{overview:'合成日总结：有一项科研活动。',generated_at:'2026-10-17T12:00:00Z',highlights:[{message_id:'mail:1',summary:'查看科研讲座安排。'}]}:null});
   if(path==='/modules/mail/preferences'){state.prefs=JSON.parse(options.body);return json({saved:true});}
   if(path==='/modules/mail/labels'){const value=JSON.parse(options.body);Object.assign(messages[0].classification,{category:value.label,bucket:value.bucket,by:'manual'});return json({saved:true});}
   if(path==='/modules/courses/snapshot')return json({status:'ready',data});
@@ -61,6 +62,11 @@ try{
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
  await writeFile(resolve('.codex/tmp/workspace-mail-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+ await evaluate(`document.querySelector('[data-digest=day]').click();waitFor(()=>document.querySelector('[data-generate-digest]'))`);
+ await evaluate(`document.querySelector('[data-generate-digest]').click();waitFor(()=>document.querySelector('.mail-digest-overview'))`);
+ assert(await evaluate(`document.querySelector('.mail-digest-overview').textContent.includes('合成日总结')`));
+ assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile mail summary fits');
+ await evaluate(`document.querySelector('[data-digest-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await evaluate(`location.hash='courses';waitFor(()=>document.querySelector('.course-platforms'))`);
  assert.equal(await evaluate(`document.querySelectorAll('.module-tabs').length`),0,'Courses have one integrated page');
