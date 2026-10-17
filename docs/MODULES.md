@@ -69,6 +69,7 @@ export async function mount(container, context) {
 | `context.services.ai.plugins()`、`.run(body)` | 列出原生插件，调用所选插件执行任务 |
 | `context.ui` | 公共 UI helper，组件约定见 [设计文档](DESIGN.md) |
 | `context.ui.useStyle(url, signal)` | 挂载样式并在中止时移除，返回幂等清理函数；在首次 await 前调用 |
+| `context.ui.bindMenus(container, signal)` | 管理 `details[data-action-menu]` 的外部点击、操作后与 Esc 关闭；Esc 返回 summary，动态菜单适用，监听随 signal 清理 |
 | `context.navigate(category)` | 切换框架分类 |
 | `context.signal` | 当前挂载的 AbortSignal，用于 fetch 与 DOM 监听器 |
 

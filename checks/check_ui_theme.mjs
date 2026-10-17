@@ -17,9 +17,9 @@ function fixture(modules,categories) {
   const original=window.fetch.bind(window);
   const state=window.themeCheck={modules,categories,empty:false,tabs:false,unexpected:[]};
   const due=hours=>new Date(Date.now()+hours*3600000).toISOString();
-  const assignment=(id,title,hours,course)=>({id,title,course_title:course,group_id:course,source:'blackboard',availability:'open',actionable:true,submitted:false,current:true,due_at:hours==null?null:due(hours),url:'https://example.invalid/assignment'});
+  const assignment=(id,title,hours,course)=>({id,title,course_title:course,group_id:course,source:'blackboard',category:hours<0?'late':'pending',submission_status:'not_submitted',availability:'open',actionable:true,submitted:false,current:true,due_at:hours==null?null:due(hours),url:'https://example.invalid/assignment'});
   const pending=[assignment('overdue','概率论习题 03',-27,'概率论与数理统计'),assignment('urgent','线性代数作业 04',2,'线性代数'),assignment('long','数据科学与金融科技概论：案例分析报告与课堂展示材料',20,'数据科学与金融科技概论'),assignment('later','程序设计 Project 2',96,'程序设计'),assignment('undated','实验报告：测量误差分析',null,'大学物理实验')];
-  const submitted={...assignment('submitted','已提交的历史作业',-96,'线性代数'),submitted:true};
+  const submitted={...assignment('submitted','已提交的历史作业',-96,'线性代数'),submitted:true,category:'completed',submission_status:'submitted'};
   const response=value=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
   window.fetch=async(url,options={})=>{
     const path=new URL(url,location.origin).pathname.replace('/api/v1','');
@@ -74,7 +74,7 @@ try {
   await command('Page.enable');
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong') && document.querySelector('.study-messages')");
-  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'248px');
+  assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'208px');
   for(const [name,width,height] of [['ui-overview-desktop',1440,1060],['ui-overview-tablet',768,1024],['ui-overview-mobile',375,812],['ui-overview-landscape',812,375]]) {
     await evaluate('window.scrollTo(0,0)');await capture(name,width,height);
   }
@@ -84,7 +84,6 @@ try {
   await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)})`});
   await command('Page.navigate',{url:base+'/#dashboard'});
   await wait("document.querySelector('.overview-stats strong')?.textContent==='12' && document.querySelector('.study-messages')");
-  await evaluate("document.querySelector('[data-home]').click()");
   assert(await evaluate("document.querySelector('.overview-columns').textContent.includes('合成课程日程')"),'Upstream agenda is preserved');
   assert(await evaluate("!document.querySelector('.overview-card').closest('.module-zone').classList.contains('module-focus')"),'Homepage defaults to visible priorities');
   assert(await evaluate("!document.querySelector('.overview-task').closest('details')"),'Deadlines never start collapsed');
@@ -96,40 +95,39 @@ try {
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1060,deviceScaleFactor:1,mobile:false});
   await evaluate("document.querySelector('.overview-attention [data-tone=urgent]').click()");
   await wait("document.querySelector('.assignment-board [data-view=urgent][aria-pressed=true]')");
-  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-task').length"),2,'Homepage urgency links apply the filter');
-  assert(await evaluate("[...document.querySelectorAll('[data-pending] .assignment-task')].every(item=>item.dataset.priority==='urgent')"));
-  assert(await evaluate("parseFloat(getComputedStyle(document.querySelector('[data-pending] time')).fontSize)>=24"),'Deadline time is prominent');
+  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),2,'Homepage urgency links apply the filter');
+  assert(await evaluate("[...document.querySelectorAll('[data-pending] .assignment-card')].every(item=>item.dataset.priority==='urgent')"));
+  assert(await evaluate("document.querySelector('[data-pending] .deadline-date') && document.querySelector('[data-pending] .deadline-relative') && document.querySelector('[data-pending] .assignment-card').getBoundingClientRect().height<120"),'Compact rows retain the date, time and remaining duration');
   await capture('ui-assignments-desktop',1440,1060);
   await capture('ui-assignments-mobile',375,812);
   assert(await evaluate("document.querySelector('[data-pending] .deadline-stamp').getBoundingClientRect().bottom<innerHeight"),'First assignment deadline is visible on mobile without scrolling');
   await evaluate("document.querySelector('.assignment-board [data-view=overdue]').click()");
-  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-task').length"),1);
+  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),1);
   assert(await evaluate("!document.querySelector('[data-pending]').textContent.includes('已提交的历史作业')"),'Submitted work never becomes urgent or overdue');
   await evaluate("document.querySelector('.assignment-board [data-view=undated]').click()");
   assert(await evaluate("document.querySelector('[data-pending] time').textContent==='待定'"),'Unknown deadlines stay explicit');
   await evaluate("document.querySelector('.assignment-board [data-view=all]').click();const search=document.querySelector('[data-search]');search.value='线性代数';search.dispatchEvent(new Event('input'))");
-  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-task').length"),1,'Search keeps the pending scope');
+  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),1,'Search keeps the pending scope');
   await evaluate("document.querySelector('[data-pending] [data-detail]').click()");
   await wait("document.querySelector('dialog[open]')?.textContent.includes('合成题干')");
   await evaluate("document.querySelector('dialog[open] [aria-label=关闭]').click();location.hash='dashboard'");
   await wait("document.querySelector('.overview-attention')");
   assert(await evaluate("!document.querySelector('link[href*=\"/assignments/\"]')"),'Assignment styles release on navigation');
   await capture('ui-priorities-return',1440,1060);
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['12px','12px','12px','12px'],'Compact overview uses consistent themed spacing');
+  assert(await evaluate("document.querySelectorAll('.overview-stats a').length===4 && !document.querySelector('.overview-sources').open"),'Secondary statistics stay available in a disclosure');
   await evaluate("document.documentElement.removeAttribute('data-ui-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
   await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
   await evaluate("document.querySelector('.skip-link').click()");
   assert.equal(await evaluate("location.hash==='#dashboard' && document.activeElement===document.querySelector('main')"),true,'Skip link preserves the category route');
-  await evaluate("document.querySelector('[data-module-section=dashboard]').click()");
-  assert.equal(await evaluate("document.activeElement.closest('.module-card')?.querySelector('[data-module-id]')?.dataset.moduleId"),'dashboard');
+  assert(await evaluate("document.querySelectorAll('h1').length===1 && !document.querySelector('.module-shortcuts')"),'The page has one title and its own contextual actions');
   await evaluate("themeCheck.empty=true;document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
   await wait("document.querySelector('.overview-stats strong')?.textContent==='—'");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats strong')].map(item=>item.textContent)"),['—','—','—','—']);
   const issues=await evaluate("document.querySelector('[data-module-id=dashboard] [data-issues]').textContent");
   assert.match(issues,/独立模块故障必须保留/);assert.match(issues,/应保留的独立服务提示/);assert(!issues.includes('piazza：未连接')&&!issues.includes('blackboard: 未连接'));
   await capture('ui-local-empty',375,812);
-  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-stats a')].map(item=>getComputedStyle(item).paddingLeft)"),['4px','4px','4px','4px']);
+  assert(await evaluate("!!document.querySelector('.source-state [data-issues]') && !document.querySelector('.source-state').open"),'Source diagnostics remain available without expanding the page');
   await evaluate("location.hash='settings'");await wait("document.querySelector('[data-settings-tab=accounts]')");
   assert(await evaluate("!document.querySelector('link[href*=\"/dashboard/\"]') && !document.querySelector('link[href*=\"/academic-assistant/\"]')"),'Module style cleanup preserved');
   await evaluate("document.querySelector('[data-settings-tab=ai]').click();document.querySelector('#ai-form [name=api_key]').value='synthetic-draft';document.querySelector('[data-settings-tab=local]').click();document.querySelector('[data-settings-tab=ai]').click()");
@@ -148,5 +146,5 @@ try {
   await evaluate("document.querySelector('[data-view=academic-assistant]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))");
   await wait("document.querySelector('.overview-stats')");
   assert.deepEqual(await evaluate('themeCheck.unexpected'),[]);
-  console.log('PASS: real and synthetic dashboards, agenda, empty/error feedback, 4 viewports, theme isolation, skip/section links, settings drafts/tabs, generic module tabs and style cleanup');
+  console.log('PASS: real and synthetic dashboards, agenda, empty/error feedback, 4 viewports, theme isolation, skip link and contextual actions, settings drafts/tabs, generic module tabs and style cleanup');
 } finally {socket?.close();browser('close');}

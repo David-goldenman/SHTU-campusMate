@@ -16,7 +16,7 @@ export async function mount(container,context) {
     const labels = {ready:'已同步',partial:'部分数据可用',cached:'本地缓存',syncing:'同步中',error:'读取失败',not_connected:'未连接',login_required:'需要登录',verification_required:'需要验证'};
     const metadata = snapshot.data.metadata.source_metadata || {};
     const waiting = Object.values(metadata).every(source => source.status === 'not_connected');
-    if (waiting && snapshot.status !== 'syncing') container.querySelector('[data-status]').textContent = '等待连接账号';
+    if (waiting && snapshot.status !== 'syncing') {container.querySelector('[data-status]').textContent = '等待连接账号';container.querySelector('.source-state').dataset.state = 'not_connected';}
     const issueNode = body.parentElement.querySelector('[data-issues]');
     if (waiting && issueNode) issueNode.textContent = [snapshot.message,...(snapshot.data.issues || [])].filter(Boolean).filter(issue => metadata[String(issue).split(/[:：]/,1)[0].trim()]?.status !== 'not_connected').join('\n');
     const now = Date.now(), zone = {timeZone:'Asia/Shanghai'};
@@ -47,7 +47,7 @@ export async function mount(container,context) {
   }
   const cleanup = await sourcePanel(container,context,(body,snapshot) => {
     latest=snapshot;host=body;draw(body,snapshot);
-    container.append(container.querySelector('.source-toolbar'),container.querySelector('[data-issues]'));
+    container.append(container.querySelector('.source-toolbar'));
   });
   if (!context.signal.aborted) timer=setInterval(()=>{if(latest && !container.contains(document.activeElement))draw(host,latest);},60000);
   return () => {cleanup();dispose();};

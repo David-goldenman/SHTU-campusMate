@@ -14,7 +14,7 @@ export async function mount(container,context) {
     const values=()=>courses.filter(item=>(!current||item.current)&&(item.title+' '+item.code).toLowerCase().includes(query.toLowerCase()));
     function draw(){
       const list=values();if(!list.some(item=>item.id===selected))selected=list[0]?.id;
-      body.querySelector('[data-courses]').innerHTML=list.map(item=>`<button type="button" class="course-choice ${selected===item.id?'selected':''}" data-course="${e(item.id)}" aria-pressed="${selected===item.id}"><span>${e(item.code || '课程')}</span><strong>${e(item.title)}</strong><small>${e(item.sources.map(value=>platforms[value.source]||value.source).join(' · '))}</small></button>`).join('')||'<p class="field-hint">当前范围没有课程。可查看其他学期，或连接账号后同步。</p>';
+      body.querySelector('[data-courses]').innerHTML=list.map(item=>`<button type="button" class="course-choice ${selected===item.id?'selected':''}" data-course="${e(item.id)}" aria-pressed="${selected===item.id}"><span>${e(item.code || '课程')}</span><strong>${e(item.title)}</strong></button>`).join('')||'<p class="field-hint">当前范围没有课程。可查看其他学期，或连接账号后同步。</p>';
       body.querySelectorAll('[data-course]').forEach(button=>{decorateCourse(button,list.find(item=>item.id===button.dataset.course));button.onclick=context.ui.safeAction(button,async()=>{selected=button.dataset.course;draw();await detail();});});
     }
     async function detail(){

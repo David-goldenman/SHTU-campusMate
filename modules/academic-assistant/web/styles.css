@@ -17,7 +17,7 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat summary { cursor:pointer; list-style:none; }
 .academic-chat summary::-webkit-details-marker { display:none; }
 .academic-chat .study-header { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:76px; padding:12px 24px; flex:none; }
-.academic-chat .study-opening-line { display:none; flex:none; margin:0; padding:0 24px 8px 70px; color:var(--muted); font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.academic-chat .study-opening-line { display:none; flex:none; margin:0; padding:0 24px 8px; color:var(--muted); font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
 .study-chat-card.module-focused .study-opening-line { display:block; }
 .academic-chat .study-heading { display:flex; align-items:center; gap:10px; min-width:0; }
 .academic-chat .study-heading>div { min-width:0; }
@@ -33,6 +33,7 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat .study-menu>div button,.academic-chat .study-prompts>div button { display:block; width:100%; padding:8px 12px; text-align:left; border-radius:7px; }
 .academic-chat .study-menu>div button:hover,.academic-chat .study-prompts>div button:hover { background:var(--surface); }
 .academic-chat .study-layout { position:relative; display:flex; flex:1; min-height:0; }
+.academic-chat .study-history-scrim { display:none; }
 .academic-chat .study-conversation { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; }
 .academic-chat .study-scroll { position:relative; flex:1; min-height:0; }
 .academic-chat .study-messages { height:100%; overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; padding:12px 28px 28px; }
@@ -137,6 +138,7 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat .study-history-menu>.study-icon-button { width:36px; }
 .academic-chat .study-history-menu>div { width:136px; }
 @media (max-width:1000px) {
+  .academic-chat .study-history-scrim:not([hidden]) { display:block; position:absolute; inset:0; z-index:8; border:0; padding:0; border-radius:0; background:#2e344033; cursor:pointer; }
   .academic-chat .study-history { position:absolute; inset:0 auto 0 0; width:min(280px,90%); z-index:9; box-shadow:12px 0 28px #2e344014; }
   .academic-chat .study-header h2 { max-width:240px; }
 }
@@ -170,3 +172,13 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .study-work-items article { padding:14px 0; border-bottom:1px solid var(--border); }
 .study-work-items header { display:flex; gap:12px; flex-wrap:wrap; justify-content:space-between; }
 .study-work-notes { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.academic-chat .study-header { min-height:64px; padding:10px 20px; }.academic-chat .study-actions { gap:6px; }.academic-chat .study-new-button { min-height:36px; border-radius:20px; font-size:13px; }.academic-chat .text-button { min-height:36px; }
+.academic-chat .study-markdown p { font-size:16px; }.academic-chat .study-opening-line { font-size:12px; }.academic-chat .study-starters { gap:8px; }
+.academic-chat .study-history-toggle { display:inline-flex; align-items:center; gap:6px; flex:none; padding:6px 10px; border:1px solid var(--border); border-radius:20px; color:var(--link); font-size:13px; white-space:nowrap; }.academic-chat .study-history-toggle[aria-expanded=true] { background:var(--primary-container,var(--surface)); border-color:transparent; }
+@media(min-width:851px) { .study-chat-card.module-focused .study-header { padding-right:72px; } }
+@media(max-width:600px) {
+ .academic-chat .study-header { flex-wrap:wrap; align-items:flex-start; gap:8px; padding:10px 12px; }.academic-chat .study-heading { width:100%; gap:12px; }.academic-chat .study-model { white-space:nowrap; max-width:170px; overflow:hidden; text-overflow:ellipsis; }.academic-chat .study-actions { width:100%; justify-content:flex-end; gap:8px; }
+ .academic-chat .study-new-button { width:auto; min-height:36px; padding:0 10px; border:1px solid var(--border); }.academic-chat .study-new-button span { position:static; width:auto; height:auto; overflow:visible; clip-path:none; }.academic-chat .study-icon-button { width:36px; height:36px; }
+}
+@media(pointer:coarse) { .academic-chat .study-new-button,.academic-chat .text-button { min-height:44px; }.academic-chat .study-icon-button { width:44px; height:44px; } }

@@ -189,23 +189,6 @@ async function render(refreshMetadata = false) {
       button.onkeydown = event => {const offset = {ArrowLeft:-1,ArrowRight:1}[event.key];if (offset) {event.preventDefault();tabs.children[(index + offset + visible.length) % visible.length].click();}};
     });
   }
-  if (layout !== 'primary' && !tabbed && visible.length > 1) {
-    const shortcuts = document.createElement('nav');
-    shortcuts.className = 'module-shortcuts';
-    shortcuts.setAttribute('aria-label','页面分区');
-    shortcuts.innerHTML = visible.map(module => '<button type="button" data-module-section="' + escape(module.id) + '">' + escape(module.name) + '</button>').join('');
-    shortcuts.addEventListener('click',event => {
-      const button = event.target.closest('[data-module-section]');
-      if (!button) return;
-      const card = [...zone.querySelectorAll('.module-card')].find(card => card.querySelector('[data-module-id]')?.dataset.moduleId === button.dataset.moduleSection);
-      const heading = card?.querySelector('.module-mount h2') || card?.querySelector('h2');
-      if (!heading) return;
-      heading.tabIndex = -1;
-      heading.closest('.module-card').scrollIntoView({block:'start'});
-      heading.focus({preventScroll:true});
-    },{signal:scope.controller.signal});
-    main.querySelector('.page-heading').append(shortcuts);
-  }
   const work = mounted.map(module => mountModule(module,zone,scope));
   if (page === 'settings') {
     work.push(settings.mount(main.querySelector('#settings-area'),{

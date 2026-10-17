@@ -33,19 +33,20 @@ export async function mount(container, context) {
   let activeId = history.conversation_id, archived = false, showArchived = false;
   const drafts = chatSession.drafts;
   container.classList.add('academic-chat');
+  context.ui.bindMenus(container,context.signal);
   card.classList.add('study-chat-card');
   title.hidden = true;
   container.innerHTML = `
-    <header class="study-header"><div class="study-heading"><button class="study-icon-button" data-history-toggle type="button" aria-label="历史对话" title="历史对话" aria-expanded="false">${icon('history')}</button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
-      <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu"><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
+    <header class="study-header"><div class="study-heading"><button class="text-button study-history-toggle" data-history-toggle type="button" aria-controls="study-history" aria-expanded="false">${icon('history')}<span>历史对话</span></button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
+      <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu" data-action-menu><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
     <p class="study-opening-line" role="note" aria-label="开场白">${e(openingLine())}</p>
-    <div class="study-layout"><aside class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
+    <div class="study-layout"><aside id="study-history" class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><label class="visually-hidden" for="study-message">发消息</label>
           <textarea id="study-message" name="message" rows="2" maxlength="8000" placeholder="给学习助手发消息…" aria-describedby="study-send-hint" required></textarea>
-          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts"><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
+          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts" data-action-menu><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
         </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p>
       </div>
     </section>
@@ -64,6 +65,12 @@ export async function mount(container, context) {
   const historyToggle = container.querySelector('[data-history-toggle]');
   const newChat = container.querySelector('[data-new-chat]');
   const conversation = container.querySelector('.study-conversation');
+  const historyScrim=document.createElement('button');historyScrim.type='button';historyScrim.className='study-history-scrim';historyScrim.hidden=true;historyScrim.tabIndex=-1;historyScrim.setAttribute('aria-label','关闭历史对话');
+  container.querySelector('.study-layout').prepend(historyScrim);
+  const drawer=matchMedia('(max-width:1000px)');
+  const updateDrawer=()=>{conversation.inert=drawer.matches&&!historyPanel.hidden;};
+  drawer.addEventListener('change',updateDrawer,{signal:context.signal});
+  historyScrim.onclick=()=>{showHistory(false);historyToggle.focus();};
   const input = form.elements.message;
   const workButton=document.createElement('button');workButton.type='button';workButton.className='text-button';workButton.textContent='学习事务';
   container.querySelector('.study-menu>div').prepend(workButton);
@@ -84,7 +91,7 @@ export async function mount(container, context) {
   retry.onclick = () => form.requestSubmit();
   function focusChat(active) {context.focus(active);const home=container.querySelector('[data-home]');home.setAttribute('aria-pressed',String(!active));home.textContent=active?'查看今日待办':'进入对话';}
   container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
-  function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) {focusChat(true);showProfile(false);}}
+  function showHistory(open) {historyPanel.hidden=!open;historyScrim.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));updateDrawer();if(open) {focusChat(true);showProfile(false);search.focus({preventScroll:true});}}
   historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
   container.querySelector('[data-history-close]').onclick = () => {showHistory(false);historyToggle.focus();};
   container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
@@ -101,6 +108,7 @@ export async function mount(container, context) {
     errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
     focusChat(true);scrollToLatest();drawConversations();showHistory(false);
     restoreTurn(chatSession.current);
+    (archived||busy?messages:input).focus({preventScroll:true});
   }
   function drawConversations() {
     const items=conversations.items.map(item=>item.title==='新对话'&&item.id===chatSession.current?.conversationId ? {...item,title:chatSession.current.message.replace(/\s+/g,' ').slice(0,36)} : item);
@@ -108,7 +116,7 @@ export async function mount(container, context) {
     container.querySelector('[data-chat-title]').textContent=selected?.title && selected.title!=='新对话' ? selected.title : '学习助手';
     container.querySelectorAll('[data-history-filter]').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.historyFilter==='archived')===showArchived)));
     const query=search.value.trim().toLocaleLowerCase();
-    container.querySelector('[data-conversations]').innerHTML=items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''}><strong>${e(item.title)}</strong><span>${generating()&&item.id===chatSession.current.conversationId?'正在生成…':e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu"><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
+    container.querySelector('[data-conversations]').innerHTML=items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''}><strong>${e(item.title)}</strong><span>${generating()&&item.id===chatSession.current.conversationId?'正在生成…':e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu" data-action-menu><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
     container.querySelectorAll('[data-open-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,()=>openConversation(button.dataset.openChat)));
     container.querySelectorAll('[data-archive-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,async()=>{
       const item=conversations.items.find(item=>item.id===button.dataset.archiveChat);
@@ -133,7 +141,7 @@ export async function mount(container, context) {
   }
   profileToggle.onclick = () => showProfile(profileToggle.getAttribute('aria-expanded') !== 'true');
   container.querySelector('[data-profile-close]').onclick = () => {showProfile(false);profileToggle.focus();};
-  container.addEventListener('keydown',event => {if(event.key!=='Escape')return;if(profileToggle.getAttribute('aria-expanded')==='true'){showProfile(false);profileToggle.focus();}else if(!historyPanel.hidden){showHistory(false);historyToggle.focus();}},{signal:context.signal});
+  container.addEventListener('keydown',event => {if(event.defaultPrevented||event.key!=='Escape')return;if(profileToggle.getAttribute('aria-expanded')==='true'){showProfile(false);profileToggle.focus();}else if(!historyPanel.hidden){showHistory(false);historyToggle.focus();}},{signal:context.signal});
   function scrollToLatest() {messages.scrollTop = messages.scrollHeight;follow = true;latest.hidden = true;}
   messages.addEventListener('scroll',() => {follow = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;latest.hidden = follow;},{signal:context.signal});
   latest.onclick = scrollToLatest;

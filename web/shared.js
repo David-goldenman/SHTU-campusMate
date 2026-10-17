@@ -152,5 +152,25 @@ export function useStyle(url, signal) {
   return cleanup;
 }
 
-export const ui = Object.freeze({escape, toast, dialog, confirmDialog, safeAction, empty, useStyle});
+export function bindMenus(container, signal) {
+  const selector = 'details[data-action-menu]';
+  document.addEventListener('pointerdown',event => {
+    for (const menu of container.querySelectorAll(selector + '[open]')) {
+      if (!menu.contains(event.target)) menu.open = false;
+    }
+  }, {signal});
+  container.addEventListener('click',event => {
+    const menu = event.target.closest(selector);
+    if (menu && !event.target.closest('summary') && event.target.closest('a,button')) menu.open = false;
+  }, {signal});
+  container.addEventListener('keydown',event => {
+    if (event.key !== 'Escape') return;
+    const menu = event.target.closest(selector + '[open]');
+    if (!menu) return;
+    event.preventDefault();event.stopPropagation();menu.open = false;
+    menu.querySelector('summary').focus();
+  }, {signal});
+}
+
+export const ui = Object.freeze({escape, toast, dialog, confirmDialog, safeAction, empty, useStyle, bindMenus});
 

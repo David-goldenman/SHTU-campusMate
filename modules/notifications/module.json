@@ -1,6 +1,6 @@
 {
   "id": "notifications",
-  "name": "重要通知",
+  "name": "学习通知",
   "version": "0.3.0",
   "category": "notifications",
   "api_version": 1,
@@ -8,6 +8,7 @@
     "label": "通知",
     "icon": "☷",
     "description": "提炼带来源的重要事项，跟踪已读状态。",
-    "order": 70
+    "order": 70,
+    "layout": "tabs"
   }
 }

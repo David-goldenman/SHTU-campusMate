@@ -70,6 +70,12 @@ try{
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<160;i++){if(condition())return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI condition timed out');};waitFor(()=>document.querySelector('[data-chat-form]'))`);
  await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Homepage starts with deadlines visible');
+ assert(await evaluate(`document.querySelector('[data-history-toggle]>span').textContent==='历史对话' && getComputedStyle(document.querySelector('[data-history-toggle]>span')).display!=='none'`),'History has a visible text label');
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelector('[data-history-toggle]').getAttribute('aria-expanded')==='true')`);
+ assert(await evaluate(`document.activeElement.matches('[data-history-search]')`),'History opens at search');
+ await evaluate(`document.querySelector('[data-history-close]').click()`);
+ assert(await evaluate(`document.activeElement.matches('[data-history-toggle]')`),'Closing history returns focus to its entry');
+ await evaluate(`document.querySelector('[data-home]').click()`);
  await evaluate(`document.querySelector('[data-home]').click();true`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'desktop input visible');
  await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.study-prompts').open=true;document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
@@ -97,6 +103,11 @@ try{
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'small desktop input visible');
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'mobile input visible');
+ assert(await evaluate(`document.querySelector('[data-history-toggle]>span').getBoundingClientRect().width>40`),'History label remains visible on mobile');
+ await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden)`);
+ assert(await evaluate(`document.querySelector('.study-conversation').inert && getComputedStyle(document.querySelector('.study-history-scrim')).display==='block'`),'History drawer separates the underlying conversation');
+ await evaluate(`document.querySelector('.study-history-scrim').click()`);
+ assert(await evaluate(`!document.querySelector('.study-conversation').inert && document.activeElement.matches('[data-history-toggle]')`),'Closing the drawer restores its entry and the conversation');
  await writeFile(resolve('.codex/tmp/chat-markdown-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
  for(const mode of ['hold','error','truncated']){
   await evaluate(`chatCheck.mode='${mode}';document.querySelector('#study-message').value='合成重试问题';document.querySelector('[data-chat-form]').requestSubmit();true`);
