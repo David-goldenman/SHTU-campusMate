@@ -18,6 +18,8 @@ AI 工具和工作流的统一扩展方式是独立的原生 Harness 插件模�
 
 模型设置参考 [官方 Models 设置](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md)：区分内置提供商与自定义模型 API。`catalog.json` 为项目锁定的官方 `0.1.5-rc.1` 运行时导出的 39 个提供商及模型 ID，不在页面加载时联网获取目录。SDK 升级时重新导出并用本机合成模型验证。自定义 API 支持 `openai-completions`、`openai-responses` 和 `anthropic-messages`；协议转换由官方适配器完成。内置目录中的认证和环境要求仍由各提供商决定。
 
+设置页以提供商条目显示当前模型与凭据状态，添加和编辑使用对话框。保存后选择该提供商并启用 AI；已配置的环境认证提供商也可直接切换使用。关闭编辑会清空未提交的密钥草稿，切页卸载会关闭编辑窗口。
+
 ## HTTP 接口
 
 所有路径以 `/api/v1` 开头，请求遵守框架统一的本机访问与写入验证要求。请求及响应均使用 JSON。
