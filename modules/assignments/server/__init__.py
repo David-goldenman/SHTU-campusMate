@@ -75,9 +75,10 @@ def counts(values):
 def summary(assignments):
     def count(items):
         return {'total': len(items), 'unsubmitted': sum(item.get('submitted') is False and item['submission_status'] in {'not_submitted', 'draft'} for item in items),
-                'pending': sum(item['pending'] for item in items)}
-    return {**count(assignments), 'submission_states': {state: sum(item['submission_status'] == state for item in assignments) for state in SUBMISSION_STATES},
-            'needs_review': sum(item['needs_review'] for item in assignments),
+                'pending': sum(item['pending'] for item in items),
+                'submission_states': {state: sum(item['submission_status'] == state for item in items) for state in SUBMISSION_STATES},
+                'needs_review': sum(item['needs_review'] for item in items)}
+    return {**count(assignments),
             'by_source': {source: count([item for item in assignments if item['source'] == source])
                                                for source in sorted({item['source'] for item in assignments})}}
 

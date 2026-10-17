@@ -2,6 +2,8 @@
 
 共享展示 SDK `/assets/campus.js` 的 `submissionLabel(item)` 供作业管理和课程中心显示同一提交状态及缓存提示；它只格式化来源已有字段，不请求来源、不决定待办。状态与依据由来源模块提供，待办规则由业务聚合模块实现。
 
+作业管理 `GET /snapshot` 的 `summary` 为全部缓存统计，`summary.by_source[平台]` 为该平台统计；两层均含 `total/unsubmitted/pending/submission_states/needs_review`，不受关键词或分页影响。七种提交状态互斥，`submitted` 只确认提交、评分情况未确认；只有 `needs_grading` 表示待评分，不能用空分数推断。按平台回答时使用对应平台的状态统计。
+
 每项业务功能在自己的 `modules/<id>/` 目录开发，框架通过清单和固定入口加载。主侧栏分类、设置和共享服务由框架统一管理；模块把页面挂到所选分类，将后端接口挂到自己的命名空间。
 
 ## 目录和清单
