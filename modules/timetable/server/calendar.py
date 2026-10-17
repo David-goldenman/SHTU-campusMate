@@ -7,6 +7,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 from backend.services.campus.data import digest
 
 ZONE = ZoneInfo('Asia/Shanghai')
+MISSING_WEEK_ONE = '尚未确定本学期第 1 教学周的日期，课程尚未展开；请读取学校校历或在学期设置中填写日期。'
 
 
 class SemesterSettings(BaseModel):
@@ -197,5 +198,8 @@ def calendar(data, week_start, week_one, adjustments=()):
                 events.append(item)
         events.sort(key=event_order)
         days.append({'date': day.isoformat(), 'events': events})
+    conflict = conflicts(days)
+    if not week_one and data['timetable']:
+        conflict.update(complete=False, message=MISSING_WEEK_ONE + conflict['message'])
     return {'week_start': start.isoformat(), 'week_end': (start + timedelta(days=6)).isoformat(),
-            'week_one': week_one, 'teaching_week': teaching_week, 'periods': list(periods.values()), 'days': days, 'conflicts': conflicts(days)}
+            'week_one': week_one, 'teaching_week': teaching_week, 'periods': list(periods.values()), 'days': days, 'conflicts': conflict}

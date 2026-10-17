@@ -21,7 +21,7 @@
 | `POST /commands` | 带账号版本、幂等操作 ID 和预期记录版本的新增、修改、删除与课程调整 |
 | `GET /changes` | 当前学校账号最近 50 条成功操作回执 |
 
-`/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
+`/schedule` 返回 `{status,updated_at,data,sources,calendar}`。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
 个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
 
@@ -35,6 +35,6 @@
 
 学校统一入口为 [官网校历栏目](https://www.shanghaitech.edu.cn/1024/list.htm)。按教务学年匹配文章及 PDF，每周检查一次，手动刷新可立即检查。文本 PDF 直接提取；图片 PDF 使用 Windows 内置 PDF 与中文 OCR，Windows 原生和 WSL 入口共用该路径。识别只接受有效周一起点，并解析明确的校运动会停课说明；法定假期和额外调课以学校后续通知为准。停课日显示校历事项并跳过上课活动。图片识别缺少系统语言组件或识别失败时，保留缓存并提示手动填写。
 
-自动校历按学年保存，手动起点按学校账号与学期保存。同一学期的自动刷新不会覆盖手动值；进入新学期会自动使用匹配的新校历，旧学期的手动设置继续保留。页面提供“恢复学校日期”，用户可显式取消当前学期的手动覆盖。学校学期名称、原始教学周和实际日历保持独立，解析错误不影响其他来源同步。
+自动校历按学年保存，手动起点按学校账号与学期保存。同一学期的自动刷新不会覆盖手动值；进入新学期会自动使用匹配的新校历，旧学期的手动设置继续保留。页面提供“恢复学校日期”，用户可显式取消当前学期的手动覆盖。学校学期名称、原始教学周和实际日历保持独立，解析错误不影响其他来源同步。日期只采用手动设置或已识别的学校校历，`week_one_source`（设置接口的 `source`）为 `manual`、`school` 或 `null`。校历读取失败时保留这些已知日期；没有确定日期时不猜测学期起点、不展开课程，并提示设置日期，已有个人安排和截止事项继续显示。有课程尚未展开时，日历和编辑回执的 `conflicts.complete=false`，不能据此声称无课或没有冲突。
 
 所有聚合通过公开 API；来源停用时提示原因，其余来源仍显示。读取期间切换账号返回 409。`stop` 取消后续请求并等待后台结束，页面卸载取消请求、轮询和样式。运行 `python modules/timetable/checks/check_timetable.py`，界面验证使用 `node checks/check_web.mjs`，所有夹具为合成资料。

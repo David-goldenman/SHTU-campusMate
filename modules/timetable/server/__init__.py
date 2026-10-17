@@ -10,7 +10,7 @@ from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
 from .reader import fetch
-from .calendar import Event, SemesterSettings, ZONE, calendar
+from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
 from .school_calendar import SchoolCalendar, term_key
 
@@ -61,7 +61,9 @@ def create_router(context):
         official = school.saved(metadata)
         automatic = official.get('terms', {}).get(term_key(metadata), {})
         manual = context.store.read(settings_key(), {})
-        return {**automatic, **manual, 'week_one': manual.get('week_one', automatic.get('week_one')), 'source': 'manual' if manual else 'school',
+        week_one = manual.get('week_one') or automatic.get('week_one')
+        origin = 'manual' if manual.get('week_one') else 'school' if automatic.get('week_one') else None
+        return {**automatic, **manual, 'week_one': week_one, 'source': origin,
                 'url': official.get('url'), 'pdf_url': official.get('pdf_url'), 'checked_at': official.get('checked_at'), 'error': official.get('error')}
 
     @router.put('/calendar-settings')
@@ -155,6 +157,8 @@ def create_router(context):
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
         events, issues, undated = local_events(), [], 0
+        if not dates['week_one'] and values['timetable']['data']['timetable']:
+            issues.append(MISSING_WEEK_ONE)
         for item in dates.get('closures', []):
             events.append({'id': 'calendar:' + item['date'], 'title': item['title'], 'source': 'calendar', 'event_type': 'calendar',
                            'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})
@@ -185,9 +189,10 @@ def create_router(context):
         missing = {item['lesson_id'] for item in adjustments} - {item['id'] for item in data['timetable']}
         if missing:
             issues.append(str(len(missing)) + ' 项课程调整暂时无法匹配最新教务课表，原调整记录仍保留。')
+        plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
-                'calendar': calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments),
+                'calendar': {**plan, 'week_one_source': dates['source']},
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
     @router.post("/schedule/sync", status_code=202)
