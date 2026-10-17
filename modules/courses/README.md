@@ -1,5 +1,7 @@
 # 课程中心
 
+作业分类与作业管理共用提交状态标签，区分草稿、待评分、已评分、豁免和待核实；pending 筛选排除豁免与未知状态。`POST /context` 同时保留 `submission_status/submission_evidence/submission_reason/checked_at/submitted_at/submission_stale/exempt/due_at_evidence`，供 AI 与通知使用来源证据，而不是只看一个布尔值。
+
 `GET /snapshot` 的 `network_failures` 转发已启用来源的网络故障标记。页面自动检测并在同步提示旁给出原因和处理建议，无需进入设置；仅来源明确的网络错误触发，成功重试后清除。
 
 界面以本学期的课程为入口，每门课程汇总已连接平台的可用内容，提供资料、作业、公告、讨论、录播、上课安排及平台成绩条目分类与原站链接。页面使用 `navigation.layout:primary`，平台来源保持 API 与同步能力。可查看其他学期、搜索课程，并用可勾选列表手动关联不同平台的同一课程。

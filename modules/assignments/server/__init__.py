@@ -5,6 +5,18 @@ from fastapi import APIRouter, HTTPException
 
 from backend.services.campus import timestamp
 
+SUBMISSION_STATES = ('not_submitted', 'draft', 'submitted', 'needs_grading', 'graded', 'exempt', 'unknown')
+
+
+def submission_state(item):
+    if item.get('exempt') is True:
+        return 'exempt'
+    if item.get('submission_status') in SUBMISSION_STATES:
+        return item['submission_status']
+    if item.get('submitted') is True:
+        return 'graded' if item.get('score') is not None else 'submitted'
+    return 'not_submitted' if item.get('submitted') is False else 'unknown'
+
 
 def arrange(data, now=None):
     at = now or datetime.now(timezone.utc)
@@ -15,8 +27,13 @@ def arrange(data, now=None):
             continue
         group = groups.get(item.get("course_id"), {})
         due = timestamp(item.get("due_at"))
-        pending = bool(group.get("current")) and item.get("actionable") is True and item.get("submitted") is False
-        values.append({**item, "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"), "current": bool(group.get("current")), "pending": pending, "overdue": bool(pending and due and datetime.fromisoformat(due) < at)})
+        state = submission_state(item)
+        source = data.get('metadata', {}).get('source_metadata', {}).get(item['source'], {})
+        source_stale = source.get('status') in {'error', 'login_required', 'verification_required', 'not_connected'}
+        pending = bool(group.get("current")) and item.get("actionable") is True and item.get("submitted") is False and state in {'not_submitted', 'draft'}
+        values.append({**item, 'submission_status': state, 'source_status': source.get('status'), 'source_updated_at': source.get('updated_at'),
+                       'source_stale': source_stale, 'needs_review': state == 'unknown' or bool(item.get('stale') or item.get('submission_stale') or source_stale),
+                       "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"), "current": bool(group.get("current")), "pending": pending, "overdue": bool(pending and due and datetime.fromisoformat(due) < at)})
     def order(item):
         value = timestamp(item.get("release_at") or item.get("created_at") or item.get("due_at"))
         return datetime.fromisoformat(value).timestamp() if value else 0
@@ -25,9 +42,11 @@ def arrange(data, now=None):
 
 def summary(assignments):
     def count(items):
-        return {'total': len(items), 'unsubmitted': sum(item.get('submitted') is False for item in items),
+        return {'total': len(items), 'unsubmitted': sum(item.get('submitted') is False and item['submission_status'] in {'not_submitted', 'draft'} for item in items),
                 'pending': sum(item['pending'] for item in items)}
-    return {**count(assignments), 'by_source': {source: count([item for item in assignments if item['source'] == source])
+    return {**count(assignments), 'submission_states': {state: sum(item['submission_status'] == state for item in assignments) for state in SUBMISSION_STATES},
+            'needs_review': sum(item['needs_review'] for item in assignments),
+            'by_source': {source: count([item for item in assignments if item['source'] == source])
                                                for source in sorted({item['source'] for item in assignments})}}
 
 

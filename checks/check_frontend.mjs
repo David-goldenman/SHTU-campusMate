@@ -4,7 +4,14 @@ import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
 import {renderNetwork} from '../web/network.js';
+import {submissionLabel} from '../web/campus.js';
 import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
+
+assert.equal(submissionLabel({submitted:null}), '提交状态待核实');
+assert.equal(submissionLabel({submitted:false,exempt:true}), '已豁免');
+assert.equal(submissionLabel({submitted:true,submission_status:'needs_grading'}), '已提交，待评分');
+assert.match(submissionLabel({submitted:true,submission_stale:true}), /已提交.*缓存.*待核实/);
+assert.equal(submissionLabel({submitted:null,submission_status:'__proto__'}), '提交状态待核实');
 
 const inlineReport={name:'<img onerror=x>',checked_at:'2026-10-17T09:30:00Z',diagnosis:{code:'campus_route',confidence:'suspected',title:'校园路径',message:'无法确定 VPN 状态',actions:['<script>']}};
 assert(syncNetworkReports([inlineReport]).includes('&lt;img'));

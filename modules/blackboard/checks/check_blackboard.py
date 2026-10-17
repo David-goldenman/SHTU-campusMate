@@ -17,7 +17,7 @@ assert reader.availability({'available':'Yes'},at) == ('open',True)
 assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'2099-01-01T00:00:00Z'}},at) == ('scheduled',False)
 assert reader.availability({'available':'Yes','adaptiveRelease':{'start':'bad-date'}},at) == ('unknown',None)
 assert reader.availability(None,at) == ('unknown',None)
-assert reader.activity('<div id="grades_wrapper"><div id="12" class="sortable_item_row submitted_item_row">Submitted</div><div id="13" class="sortable_item_row">未提交</div></div>') == {'_12_1':True,'_13_1':False}
+assert {key: value['submitted'] for key, value in reader.activity('<div id="grades_wrapper"><div id="12" class="sortable_item_row submitted_item_row">Submitted</div><div id="13" class="sortable_item_row"><span class="activityType">未提交</span></div></div>').items()} == {'_12_1':True,'_13_1':False}
 for term in ['2026秋季学期', '2026-2027学年秋季学期', '2026 秋', '2026秋', '2026年秋季']:
     courses = reader.portal('<div id="module:_185_1"><a href="/launcher?type=Course&amp;id=_9_1">PHYS1183 普通物理II-' + term + '</a></div>')
     assert courses['_9_1']['term'] == term
@@ -52,6 +52,8 @@ class Submissions:
         return {'name': '合成课程2026秋季学期', 'courseId': 'QA101'}
 
     def html(self, url):
+        if '/uploadAssignment?' in url:
+            return '<span id="pageTitleText">上载作业：合成作业</span><form id="uploadAssignmentFormId"></form>'
         if '/myGrades?' in url:
             return '<div id="grades_wrapper"><div id="21" class="sortable_item_row">—</div><div id="22" class="sortable_item_row submitted_item_row">Submitted</div></div>'
         if '/announcement?' in url:
@@ -68,10 +70,10 @@ assert synced['assignments'][2]['score'] == 0
 HISTORY = '''<span id="pageTitleText">复查提交历史记录: 合成报告</span>
 <div id="currentAttempt"><div class="attemptHeader"><span class="dateStamp">26-9-30 下午3:12</span></div>
 <div id="currentAttempt_submission"><h4>提交</h4><ul class="filesList"><li>synthetic.pdf</li></ul></div></div>'''
-assert reader.submission_history(HISTORY) is True
-assert reader.submission_history(HISTORY.replace('复查提交历史记录', 'Review Submission History')) is True
-assert reader.submission_history(HISTORY.replace('26-9-30 下午3:12', '草稿')) is False
-assert reader.submission_history('<form id="uploadAssignmentFormId"><input type="file"></form>') is False
+assert reader.submission_history(HISTORY)['submitted'] is True
+assert reader.submission_history(HISTORY.replace('复查提交历史记录', 'Review Submission History'))['submitted'] is True
+assert reader.submission_history(HISTORY.replace('26-9-30 下午3:12', '草稿'))['submission_status'] == 'draft'
+assert reader.submission_history('<span id="pageTitleText">上载作业</span><form id="uploadAssignmentFormId"><input type="file"></form>')['submitted'] is False
 try:
     reader.submission_history('<div>Unable to read assignment</div>')
 except SourceError:
@@ -92,7 +94,7 @@ class HiddenGradeColumns(Submissions):
             if 'content_id=_11_1' in url:
                 return HISTORY
             if 'content_id=_12_1' in url:
-                return '<form id="uploadAssignmentFormId"></form>'
+                return '<span id="pageTitleText">上载作业</span><form id="uploadAssignmentFormId"></form>'
             raise SourceError('Synthetic history unavailable')
         return super().html(url)
 
@@ -127,6 +129,10 @@ async def check_cached_submissions():
         })
         data['assignments'].append({'id': 'blackboard:unavailable', 'source': 'blackboard', 'title': '未能核实的历史',
                                     'course_id': 'blackboard:_9_1', 'submitted': None, 'actionable': True, 'submission_evidence': 'unavailable'})
+        data['assignments'].append({'id': 'blackboard:history', 'source': 'blackboard', 'title': '已核实的历史',
+                                   'course_id': 'blackboard:_9_1', 'actionable': True, **reader.submission_history(HISTORY)})
+        data['assignments'].append({'id': 'blackboard:exempt', 'source': 'blackboard', 'title': '已豁免的作业',
+                                   'course_id': 'blackboard:_9_1', 'submitted': False, 'actionable': True, 'exempt': True})
         bb.store.write('snapshot', {'owner': package._source.owner(), 'data': data, 'updated_at': '2026-10-17T00:00:00Z'})
         bb.store.write('sync', {'owner': package._source.owner(), 'status': 'ready'})
         try:
@@ -148,19 +154,22 @@ async def check_cached_submissions():
                 assert snapshot['courses'][0]['term'] == ''
                 assert snapshot['courses'][1]['semester'] == '2026-fall'
                 values = snapshot['assignments']
-                assert [item['submitted'] for item in values] == [False, False, True, False, False, None]
+                assert [item['submitted'] for item in values] == [False, False, True, False, False, None, True, False]
                 assert bb.store.read('snapshot')['data']['assignments'][0]['submitted'] is None, 'Reading normalizes the response without rewriting cached source data'
                 pending = (await client.get('/courses/catalog/assignments?current=true&pending=true')).json()['items']
                 assert {item['id'] for item in pending} == {'blackboard:null', 'blackboard:false'}
                 overview = (await client.get('/assignments/snapshot')).json()
                 assert {item['id'] for item in overview['pending']} == {'blackboard:null', 'blackboard:false'}
-                assert overview['summary']['by_source']['blackboard'] == {'total': 6, 'unsubmitted': 4, 'pending': 2}
+                assert overview['summary']['by_source']['blackboard'] == {'total': 8, 'unsubmitted': 4, 'pending': 2}
                 assert next(item for item in overview['data']['assignments'] if item['id'] == 'gradescope:unknown')['submitted'] is None
                 response = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:null']})
                 assert response.status_code == 200, response.text
                 assert response.json()['items'][0]['submitted'] is False
                 unknown = await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:unavailable']})
                 assert unknown.json()['items'][0]['submitted'] is None
+                evidence = (await client.post('/courses/context', json={'context_ids': ['assignments:blackboard:history']})).json()['items'][0]
+                assert evidence['submission_status'] == 'submitted' and evidence['submission_evidence'] == 'submission_history'
+                assert evidence['submitted_at'] == '2026-09-30T15:12:00+08:00'
                 bb.auth.revision = 'different-account'
                 assert (await client.get('/blackboard/snapshot')).json()['data']['assignments'] == []
         finally:
