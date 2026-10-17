@@ -18,6 +18,7 @@ function fixture(modules,categories){
   if(path==='/bootstrap')return json({version:'synthetic',csrf_token:'synthetic',modules,categories});
   if(path==='/modules')return json({modules,categories});
   if(path==='/settings')return json({port:16666,active_port:16666,restart_required:false,storage:{directory:'.private',encryption:'Synthetic'}});
+  if(path==='/data/backups')return json({backups:[]});
   if(path==='/auth/providers')return json({providers:[]});
   if(path==='/ai/settings')return json({enabled:true,key_saved:true,model:'deepseek-flash'});
   if(path==='/modules/dashboard/snapshot')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
