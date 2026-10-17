@@ -55,8 +55,9 @@
 .week-planner .lesson-table .lesson-period strong { font-size:12px; font-weight:500; }
 .week-planner .lesson-period span { font-size:10px; color:var(--muted); margin-top:3px; }
 .week-planner .lesson-block { min-height:0; min-width:0; padding:3px; }
-.week-planner .lesson-block .calendar-event { height:100%; min-height:0; margin:0; padding:6px; overflow:auto; }
-.week-planner .lesson-block .calendar-event strong { line-height:1.4; }
+.week-planner .lesson-block .calendar-event { display:flex; flex-direction:column; align-items:stretch; height:100%; min-height:0; margin:0; padding:6px; overflow:auto; }
+.week-planner .lesson-block .calendar-event>* { flex-shrink:0; }
+.week-planner .lesson-block .calendar-event strong { order:-1; margin:0 0 2px; line-height:1.4; }
 .week-planner .lesson-block .calendar-event span { font-size:11px; line-height:1.35; }
 @media (min-width:761px) and (max-width:1150px) { .week-planner .calendar-table { min-width:830px; } }
 @media (max-width:760px) {
