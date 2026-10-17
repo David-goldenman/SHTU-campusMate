@@ -1,4 +1,5 @@
 import {sourcePanel, link} from '/assets/campus.js';
+import {mountCampusMoment} from '/assets/themes/campus-moments.js';
 import {deadlineInfo, deadlineMarkup} from '/assets/deadlines.js';
 
 export async function mount(container,context) {
@@ -50,5 +51,6 @@ export async function mount(container,context) {
     container.append(container.querySelector('.source-toolbar'),container.querySelector('[data-issues]'));
   });
   if (!context.signal.aborted) timer=setInterval(()=>{if(latest && !container.contains(document.activeElement))draw(host,latest);},60000);
-  return () => {cleanup();dispose();};
+  const removeMoment = mountCampusMoment(container,'dashboard',context.signal);
+  return () => {removeMoment();cleanup();dispose();};
 }

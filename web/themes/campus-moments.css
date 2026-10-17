@@ -1,0 +1,31 @@
+.campus-moment { display:grid; grid-template-columns:minmax(0,1fr) minmax(160px,40%); align-items:center; gap:28px; width:min(100%,620px); margin:36px 0 8px auto; padding-top:18px; border-top:1px solid var(--border); color:var(--text); }
+.campus-moment[hidden] { display:none!important; }
+.campus-moment figcaption { min-width:0; padding:4px 0; }
+.campus-moment-label { display:block; color:var(--muted); font:12px/1.6 ui-monospace,Consolas,monospace; letter-spacing:1px; }
+.campus-moment figcaption p { margin:12px 0 4px; color:var(--text); font-size:17px; font-weight:400; line-height:1.75; }
+.campus-moment-link { display:inline-flex; align-items:center; min-height:44px; color:var(--link); font-size:12px; }
+.campus-moment-picture { overflow:hidden; height:138px; border-radius:3px; background:#fffefa; }
+.campus-moment-picture img { display:block; width:100%; height:100%; object-fit:cover; object-position:50% 58%; }
+.campus-moment[data-revealed] { animation:moment-arrive .4s ease-out both; }
+.art-moments-section { display:grid; grid-template-columns:minmax(0,1fr) minmax(180px,.65fr); gap:24px; align-items:center; margin-top:32px; padding-top:24px; border-top:1px solid var(--border); }
+.art-moments-section h3 { margin:0 0 8px; font-size:18px; font-weight:500; }
+.art-moments-section p { color:var(--muted); font-size:14px; line-height:1.8; }
+.art-moment-options { display:flex; flex-wrap:wrap; gap:8px 20px; border:0; padding:0; margin:10px 0 0; min-width:0; }
+.art-moment-options label { display:flex; align-items:center; gap:8px; min-height:44px; font-size:14px; font-weight:400; cursor:pointer; }
+.art-moment-preview { width:100%; height:134px; object-fit:cover; object-position:50% 58%; border-radius:3px; }
+@keyframes moment-arrive { from { opacity:.7; transform:translateY(8px); } to { opacity:1; transform:none; } }
+@media (max-width:600px) {
+  .campus-moment { grid-template-columns:minmax(0,1fr) 134px; gap:16px; margin-top:28px; }
+  .campus-moment-picture { height:112px; }
+  .campus-moment figcaption p { font-size:15px; margin-top:7px; }
+  .campus-moment-label { font-size:12px; letter-spacing:0; }
+  .art-moments-section { grid-template-columns:1fr; gap:14px; }
+  .art-moment-preview { height:140px; }
+}
+@media (max-width:340px) {
+  .campus-moment { grid-template-columns:minmax(0,1fr) 108px; gap:12px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .campus-moment[data-revealed] { animation:none; }
+}
+[data-art-motion="reduced"] .campus-moment[data-revealed] { animation:none; }

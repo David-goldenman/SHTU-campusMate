@@ -1,0 +1,16 @@
+{
+  "method": "Built-in image_gen",
+  "style": "cobalt and warm-white photogravure, fine bitmap dithering and line screen",
+  "assets": [
+    {
+      "id": "campus-water",
+      "source": "Image_100897839309894.jpg",
+      "prompt": "Use case: style-transfer. Edit target: the attached campus photograph. Create one finished landscape 4:3 editorial art plate from THIS photograph for a calm, sophisticated blue-and-white university workspace. Preserve the actual lake edge, brick path, trees, distinctive rectangular glass building, camera viewpoint, arrangement and proportions. Change only the rendering, not the architecture or geography. Medium: single-ink cobalt photogravure / early digital bitmap print, fine clustered-dot halftone, restrained error-diffusion dither and a very subtle horizontal line-screen texture, as if a documentary campus photo was reproduced on uncoated paper. Exactly cobalt blue near #2348AC and warm white near #FFFEFA, optical midtones made of the two inks. Keep water and sky spacious and mostly light; clear edge silhouettes, visible individual fine pixel clusters, not coarse blocky video-game pixels. Intimate, thoughtful, ordinary campus afternoon, not strange or threatening. Retain clean large shapes and recognizable photographic perspective. Edge-to-edge art, no border, no lettering, no logo, no caption, no added objects, no surreal elements, no fantasy buildings, no synthetic glossy 3D, no anime, no painterly soft shading, no heavy distressed grunge, no black. This is a gentle quiet Easter-egg illustration, not a hero poster."
+    },
+    {
+      "id": "campus-windows",
+      "source": "Image_1776654661091_886.jpg",
+      "prompt": "Use case: style-transfer. Edit target: the attached NIGHT photograph of lit campus windows. Create a finished landscape 3:2 single-ink print art plate from THIS exact photograph, keeping the two building facades, repeating square/rectangular window grid, relative perspective, camera view and naturally uneven lit windows. Only change the visual rendering. Medium: cobalt-blue and warm-white photogravure / early bitmap print, fine clustered dot halftone with restrained error-diffusion dithering, very delicate horizontal scanline texture, as if a quiet late-night campus memory is printed on paper. Ink #2348AC, paper #FFFEFA; these are the only colors, apparent midtones from dot density. Night facade blue, lit windows paper white with lightly dithered glass. Lift the darkest areas slightly to reveal architectural lines, simplify background clutter without changing window placement. Balance the dark blue with enough white breathing space and window light; warm, still, lived-in, contemplative, not ominous or industrial dystopia. Fine textured pixel clusters, not chunky low-resolution video-game art. Edge-to-edge image, no layout, no lettering, no logo, no frame, no added people, no extra windows, no invented architecture, no surreal distortion, no stars or planets added, no neon glow, no glossy 3D, no drawing of an AI mascot, no black, no heavy grunge."
+    }
+  ]
+}
