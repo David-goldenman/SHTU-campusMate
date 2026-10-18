@@ -72,6 +72,11 @@
 :root[data-art-theme="observatory"] .course-hub .course-department,
 :root[data-art-theme="observatory"] .course-detail>header[data-department] h3 { color:var(--text); }
 
+/* The timetable's blue Today badge needs dark ink in the night edition. */
+:root[data-art-theme="observatory"] .week-planner .four-week-grid .overview-day.is-today::before {
+  color:var(--night-button-text); font-size:12px;
+}
+
 @media(max-width:600px) {
   :root[data-art-theme="observatory"] .academic-chat .study-welcome-copy {
     background:linear-gradient(90deg,var(--art-paper) 96%,transparent);

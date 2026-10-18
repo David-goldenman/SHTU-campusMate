@@ -42,7 +42,7 @@ export async function mount(container, context) {
     const place = isLesson(item) ? item.location : [item.course_title,item.location].filter(Boolean).join(' · ');
     return `<button type="button" class="overview-item kind-${item.event_type}${item.late ? ' is-late' : ''}${item.submitted ? ' is-complete' : ''}${['leave','cancel','moved'].includes(item.status) ? ' is-inactive' : ''}" data-event="${e(item.id)}" title="${e(item.title + ' · ' + when(item))}">${item.platform ? '<span class="overview-platform">' + e(item.platform) + '</span>' : ''}<strong>${e(item.title)}</strong><span class="overview-meta">${e(timed)}${item.late ? '<em class="overview-late">迟交</em>' : ''}</span>${place ? '<span class="overview-place">' + e(place) + '</span>' : ''}</button>`;
   }
-  let overviewOpen=false, weekOpen=true;
+  let overviewOpen=false, weekOpen=true, otherOpen=false;
   function overviewView(value) {
     if (!value || !value.weeks?.length) return '';
     const today = dayOf(Date.now());
@@ -67,7 +67,10 @@ export async function mount(container, context) {
     const hasClasses = lessons.some(day => day.items.length);
     const missingClock = lessons.some(day => day.items.some(({item}) => !item.at || !item.ends_at));
     const courseTable = hasClasses ? `<h3 class="planner-section-title">课程课表</h3>${missingClock ? '<p class="field-hint">部分课程的具体钟点尚未同步，已按教务节次排列；可点击“同步来源”补充钟点。</p>' : ''}<div class="calendar-table-wrap lesson-table-wrap" tabindex="0" aria-label="每周课程课表"><table class="calendar-table lesson-table" data-calendar><caption class="visually-hidden">${title}，课程按节次排列，北京时间</caption><thead><tr><th scope="col">节次</th>${header}</tr></thead><tbody><tr><th scope="row"><div class="lesson-periods" data-period-count="${periods.length}">${labels}</div></th>${cal.days.map((day,i) => `<td class="${dayClass(day)}"><div class="lesson-day" data-period-count="${periods.length}" data-lesson-lanes="${lessons[i].lanes}">${lessons[i].items.map(({item,lane}) => `<div class="lesson-block" data-lesson-start="${item.period_start}" data-lesson-span="${item.period_end-item.period_start+1}" data-lesson-lane="${lane}">${card(item)}</div>`).join('')}</div></td>`).join('')}</tr></tbody></table></div>` : '<p class="planner-empty">' + (!cal.week_one && snapshot.data.timetable.length ? '课程日期待确认，设置教学周后显示课表。' : '本周没有符合筛选条件的课程。') + '</p>';
-    return `<div class="calendar-desktop">${courseTable}</div>`;
+    const otherDays = cal.days.map(day => ({...day,events:day.events.filter(item => selected(item) && !isLesson(item)).sort(compareEvents)})).filter(day => day.events.length);
+    const otherCount = otherDays.reduce((count,day) => count + day.events.length,0);
+    const otherAgenda = otherCount ? `<details class="planner-issues planner-other-events" ${otherOpen ? 'open' : ''}><summary>其他安排与截止（${otherCount}）</summary>${otherDays.map(day => `<section><h4 class="planner-section-title">${e(day.date.slice(5).replace('-',' / '))}</h4>${day.events.map(card).join('')}</section>`).join('')}</details>` : '';
+    return `<div class="calendar-desktop">${courseTable}${otherAgenda}</div>`;
   }
   function mobileDay(day, selected) {
     return [['class','按节次安排'],...groups].map(([kind,label]) => {
@@ -120,6 +123,7 @@ export async function mount(container, context) {
     const overview=container.querySelector('.planner-overview');
     if(overview)overview.ontoggle=()=>{overviewOpen=overview.open;};
     const weekDetail=container.querySelector('.planner-week-detail');weekDetail.ontoggle=()=>{weekOpen=weekDetail.open;};
+    const otherAgenda=container.querySelector('.planner-other-events');if(otherAgenda)otherAgenda.ontoggle=()=>{otherOpen=otherAgenda.open;};
     removeMoment();
     if (['observatory','star-notes'].includes(context.theme?.id)) removeMoment = mountCampusMoment(container,'timetable',context.signal);
     container.prepend(networkHost);

@@ -3,6 +3,10 @@ import {link} from '/assets/campus.js';
 export async function mount(container,context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
+  const cleanup = () => removeStyle();
+  context.signal.addEventListener('abort',cleanup,{once:true});
+  const sounds = await import('/assets/sounds.js').catch(() => null);
+  if (context.signal.aborted) return cleanup;
   container.innerHTML = '<p class="field-hint">回答使用所选缓存文字，并发送至设置中选择的模型服务。邮件、讨论与转写按已读取范围提供。</p><div class="campus-toolbar"><label>资料范围<select data-course><option value="">本学期与校园邮件</option></select></label><button type="button" class="button button-secondary" data-refresh>刷新资料</button><a class="text-button" href="#settings">AI 设置</a><button type="button" class="text-button" data-clear>清除当前对话</button></div><details><summary data-coverage>选择资料</summary><div class="assistant-context" data-items></div></details><div class="assistant-messages" data-history aria-live="polite"></div><form class="campus-form" data-form><label>处理方式<select name="task"><option value="chat">连续对话</option><option value="summarize">总结资料</option><option value="classify">分类建议</option><option value="report">生成报告</option><option value="run">插件任务</option></select></label><label data-plugins hidden>执行插件<select name="plugin"></select></label><label>问题或要求<textarea name="message" required maxlength="8000" placeholder="概括本周课程安排，整理仍可处理的作业并标注来源。"></textarea></label><button class="button button-primary" type="submit">发送</button></form><section data-result aria-live="polite"></section>';
   const course = container.querySelector('[data-course]');
   const pluginPages = document.createElement('p');
@@ -46,6 +50,8 @@ export async function mount(container,context) {
       const mode = form.elements.task.value;
       const payload = mode === 'chat' ? {...body,message} : mode === 'run' ? {...body,prompt:message,plugins:form.elements.plugin.value ? [form.elements.plugin.value] : []} : {...body,prompt:message,task:mode};
       const result = await context.api(mode === 'chat' ? '/chat' : mode === 'run' ? '/run' : '/generate',{method:'POST',body:payload,timeoutMs:600000});
+      if (context.signal.aborted) return;
+      sounds?.playSound('assistant');
       if (mode === 'chat') {
         const history = await context.api('/chat?' + new URLSearchParams(course.value ? {course_id:course.value} : {}));
         container.querySelector('[data-history]').innerHTML = history.messages.map(show).join('');
@@ -54,6 +60,6 @@ export async function mount(container,context) {
     } catch(error) { if (!context.signal.aborted) context.ui.toast(error.message); }
     finally { button.disabled = false; course.disabled = false; refreshButton.disabled = false; clear.disabled = false; }
   };
-  try { await refresh(); } catch(error) { removeStyle(); throw error; }
-  return () => removeStyle();
+  try { await refresh(); } catch(error) { cleanup(); throw error; }
+  return cleanup;
 }
