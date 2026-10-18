@@ -21,7 +21,8 @@ export function buildDayPlan(events,buildings,routeFor,buffer=5) {
       ?routeFor(from.match.buildings[0],to.match.buildings[0]):{status:'unknown_location'};
     const minutes=route?.status==='same'?0:route?.status==='ok'?route.minutes:null;
     const gap=from.end===null?null:(to.start-from.end)/60000;
-    legs.set(to.index,{from,to,route,gap,minutes,buffer,
+    const conflicts=stops.slice(0,i).filter(entry=>entry.end!==null&&entry.end>to.start);
+    legs.set(to.index,{from,to,route,gap,minutes,buffer,conflicts,
       slack:gap!==null&&minutes!==null?gap-minutes-buffer:null,
       departure:minutes!==null?to.start-(minutes+buffer)*60000:null});
   }
@@ -42,6 +43,7 @@ export function smartMarkers(plan,day,now=Date.now()) {
 export function transferText(leg) {
   if(!leg)return '';
   if(leg.gap!==null&&leg.gap<0)return `时间重叠 ${Math.ceil(-leg.gap)} 分钟，请先核对安排`;
+  if(leg.conflicts.length)return '与较早的安排时间重叠，请先核对安排';
   if(leg.route?.status==='unknown_location')return '前后地点未能明确定位，请先核对地点';
   if(leg.minutes===null)return ({conditions_unavailable:'通行信息未就绪，暂不测算',conditions_invalid:'通行范围需复核，暂不测算',restricted:'起点或终点受通行限制',disconnected:'已收录道路不连通',unmapped:'地点附近缺少可用道路'})[leg.route?.status]||'室外路线暂不可用';
   if(leg.gap===null)return '上一项结束时间待定，无法判断间隔是否足够';

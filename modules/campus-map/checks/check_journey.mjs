@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {buildDayPlan,nextStop,smartMarkers,transferText,dayAt,clockAt} from '../web/journey.js';
+import {journeyMarkup} from '../web/journey-view.js';
 
 const buildings=['甲楼','乙楼','丙楼'].map((name,id)=>({id:String(id),name,aliases:[name]}));
 const day='2026-10-21',at=clock=>day+'T'+clock+':00+08:00';
@@ -13,6 +14,7 @@ assert.deepEqual(plan.entries.map(entry=>entry.item.id),['first','deadline','sec
 assert.deepEqual(plan.stops.map(entry=>entry.item.id),['first','second']);
 const leg=plan.legs.get(2);assert.equal(leg.from.item.id,'first');assert.equal(leg.gap,10);assert.equal(leg.slack,-3);
 assert.equal(clockAt(leg.departure),'09:47');assert(transferText(leg).includes('约缺 3 分钟'));
+assert(!journeyMarkup(plan,{escape:String,day,schedule:{available:true},now:Date.parse(at('09:55'))}).summary.includes('建议 '),'Do not recommend leaving before the previous event ends');
 assert.equal(make([first,second],routeFor,0).legs.get(1).slack,2);
 assert.equal(nextStop(plan,day,Date.parse(at('09:30'))).active[0].item.id,'first');
 assert.equal(nextStop(plan,day,Date.parse(at('09:55'))).next.item.id,'second');
@@ -30,6 +32,12 @@ assert.equal(make([{...first,ends_at:at('08:00')},second]).legs.get(1).gap,null)
 const overlap=make([{...first,ends_at:at('10:20')},second]);
 assert(transferText(overlap.legs.get(1)).startsWith('时间重叠 20 分钟'));
 assert.equal(nextStop(overlap,day,Date.parse(at('10:10'))).active.length,2);
+const earlierOverlap=make([event('long-class','09:00','11:00'),event('short-class','09:40','09:50','乙楼'),second],routeFor,0);
+assert.equal(earlierOverlap.legs.get(2).gap,10);
+assert.deepEqual(earlierOverlap.legs.get(2).conflicts.map(entry=>entry.item.id),['long-class']);
+assert(transferText(earlierOverlap.legs.get(2)).includes('较早的安排时间重叠'));
+const overlapSummary=journeyMarkup(earlierOverlap,{escape:String,day,schedule:{available:true},now:Date.parse(at('09:55'))}).summary;
+assert(overlapSummary.includes('时间重叠')&&!overlapSummary.includes('建议 '),'Do not recommend a departure while an earlier commitment still overlaps');
 const same=make([first,{...second,location:'甲楼'}]).legs.get(1);
 assert.equal(same.minutes,0);assert(transferText(same).startsWith('同一建筑'));
 const blocked=make([first,second],()=>({status:'restricted'})).legs.get(1);
