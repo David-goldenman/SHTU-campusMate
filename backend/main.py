@@ -101,7 +101,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                 await run_in_threadpool(auth.close)
                 store.close()
 
-    app = FastAPI(title="Campus Next · 共享接口", version=VERSION, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json", lifespan=lifespan, exception_handlers=errors,
+    app = FastAPI(title="campusMate · 共享接口", version=VERSION, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json", lifespan=lifespan, exception_handlers=errors,
                   dependencies=[Security(APIKeyHeader(name="X-Framework-Token", auto_error=False, description="写操作填写 GET /api/v1/bootstrap 返回的 csrf_token。"))])
     app.state.modules, app.state.auth, app.state.ai = modules, auth, ai
     app.state.store, app.state.vault, app.state.port = store, vault, active_port
@@ -227,7 +227,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.get("/api/docs", include_in_schema=False)
     def docs():
-        return get_swagger_ui_html(openapi_url="/api/openapi.json", title="Campus Next · API")
+        return get_swagger_ui_html(openapi_url="/api/openapi.json", title="campusMate · API")
 
     @app.get("/", include_in_schema=False)
     def index():
@@ -241,7 +241,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Campus Next 本地网页服务")
+    parser = argparse.ArgumentParser(description="campusMate 本地网页服务")
     parser.add_argument("--port", type=int)
     parser.add_argument("--launch-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -252,7 +252,7 @@ def main():
     ready.parent.mkdir(parents=True, exist_ok=True)
     state = {"launch_id": app.state.launch_id, "port": app.state.port, "pid": os.getpid()}
     ready.write_text(json.dumps(state), encoding="utf-8")
-    print(f"Campus Next: http://127.0.0.1:{app.state.port}", flush=True)
+    print(f"campusMate: http://127.0.0.1:{app.state.port}", flush=True)
     try:
         uvicorn.run(app, host="127.0.0.1", port=app.state.port, access_log=False)
     finally:
