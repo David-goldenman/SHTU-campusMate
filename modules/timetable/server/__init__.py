@@ -4,7 +4,7 @@ from pydantic import Field, model_validator
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from backend.services.campus import Source, semester, timestamp
 from backend.services.campus.assignments import filter_issues, historical
@@ -15,6 +15,7 @@ from .reader import fetch
 from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
 from .homework import homework_window, overview_weeks
+from .ical import FILENAME, build_calendar
 from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂", "eams": "教务系统"}
@@ -218,6 +219,13 @@ def create_router(context):
                 'homework': reminders, 'palette': appearance.get('palette', []),
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
+
+    @router.get('/calendar/export.ics')
+    async def export_calendar():
+        value = await schedule()
+        return Response(build_calendar(value), media_type='text/calendar; charset=utf-8',
+                        headers={'Content-Disposition': 'attachment; filename="' + FILENAME + '"',
+                                 'Cache-Control': 'no-store'})
 
     @router.post("/schedule/sync", status_code=202)
     async def sync_schedule():

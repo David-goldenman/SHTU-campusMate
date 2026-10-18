@@ -116,6 +116,24 @@ assert [week['teaching_week'] for week in grid['weeks']] == [4, 5, 6, 7]
 assert len(grid['weeks'][1]['days']) == 7 and grid['weeks'][1]['days'][3]['date'] == '2026-10-15'
 merged = [event for day in grid['weeks'][1]['days'] for event in day['events'] if event['id'] == 'blackboard:current'][0]
 assert (merged['homework'], merged['platform'], merged['late'], merged['course_title']) == (True, 'Blackboard', True, '合成课程')
+exported = module.build_calendar({'overview': {'start': '2026-10-12', 'end': '2026-11-01', 'weeks': [{'days': [
+    {'date': '2026-10-19', 'events': [
+        {'id': 'class:synthetic', 'event_type': 'class', 'title': '合成课程', 'course_title': '合成课程',
+         'date': '2026-10-19', 'at': '2026-10-19T08:15:00+08:00', 'ends_at': '2026-10-19T09:55:00+08:00',
+         'period_start': 1, 'period_end': 2, 'location': '教室, A', 'teacher': '合成教师'},
+        {'id': 'class:cancelled', 'event_type': 'class', 'title': '已取消课程', 'status': 'cancel', 'date': '2026-10-19'},
+        {'id': 'blackboard:synthetic', 'event_type': 'deadline', 'title': '作业 1', 'due_at': '2026-10-20T23:59:00+08:00',
+         'at': '2026-10-20T23:59:00+08:00', 'homework': True, 'platform': 'Blackboard',
+         'course_title': '合成课程', 'url': 'https://example.test/assignment/1'}]}]}]}},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+assert exported.endswith('\r\n')
+assert exported.count('BEGIN:VCALENDAR') == exported.count('END:VCALENDAR') == 1
+assert exported.count('BEGIN:VEVENT') == exported.count('END:VEVENT') == 2
+assert 'SUMMARY:合成课程' in exported and 'SUMMARY:作业截止：作业 1' in exported
+assert 'DTSTART:20261019T001500Z' in exported and 'DTEND:20261019T015500Z' in exported
+assert 'LOCATION:教室\\, A' in exported and 'TRIGGER:-PT30M' in exported
+assert '已取消课程' not in exported
+assert all(len(line.encode('utf-8')) <= 75 for line in exported.split('\r\n'))
 # A room change across weeks must not duplicate the card inside one week.
 split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
     {**item, 'id': 'first-room', 'weekday': 2, 'weeks': [1, 2], 'location': 'A'},
@@ -172,6 +190,12 @@ async def check_schedule():
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://fixture") as client:
                 schedule = (await client.get("/schedule")).json()
+                exported = await client.get('/calendar/export.ics')
+                assert exported.status_code == 200 and exported.headers['content-type'].startswith('text/calendar')
+                assert exported.headers['content-disposition'] == 'attachment; filename="shanghaitech-timetable-4-weeks.ics"'
+                body = exported.content.decode('utf-8')
+                assert body.startswith('BEGIN:VCALENDAR\r\n') and body.endswith('END:VCALENDAR\r\n')
+                assert 'SUMMARY:作业截止：Quiz 1' in body and 'DTSTART:' in body
                 assert len(schedule["data"]["timetable"]) == 2
                 assert schedule["homework"]["items"] == [] and schedule["homework"]["pending"] == schedule["homework"]["late"] == 0
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
