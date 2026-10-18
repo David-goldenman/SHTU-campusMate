@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {applyLessonPositions, compareEvents, eventGroup, isCancelledClass, lessonLayout, matchesFilter, periodsFor} from '../web/planner.js';
+import {applyLessonPositions, campusMapUrl, compareEvents, eventGroup, isCancelledClass, lessonLayout, matchesFilter, periodsFor} from '../web/planner.js';
 
 const lessons = [
   {id:'a',event_type:'class',period_start:10,period_end:11,at:null},
@@ -56,3 +56,9 @@ assert.equal(day.style['--lesson-lanes'],'2');
 assert.equal(block.style.gridRow,'10 / span 2');
 assert.equal(block.style.gridColumn,'2');
 console.log('PASS: course axis, span and overlap lane positions use CSP-compatible CSSOM properties');
+
+const mapEvent={id:'event&中文',event_type:'class',location:'信息学院1D-102',at:'2026-10-20T16:30:00Z',original_date:'2026-10-19',status:'rescheduled'};
+assert.equal(campusMapUrl(mapEvent),'#campus-map?date=2026-10-21&event=event%26%E4%B8%AD%E6%96%87');
+assert.equal(campusMapUrl({...mapEvent,at:null,date:'2026-10-22'}),'#campus-map?date=2026-10-22&event=event%26%E4%B8%AD%E6%96%87');
+for(const override of [{status:'moved'},{status:'leave'},{status:'cancel'},{event_type:'deadline'},{event_type:'calendar'},{all_day:true},{location:''},{at:null,date:'2026-02-30'},{at:'2026-10-21T09:00:00'}])assert.equal(campusMapUrl({...mapEvent,...override}), '');
+console.log('PASS: saved event map links preserve adjusted dates/identities and exclude inactive/non-travel events');

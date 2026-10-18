@@ -43,14 +43,14 @@ def create_router(context):
         if owner != account_revision(context):
             raise HTTPException(409, '账号已切换，请重新读取当天安排。')
         if response.status_code != 200:
-            return {'date': selected.isoformat(), 'available': False, 'events': [],
+            return {'date': selected.isoformat(), 'available': False, 'events': [], 'account_revision': owner,
                     'issues': ['时间表模块未启用或暂时不可用，校园地图仍可查看。']}
         snapshot = response.json()
         calendar = snapshot.get('calendar', {})
         selected_day = next((item for item in calendar.get('days', []) if item['date'] == selected.isoformat()), {})
         events = [{field: item[field] for field in FIELDS if field in item}
                   for item in selected_day.get('events', []) if item.get('status') not in {'cancel', 'leave', 'moved'}]
-        return {'date': selected.isoformat(), 'available': True, 'events': events,
+        return {'date': selected.isoformat(), 'available': True, 'events': events, 'account_revision': owner,
                 'status': snapshot.get('status'), 'updated_at': snapshot.get('updated_at'),
                 'issues': snapshot.get('data', {}).get('issues', []),
                 'week_one': calendar.get('week_one')}

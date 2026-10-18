@@ -2,6 +2,15 @@
 export const isLesson = item => Number.isInteger(item.period_start) && Number.isInteger(item.period_end);
 export const isCancelledClass = item => item.event_type === 'class' && item.status === 'cancel';
 
+// Navigate with the saved event identity so the map reads the latest adjusted location.
+export function campusMapUrl(item) {
+  if(!item?.id||!item.location?.trim()||['cancel','leave','moved'].includes(item.status)||['deadline','calendar'].includes(item.event_type)||item.all_day)return '';
+  const value=item.at||item.starts_at||'',instant=/T\d{2}:\d{2}.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)?Date.parse(value):NaN;
+  const day=Number.isFinite(instant)?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date(instant)):item.date;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(day||'')||!Number.isFinite(Date.parse(day))||!new Date(day).toISOString().startsWith(day))return '';
+  return '#campus-map?'+new URLSearchParams({date:day,event:item.id});
+}
+
 export function matchesFilter(item, filter = 'all', showCancelled = false) {
   if (isCancelledClass(item) && !showCancelled) return false;
   return filter === 'all' || (filter === 'study'
