@@ -6,7 +6,7 @@ export UV_PROJECT_ENVIRONMENT="$task_runtime/venv"
 export UV_CACHE_DIR="$task_runtime/cache/uv"
 export UV_PYTHON_INSTALL_DIR="$task_runtime/python"
 export PYTHONPYCACHEPREFIX="$task_runtime/cache/python"
-export PYTHONDONTWRITEBYTECODE=1
+unset PYTHONDONTWRITEBYTECODE
 export TMPDIR="$task_runtime/tmp"
 export XDG_CACHE_HOME="$task_runtime/cache"
 mkdir -p "$TMPDIR"

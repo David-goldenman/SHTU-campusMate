@@ -11,11 +11,8 @@ from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
-import pypdfium2 as pdfium
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
-from pypdf import PdfReader
-from pypdf.errors import PyPdfError
 
 from backend.core.paths import PROJECT
 from backend.core.vault import windows_path, windows_tool
@@ -115,6 +112,8 @@ class SchoolCalendar:
 
     def render(self, content, key):
         """Cache the original PDF and rasterize every page for the web panel."""
+        import pypdfium2 as pdfium
+
         folder = self.directory(key)
         folder.mkdir(parents=True, exist_ok=True)
         pdf_path = folder / 'calendar.pdf'
@@ -168,6 +167,9 @@ class SchoolCalendar:
                 'due': bool(key) and self.due(metadata)}
 
     def refresh(self, metadata):
+        from pypdf import PdfReader
+        from pypdf.errors import PyPdfError
+
         key = term_key(metadata)
         if key is None:
             raise HTTPException(409, '请先同步教务课表，再读取本学年校历。')

@@ -41,6 +41,7 @@ async def check(root):
             client.headers["X-Framework-Token"] = initial["csrf_token"]
             installed = initial["modules"]
             assert installed and all(item["status"] == "ready" for item in installed), installed
+            assert not {"pypdf", "pypdfium2"}.intersection(sys.modules), "Document engines must load on demand, not during application startup"
             ids = [item["id"] for item in installed]
 
             async def toggle(module_id, enabled):

@@ -70,7 +70,7 @@ try {
         $env:UV_PYTHON_INSTALL_DIR = Join-Path $runtime 'python'
         $env:UV_CACHE_DIR = Join-Path $runtime 'cache/uv'
         $env:PYTHONPYCACHEPREFIX = Join-Path $runtime 'cache/python'
-        $env:PYTHONDONTWRITEBYTECODE = '1'
+        $env:PYTHONDONTWRITEBYTECODE = $null
         $env:TEMP = Join-Path $runtime 'tmp'
         $env:TMP = $env:TEMP
         New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null

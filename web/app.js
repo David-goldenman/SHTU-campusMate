@@ -2,6 +2,7 @@ import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './
 import * as settings from './settings.js';
 import {icon as navIcon} from './icons.js';
 import {cleanupAll, withTimeout} from './lifecycle.js';
+import {navigationChanged} from './navigation.js';
 import {initializeThemes, themeContext, viewURL} from './themes/appearance.js';
 import {unlock as unlockSounds} from './sounds.js';
 
@@ -137,9 +138,10 @@ async function stopBackground(id) {
   return failed;
 }
 
-async function syncBackground() {
+async function syncBackground(current) {
   const modules=state.modules.filter(item=>item.enabled&&item.status==='ready'&&item.background_url);
   await Promise.all([...backgroundScopes].filter(([id,scope])=>!modules.some(module=>module.id===id&&module.background_url===scope.url)).map(([id])=>stopBackground(id)));
+  if (current !== revision) return;
   await Promise.all(modules.filter(module=>!backgroundScopes.has(module.id)).map(module=>{
     const root=document.createElement('div');document.body.append(root);
     const scope={controller:new AbortController(),cleanups:[],root,url:module.background_url};
@@ -148,17 +150,24 @@ async function syncBackground() {
   }));
 }
 
+async function refreshNavigationMetadata(current, signal) {
+  try {
+    const latest = await api('/bootstrap',{signal});
+    if (current !== revision) return;
+    const changed = navigationChanged(state,latest);
+    state = latest;
+    setToken(state.csrf_token);
+    if (changed) await render();
+  } catch (error) {
+    if (current === revision && error.name !== 'AbortError') toast(error.message);
+  }
+}
+
 async function render(refreshMetadata = false) {
   const current = ++revision;
   await dispose();
   if (current !== revision) return;
-  if (refreshMetadata) {
-    const latest = await api('/bootstrap');
-    if (current !== revision) return;
-    state = latest;
-    setToken(state.csrf_token);
-  }
-  await syncBackground();
+  void syncBackground(current).catch(error => {if (current === revision) toast(error.message);});
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
@@ -178,6 +187,7 @@ async function render(refreshMetadata = false) {
   main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
+  if (refreshMetadata) void refreshNavigationMetadata(current,scope.controller.signal);
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
   zone.dataset.count = String(visible.length);

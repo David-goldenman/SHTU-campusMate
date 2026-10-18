@@ -48,6 +48,9 @@ def check(project):
         first = json.loads(state_file.read_text(encoding="utf-8"))
         assert first["root"] == str(project) and first["port"] == port
         assert not (project / ".codex").exists(), "Application runtime belongs in .private/runtime"
+        cache = project / ".private" / "runtime" / "cache" / "python"
+        assert any(cache.rglob("main.cpython-*.pyc")), "Startup imports must populate the runtime bytecode cache"
+        assert all(not any((project / folder).rglob("__pycache__")) for folder in ("backend", "modules", "scripts")), "Bytecode must stay in the private runtime"
         http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with http.open(f"http://127.0.0.1:{port}/api/v1/bootstrap", timeout=3) as response:
             value = json.loads(response.read())

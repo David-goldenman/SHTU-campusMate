@@ -17,4 +17,8 @@
 
 后台进程记录与停止信号保存在 `.private/runtime/launcher/`，日志在 `.private/runtime/logs/`，临时文件在 `.private/runtime/tmp/`。这些目录由程序创建并被 Git 忽略。开发检查使用独立合成目录，完整检查入口继续使用 `check.ps1` / `check.sh`。
 
+Windows 与 WSL 启动器在 `.private/runtime/cache/python/` 保存框架和启动依赖的 Python 字节码，后续启动复用缓存；首次生成缓存仍需解析源码。业务模块加载前继续关闭字节码写入，确保同一秒内修改模块代码后刷新也能生效。缓存不写入源码目录，不包含账号或业务数据。
+
+PDF 文字解析和校历图片渲染引擎在首次读取或更新对应资料时加载，打开工作台无需等待这些文档组件。
+
 界面设计、主题和业务 API 继续遵循 [设计规范](DESIGN.md)、[主题契约](UI_THEME.md) 和 [模块接口](MODULES.md)。

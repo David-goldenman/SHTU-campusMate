@@ -4,8 +4,19 @@ import zipfile
 from xml.etree import ElementTree
 
 from fastapi import HTTPException
-from pypdf import PdfReader
-from pypdf.errors import PyPdfError
+
+
+def pdf_pages(content):
+    from pypdf import PdfReader
+    from pypdf.errors import PyPdfError
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        if reader.is_encrypted or len(reader.pages) > 1000:
+            raise HTTPException(422, "请使用未加密且至多 1000 页的 PDF。")
+        return [(page.extract_text() or "").strip()[:20000] for page in reader.pages]
+    except PyPdfError as error:
+        raise ValueError("PDF text could not be parsed") from error
 
 
 def extract(content, media_type, title, *, allow_empty=False):
@@ -13,10 +24,7 @@ def extract(content, media_type, title, *, allow_empty=False):
         raise HTTPException(422, "资料应为非空且至多 30 MB 的文件。")
     try:
         if content.startswith(b"%PDF"):
-            reader = PdfReader(io.BytesIO(content))
-            if reader.is_encrypted or len(reader.pages) > 1000:
-                raise HTTPException(422, "请使用未加密且至多 1000 页的 PDF。")
-            kind, pages = "pdf", [(page.extract_text() or "").strip()[:20000] for page in reader.pages]
+            kind, pages = "pdf", pdf_pages(content)
         elif content.startswith(b"PK"):
             with zipfile.ZipFile(io.BytesIO(content)) as archive:
                 if sum(item.file_size for item in archive.infolist() if item.filename.endswith(('.xml', '.rels'))) > 40 * 1024 * 1024:
@@ -41,7 +49,7 @@ def extract(content, media_type, title, *, allow_empty=False):
             kind, pages = "text", [content.decode('utf-8-sig').strip()[:20000]]
         else:
             raise HTTPException(422, "当前支持 PDF、PPTX 和 UTF-8 文本；请下载原文件查看其他格式。")
-    except (ValueError, KeyError, OSError, PyPdfError, zipfile.BadZipFile, ElementTree.ParseError):
+    except (ValueError, KeyError, OSError, zipfile.BadZipFile, ElementTree.ParseError):
         raise HTTPException(422, "资料文字无法解析，请下载原文件查看。") from None
     if not allow_empty and not any(pages):
         raise HTTPException(422, "资料没有可提取的文字，扫描页或图片内容请在原文件中查看。")

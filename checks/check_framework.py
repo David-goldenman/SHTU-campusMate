@@ -1,6 +1,7 @@
 """Offline integration check; fixtures exist only inside .codex/tmp."""
 import asyncio
 import json
+import os
 import sys
 import tempfile
 from copy import deepcopy
@@ -144,7 +145,10 @@ async def check(root):
             assert (await client.put("/api/v1/modules/alpha/state", headers={"Authorization": "Bearer synthetic-alpha", "Origin": "https://untrusted.example"})).status_code == 403
             client.headers["X-Framework-Token"] = csrf_token
             initial_package = app.state.modules.entries["alpha"].package.__name__
-            (alpha / "server" / "helpers.py").write_text("VALUE = 'new'\n")
+            helper = alpha / "server" / "helpers.py"
+            stamp = helper.stat()
+            helper.write_text("VALUE = 'new'\n")
+            os.utime(helper, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
             updated = (await client.post("/api/v1/modules/reload")).json()["modules"]
             unchanged = next(item for item in updated if item["id"] == "alpha")
             assert first["frontend_url"] == unchanged["frontend_url"], "Backend reload preserves unchanged frontend URLs"

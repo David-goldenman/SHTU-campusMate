@@ -46,6 +46,11 @@ def check_documents():
         raise AssertionError('Unsupported documents must not invent page text')
     except HTTPException as error:
         assert error.status_code == 422
+    try:
+        extract(b'%PDF-1.7\ntruncated synthetic file', 'application/pdf', 'broken.pdf')
+        raise AssertionError('Malformed PDFs must retain the public parse error')
+    except HTTPException as error:
+        assert error.status_code == 422 and '无法解析' in error.detail
 
 
 async def check():

@@ -2,6 +2,7 @@ import asyncio
 import sys
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from fastapi import HTTPException
@@ -77,6 +78,30 @@ with sandbox('mail') as context:
     assert effective['year'] == 1 and effective['major'] == '合成专业' and '信号与系统' in effective['courses']
     assert intelligence.preferences()['year'] is None and intelligence.preferences()['courses'] == [], 'Linked context must not overwrite manual preferences'
     assert models.preliminary({'title':'信号与系统实验材料发布','body_text':''},effective)['bucket'] == 'focus'
+    batch = [item, *[{**item, 'id': f'mail:batch-{index}', 'source_id': f'batch-{index}', 'title': f'CS100 作业通知 {index}'} for index in range(99)]]
+    context.store.write('snapshot', {'owner': source.owner(), 'data': validate_bundle({'messages': batch}), 'updated_at': None})
+    expected = {row['id']: intelligence.prepared(row['id']) for row in batch}
+    with patch.object(source, 'snapshot', wraps=source.snapshot) as snapshots, \
+         patch.object(intelligence, 'effective_preferences', wraps=intelligence.effective_preferences) as preferences, \
+         patch.object(context.ai, 'settings', wraps=context.ai.settings) as settings:
+        records = intelligence.records()
+        assert snapshots.call_count == preferences.call_count == settings.call_count == 1, 'A mailbox batch must read shared inputs once, not once per message'
+    for row in records:
+        assert row['classification']['input_revision'] == expected[row['id']]['fingerprint']
+        if row['id'] != item['id']:
+            assert row['classification'] == {**expected[row['id']]['preliminary'], 'input_revision': expected[row['id']]['fingerprint'], 'review_pending': True}
+    assert records[0]['classification']['category'] == '我的分类', 'Batching must preserve manual priority'
+    with patch.object(context.ai, 'settings', return_value={'provider': 'openai', 'model': 'changed', 'base_url': 'https://example.test'}):
+        assert all(row['classification']['input_revision'] != expected[row['id']]['fingerprint'] for row in intelligence.records()), 'New batches must use current AI settings'
+    def change_account():
+        context.auth.revision = 'changed-during-batch'
+        return {'model': 'synthetic'}
+    with patch.object(context.ai, 'settings', side_effect=change_account):
+        try:
+            intelligence.records()
+            raise AssertionError('An account change during a batch must reject its result')
+        except HTTPException as error:
+            assert error.status_code == 409
     context.auth.revision = 'other-account'
     assert intelligence.effective_preferences()['courses'] == [], 'Linked study context is account-scoped'
     assert intelligence.preferences()['requirements'] == '' and intelligence.records() == []

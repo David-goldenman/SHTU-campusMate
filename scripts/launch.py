@@ -298,14 +298,17 @@ def start(port, no_browser):
         log = LOGS / ("server-" + datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + instance[:6] + ".log")
         env = {
             **os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1",
-            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": str(RUNTIME / "cache" / "python"),
+            "PYTHONPYCACHEPREFIX": str(RUNTIME / "cache" / "python"),
             "TEMP": str(temporary), "TMP": str(temporary), "TMPDIR": str(temporary),
         }
+        # Reuse startup imports on subsequent launches, even from a test/development shell.
+        # ModuleManager separately disables writes before loading hot-reloadable modules.
+        env.pop("PYTHONDONTWRITEBYTECODE", None)
         env.update(timezone)
         print("正在启动 campusMate，使用：" + sys.executable, flush=True)
         with log.open("wb") as output:
             process = subprocess.Popen(
-                [sys.executable, "-X", "utf8", "-B", str(Path(__file__).resolve()),
+                [sys.executable, "-X", "utf8", str(Path(__file__).resolve()),
                  "--serve", "--port", str(port), "--instance", instance],
                 cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT,
                 creationflags=subprocess.CREATE_NO_WINDOW,

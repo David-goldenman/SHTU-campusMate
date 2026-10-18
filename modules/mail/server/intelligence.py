@@ -173,25 +173,33 @@ class Intelligence:
     def prepared(self, message_id):
         item = self.selected(message_id)
         preferences = self.effective_preferences()
+        value = self._prepared(item, preferences, self.context.ai.settings(), self.source.owner())
+        return {**value, 'schema': Decision.model_json_schema()}
+
+    def _prepared(self, item, preferences, ai, owner):
         text = {'title': item['title'], 'body_text': item.get('body_text', '')[:14000]}
         # Contact details do not help decide which campus notices matter.
         text = {key: re.sub(r'(?<!\d)1[3-9]\d{9}(?!\d)', '[联系电话]', re.sub(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', '[邮箱地址]', value)) for key, value in text.items()}
         preliminary_value = preliminary(item, preferences)
-        ai = self.context.ai.settings()
         route = ai['model'] if ai.get('provider', 'deepseek') == 'deepseek' else [ai['provider'], ai['model'], ai.get('base_url')]
-        fingerprint = digest([self.source.owner(), text, preferences, route, PROMPT])
-        return {'message_id': message_id, 'fingerprint': fingerprint, 'notification': text, 'sender': item.get('sender', ''),
+        fingerprint = digest([owner, text, preferences, route, PROMPT])
+        return {'message_id': item['id'], 'fingerprint': fingerprint, 'notification': text, 'sender': item.get('sender', ''),
                 'received_at': item.get('received_at'), 'preferences': preferences, 'preliminary': preliminary_value,
-                'instruction': PROMPT, 'schema': Decision.model_json_schema()}
+                'instruction': PROMPT}
 
     def records(self):
         owner = account_revision(self.context)
-        reviews = self.context.store.read(self.key('reviews'), {})
+        mail_owner = self.source.owner()
+        reviews = self.context.store.read('reviews:' + mail_owner, {})
         labels = self.context.store.read('labels', {})
-        labels = labels.get('value', {}) if labels.get('owner') == self.source.owner() else {}
+        labels = labels.get('value', {}) if labels.get('owner') == mail_owner else {}
+        messages = self.source.snapshot()['data']['messages']
+        # Read shared inputs once per batch; repeated Vault reads block other pages.
+        preferences = self.effective_preferences() if messages else {}
+        ai = self.context.ai.settings() if messages else {}
         result = []
-        for item in self.source.snapshot()['data']['messages']:
-            prepared = self.prepared(item['id'])
+        for item in messages:
+            prepared = self._prepared(item, preferences, ai, mail_owner)
             classification = prepared['preliminary']
             review = reviews.get(item['id'])
             if review and review['fingerprint'] == prepared['fingerprint']:
