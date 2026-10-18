@@ -144,6 +144,8 @@ def check_download():
         calls.append(str(request.url))
         if request.url.path == "/redirect":
             return httpx.Response(302, headers={"Location": "https://foreign.example/file"})
+        if request.url.path == '/stream':
+            return httpx.Response(200, content=b'%PDF-synthetic', headers={'Content-Type': 'application/pdf', 'Content-Length': '2'})
         return httpx.Response(200, content=b"%PDF-synthetic", headers={"Content-Type": "application/pdf"})
 
     with sandbox("files", handler) as context:
@@ -159,6 +161,12 @@ def check_download():
             except LoginRequired:
                 pass
         assert not any("foreign.example" in url for url in calls)
+        try:
+            download(context, 'ids', ['example.edu'], lambda remote: ('https://example.edu/stream', 'notes.pdf'), threading.Event(), max_bytes=5)
+            raise AssertionError('The actual streamed size must be bounded even when Content-Length is wrong')
+        except SourceError:
+            pass
+        assert not list((context.data_dir / 'tmp' / 'downloads').iterdir()), 'Oversized downloads must clean their partial file'
 
 
 def check_auth_cancellation():

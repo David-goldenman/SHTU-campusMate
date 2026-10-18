@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from backend.services.auth import LoginRequired
 from backend.services.campus import SourceError, course, identity, plain, rows, timestamp
+from .resources import fetch_resources
 
 BASE = "https://piazza.com"
 
@@ -31,7 +32,7 @@ def fetch(remote, previous):
     if not isinstance(profile, dict) or "networks" not in profile:
         raise SourceError("Piazza 课程目录格式已变化。")
     classes = profile["networks"]
-    result = {"courses": [], "posts": [], "issues": [], "metadata": {"feed_limit": 50, "scope": "recent_updated_per_course"}}
+    result = {"courses": [], "posts": [], "materials": [], "issues": [], "metadata": {"feed_limit": 50, "scope": "recent_updated_per_course", "resource_scope": "enrolled_course_resources"}}
     for network in rows(classes):
         nid = network.get("id") or network.get("nid")
         if not isinstance(nid, (str, int)) or not str(nid):
@@ -54,6 +55,11 @@ def fetch(remote, previous):
         except HTTPException:
             result["issues"].append(item["title"] + " 的近期讨论暂时不可读，保留缓存。")
             result["posts"].extend(old for old in previous.get("posts", []) if old.get("course_id") == item["id"])
+        try:
+            result['materials'].extend(fetch_resources(remote, network))
+        except HTTPException:
+            result['issues'].append(item['title'] + ' 的 Piazza 课件目录暂时不可读，保留缓存。')
+            result['materials'].extend({**old, 'stale': True} for old in previous.get('materials', []) if old.get('course_id') == item['id'])
     return result
 
 

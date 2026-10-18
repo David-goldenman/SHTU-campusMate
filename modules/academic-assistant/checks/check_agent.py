@@ -51,6 +51,7 @@ def check_documents():
         raise AssertionError('Malformed PDFs must retain the public parse error')
     except HTTPException as error:
         assert error.status_code == 422 and '无法解析' in error.detail
+    return data.getvalue()
 
 
 async def check():
@@ -58,11 +59,15 @@ async def check():
         original_status = context.auth.get_status
         context.auth.get_status = lambda provider: {**original_status(provider), 'identity_verified': True}
         material = {'id': 'blackboard:slides', 'source': 'blackboard', 'title': 'Synthetic slides.pptx', 'url': 'https://example.edu/course', 'download_url': '/api/v1/modules/blackboard/file?material_id=blackboard%3Aslides'}
+        piazza_material = {'id': 'piazza:resource:demo:slides', 'source': 'piazza', 'title': 'Synthetic Piazza.pdf', 'url': 'https://piazza.com/class_profile/get_resource/demo/slides', 'download_url': '/api/v1/modules/piazza/file?material_id=piazza%3Aresource%3Ademo%3Aslides'}
         assignment = {'id': 'gradescope:hw', 'source': 'gradescope', 'title': '合成作业', 'due_at': '2026-10-20T20:00:00+08:00', 'submitted': False, 'actionable': True}
 
         async def api(name, path='/snapshot', **options):
             if name == 'blackboard':
                 return httpx.Response(200, content=slides(), headers={'content-type': 'application/zip'})
+            if name == 'piazza':
+                assert path.startswith('/file?material_id=')
+                return httpx.Response(200, content=PDF, headers={'content-type': 'application/pdf'})
             if name == 'assignments':
                 blackboard = [{'id': 'blackboard:' + state, 'source': 'blackboard', 'title': '合成提交记录', 'submitted': True, 'submission_status': state}
                               for state in ('submitted', 'graded')]
@@ -73,7 +78,7 @@ async def check():
                                               'blackboard': {'total': 2, 'unsubmitted': 0, 'pending': 0,
                                                              'submission_states': {'submitted': 1, 'needs_grading': 0, 'graded': 1}, 'needs_review': 0}}}})
             if name == 'courses':
-                return httpx.Response(200, json={'data': validate_bundle({'assignments': [assignment], 'materials': [material], 'metadata': {'source_metadata': {'blackboard': {'updated_at': 'synthetic-revision'}}}})})
+                return httpx.Response(200, json={'data': validate_bundle({'assignments': [assignment], 'materials': [material, piazza_material], 'metadata': {'source_metadata': {'blackboard': {'updated_at': 'synthetic-revision'}, 'piazza': {'updated_at': 'synthetic-revision'}}}})})
             raise AssertionError((name, path))
 
         context.api = api
@@ -107,11 +112,15 @@ async def check():
                 assert response.status_code == 200, response.text
                 document = response.json()['items'][0]
                 assert document['page'] == 1 and 'superposition' in document['text']
+                response = await client.post(base + '/tools/document', json={'record_id': piazza_material['id'], 'q': 'assignment'}, headers=headers)
+                assert response.status_code == 200, response.text
+                piazza_page = response.json()['items'][0]
+                assert piazza_page['page'] == 1 and 'Synthetic assignment text' in piazza_page['text']
                 response = await client.post(base + '/tools/remember', json={'profile': {'weekly_hours': 10}, 'quote': '每周10小时'}, headers=headers)
                 assert response.status_code == 200, response.text
                 assert (await client.post(base + '/tools/remember', json={'profile': {'major': '不存在的专业'}, 'quote': '每周10小时'}, headers=headers)).status_code == 422
                 assert (await client.post(base + '/tools/navigate', json={'category': 'assignments'}, headers=headers)).status_code == 200
-                citations = [{'source_id': source['source_id'], 'quote': 'title: 合成作业\nsubmitted: false'}, {'source_id': document['source_id'], 'quote': 'Vector  superposition'}]
+                citations = [{'source_id': source['source_id'], 'quote': 'title: 合成作业\nsubmitted: false'}, {'source_id': document['source_id'], 'quote': 'Vector  superposition'}, {'source_id': piazza_page['source_id'], 'quote': 'Synthetic assignment text'}]
                 rejected = await client.post(base + '/tools/finish', json={'text': '合成回答', 'citations': [{'source_id': source['source_id'], 'quote': '不存在的作业'}]}, headers=headers)
                 assert rejected.status_code == 422
                 while len(package._agent.tasks[token].activity) < 24:
@@ -190,6 +199,6 @@ async def check():
         package.stop(context)
 
 
-check_documents()
+PDF = check_documents()
 asyncio.run(check())
 print('academic assistant: PDF/PPTX page order, task-bound tools, exact citations, explicit profile updates, navigation, history and account isolation passed')

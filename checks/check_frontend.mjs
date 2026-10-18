@@ -5,7 +5,7 @@ import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/compos
 import {cleanupAll} from '../web/lifecycle.js';
 import {navigationChanged} from '../web/navigation.js';
 import {renderNetwork} from '../web/network.js';
-import {submissionLabel} from '../web/campus.js';
+import {submissionLabel, records} from '../web/campus.js';
 import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
 import {schoolServices} from '../web/school-login.js';
 
@@ -143,6 +143,10 @@ assert(!markdown.includes('<script>') && !markdown.includes('href="javascript:')
 assert.match(renderMarkdown('[资料](https://example.edu)'),/rel="noopener noreferrer"/);
 
 globalThis.location = {origin:'http://127.0.0.1:16666'};
+const resourceMarkup=records([{title:'<script>Lecture.pdf</script>',source:'piazza',url:'https://piazza.com/class_profile/get_resource/demo/slides',download_url:'/api/v1/modules/piazza/file?material_id=demo',preview_url:'/api/v1/modules/piazza/file?material_id=demo&inline=true'}],escape);
+assert(resourceMarkup.includes('查看文件')&&resourceMarkup.includes('下载文件')&&resourceMarkup.includes('原站'));
+assert(resourceMarkup.includes('inline=true')&&!resourceMarkup.includes('<script>'));
+assert(!records([{title:'unsafe',preview_url:'javascript:alert(1)'}],escape).includes('href="javascript:'));
 const events = [{type:'delta',text:'中文边界 🌲'},{type:'complete',message:{text:'完成'}}];
 const bytes = new TextEncoder().encode(events.map(value=>JSON.stringify(value)).join('\n'));
 setToken('synthetic-csrf');
