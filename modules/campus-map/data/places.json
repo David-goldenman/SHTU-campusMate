@@ -2622,29 +2622,22 @@
     },
     {
       "id": "67a2a330debc4292bb768bff52e88e68",
-      "name": "篮球场",
-      "category": "sports",
-      "category_label": "体育运动",
+      "name": "博士公寓12号楼",
+      "short_name": "博士公寓12",
+      "category": "residence",
+      "category_label": "博士公寓",
       "polygon": [
         [
           121.60557,
           31.183836
         ],
         [
-          121.605577,
-          31.183055
+          121.605573,
+          31.18345
         ],
         [
-          121.606088,
-          31.183035
-        ],
-        [
-          121.606092,
-          31.183143
-        ],
-        [
-          121.606092,
-          31.183325
+          121.606097,
+          31.18345
         ],
         [
           121.606102,
@@ -2660,8 +2653,47 @@
         ]
       ],
       "aliases": [
-        "篮球场"
+        "博士公寓12号楼",
+        "博士公寓12",
+        "博士生公寓12号楼",
+        "博士生公寓12"
       ],
+      "place_update": {
+        "source_type": "user_feedback",
+        "reported_at": "2026-10-18",
+        "source_label": "使用者更正 · 2026-10-18",
+        "note": "原排球场、篮球场区域已改为博士公寓11、12、13号楼，从北到南排列。图中范围沿用旧场地作位置示意，尚非新楼测绘轮廓。"
+      },
+      "source_label": "旧版官方底图 ↗",
+      "source_url": "https://map.shanghaitech.edu.cn/?id=67a2a330debc4292bb768bff52e88e68typebuilding|22f2832a4e894959954f838da53632c1"
+    },
+    {
+      "id": "doctoral-apartment-13",
+      "name": "博士公寓13号楼",
+      "short_name": "博士公寓13",
+      "category": "residence",
+      "category_label": "博士公寓",
+      "polygon": [
+        [121.605574, 31.183435],
+        [121.605577, 31.183055],
+        [121.606088, 31.183035],
+        [121.606092, 31.183143],
+        [121.606092, 31.183325],
+        [121.606097, 31.183435]
+      ],
+      "aliases": [
+        "博士公寓13号楼",
+        "博士公寓13",
+        "博士生公寓13号楼",
+        "博士生公寓13"
+      ],
+      "place_update": {
+        "source_type": "user_feedback",
+        "reported_at": "2026-10-18",
+        "source_label": "使用者更正 · 2026-10-18",
+        "note": "原排球场、篮球场区域已改为博士公寓11、12、13号楼，从北到南排列。图中范围沿用旧场地作位置示意，尚非新楼测绘轮廓。"
+      },
+      "source_label": "旧版官方底图 ↗",
       "source_url": "https://map.shanghaitech.edu.cn/?id=67a2a330debc4292bb768bff52e88e68typebuilding|22f2832a4e894959954f838da53632c1"
     },
     {
@@ -3118,9 +3150,10 @@
     },
     {
       "id": "33115ddbc53547649ba73f5a89a95721",
-      "name": "排球场",
-      "category": "sports",
-      "category_label": "体育运动",
+      "name": "博士公寓11号楼",
+      "short_name": "博士公寓11",
+      "category": "residence",
+      "category_label": "博士公寓",
       "polygon": [
         [
           121.605572,
@@ -3140,8 +3173,18 @@
         ]
       ],
       "aliases": [
-        "排球场"
+        "博士公寓11号楼",
+        "博士公寓11",
+        "博士生公寓11号楼",
+        "博士生公寓11"
       ],
+      "place_update": {
+        "source_type": "user_feedback",
+        "reported_at": "2026-10-18",
+        "source_label": "使用者更正 · 2026-10-18",
+        "note": "原排球场、篮球场区域已改为博士公寓11、12、13号楼，从北到南排列。图中范围沿用旧场地作位置示意，尚非新楼测绘轮廓。"
+      },
+      "source_label": "旧版官方底图 ↗",
       "source_url": "https://map.shanghaitech.edu.cn/?id=33115ddbc53547649ba73f5a89a95721typebuilding|22f2832a4e894959954f838da53632c1"
     },
     {
