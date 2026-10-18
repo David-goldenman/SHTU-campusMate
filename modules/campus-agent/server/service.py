@@ -94,6 +94,8 @@ class Job:
 
     def selected_data(self, value):
         if isinstance(value, dict):
+            if value.get('source') == 'group-messages':
+                return None  # The selected-group workflow already owns extraction and notification.
             if (value.get('source') == 'mail' or str(value.get('id', '')).startswith('mail:')) and value.get('id') not in self.pending:
                 return None
             return {key: self.selected_data(child) for key, child in value.items()}
@@ -256,8 +258,13 @@ class CampusAgent:
 
     async def collect(self):
         modules, snapshots = {}, {}
-        for info in self.context.modules()['modules']:
-            if info['status'] != 'ready' or info['id'] in {self.context.id, 'notifications'}:
+        infos = self.context.modules()['modules']
+        managed_calendar = set()
+        if any(info['id'] == 'group-messages' and info['status'] == 'ready' for info in infos):
+            group_snapshot = await self.api('group-messages')
+            managed_calendar = set(group_snapshot.get('data', {}).get('metadata', {}).get('managed_calendar_ids', []))
+        for info in infos:
+            if info['status'] != 'ready' or info['id'] in {self.context.id, 'notifications', 'group-messages'}:
                 continue
             module = info['id']
             key = (module, info['revision'])
@@ -274,7 +281,7 @@ class CampusAgent:
                 snapshots[module] = await self.api(module)
                 if module == 'timetable':
                     events = await self.api(module, '/events')
-                    snapshots[module]['data']['events'] = [item for item in events['items'] if not item.get('origin_id', '').startswith('campus-agent:')]
+                    snapshots[module]['data']['events'] = [item for item in events['items'] if not item.get('origin_id', '').startswith('campus-agent:') and item['id'] not in managed_calendar]
         mail = await self.api('mail', '/intelligence') if 'mail' in modules else {'messages': [], 'preferences': {}}
         return modules, snapshots, mail
 
