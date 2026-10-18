@@ -1,5 +1,7 @@
 # 共享认证服务
 
+桌面安装版使用随包的 Electron 独立登录窗口，凭据和浏览器资料保存在安装目录 `.private/`；源码网页入口继续使用本机 Edge。两者沿用相同的登录、会话复核与账号隔离接口。
+
 框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`ecourse`、`timetable`，默认 `blackboard`。学校邮箱同时支持推荐的 IMAP 专用密码登录与官方网页会话；配置 IMAP 后优先使用 IMAP，网页会话及其缓存会被删除。E 云课堂使用原站登录页中的已登录账号标识验证身份，其课程数据由独立模块只读同步。
 
 ## 本地凭据与资料

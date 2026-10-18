@@ -21,7 +21,8 @@ from .catalog import runtime_route
 def prepare(command, *, cwd, env, timeout, check_cancelled):
     """Poll only our preparation subprocess, so Stop also works before model startup."""
     check_cancelled()
-    process = subprocess.Popen(command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    # Noninteractive CLI commands must not inherit the desktop host's open control pipe.
+    process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                start_new_session=os.name != 'nt', creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     deadline = time.monotonic() + timeout
     try:

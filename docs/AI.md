@@ -1,5 +1,7 @@
 # 共享 AI 与插件运行时
 
+桌面安装包携带固定版本 Node、pnpm、官方 Harness 与插件。运行时使用随包工具，包管理缓存、任务文件及日志均在安装目录 `.private/` 内；用户无需另行安装 Python 或包管理器。
+
 共享服务提供基础对话、文本与 JSON 生成，以及基于 DeepSeek Harness 官方运行时的插件任务。设置统一选择当前提供商和模型。DeepSeek 基础接口直接调用官方 Chat Completions；其他提供商的基础调用与插件任务均使用官方 Harness 的 `dsh-llm-pi-ai` 适配器。插件入口通过 `deepseek-harness-sdk==0.1.5rc1` 启动官方 `sdk-minimal`，由原生 Cordis 插件提供工具和业务能力。
 
 服务位于 `backend/services/ai/`，由框架启动时创建一个 `AIService(vault, store)` 实例，所有模块通过共享上下文使用该实例。模块负责挑选资料、组织提示和管理自己的结果；AI 服务仅处理调用方传入的内容。对话历史由对应模块决定如何保存，调用时通过 `messages` 显式传入。

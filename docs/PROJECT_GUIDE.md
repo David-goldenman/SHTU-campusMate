@@ -1,5 +1,7 @@
 # 运行与开发指南
 
+Windows 桌面安装包可从 [GitHub Releases](https://github.com/David-goldenman/Shanghaitech-2026-Hackthon/releases) 获取，支持选择安装目录，所需运行环境随包提供。用户数据、缓存、日志及下载保存在安装目录 `.private/`，具体操作见 [桌面说明](../packaging/electron/README.md)。
+
 项目介绍见 [campusMate](../README.md)。本文集中说明运行环境、配置、当前验收状态和开发入口；协作规则以 [团队开发约定](DEVELOPMENT.md) 为准。
 
 已有 Python 环境可通过 [Windows 已有环境启动器](LOCAL_UI.md) 在后台运行，并使用 `stop.cmd` 停止。默认双击入口由 uv 准备项目运行环境。

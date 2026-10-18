@@ -38,8 +38,8 @@ def main():
     run([windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
          "-File", windows_path(PROJECT / "checks" / "check_launcher.ps1")], "Windows launcher")
 
-    sources = sorted(path for folder in ("web", "modules", "scripts", "checks")
-                     for path in (PROJECT / folder).rglob("*") if path.suffix in {".js", ".mjs"})
+    sources = sorted(path for folder in ("web", "modules", "scripts", "checks", "packaging")
+                     for path in (PROJECT / folder).rglob("*") if path.suffix in {".js", ".mjs", ".cjs"})
     for path in sources:
         run([node, "--check", str(path.relative_to(PROJECT))], "JavaScript syntax: " + str(path.relative_to(PROJECT)))
     print(f"\nPASS: {len(python_checks)} Python checks, {len(javascript_checks)} JavaScript checks, Windows launcher and {len(sources)} JavaScript syntax checks", flush=True)

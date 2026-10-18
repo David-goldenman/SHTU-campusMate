@@ -46,7 +46,7 @@ class VerificationBrowser:
         line = process.stdout.readline()
         if not line:
             process.wait(timeout=5)
-            raise PublicError("验证窗口未能启动，请检查 Windows Node 与 Edge。")
+            raise PublicError("验证窗口未能启动，请关闭验证窗口后重新连接。")
         return json.loads(line)
 
     def state(self, provider):

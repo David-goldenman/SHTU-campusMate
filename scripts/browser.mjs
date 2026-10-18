@@ -51,9 +51,11 @@ try {
     if (!existing) {
       const args = [`--user-data-dir=${input.profile}`, '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', `--disk-cache-dir=${join(input.profile, 'cache')}`, '--disable-background-mode', '--disable-sync', '--window-size=1300,900'];
       args.push(...proxyArguments(input.url));
-      if (input.headless) args.push('--headless=new', '--disable-gpu');
+      const desktopShell = process.env.CAMPUS_AUTH_ELECTRON;
+      if (desktopShell) args.unshift('--campus-auth', ...(input.headless ? ['--campus-smoke'] : []));
+      else if (input.headless) args.push('--headless=new', '--disable-gpu');
       args.push('about:blank');
-      const child = spawn(input.edge || process.env.CAMPUS_EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', args, {
+      const child = spawn(desktopShell || input.edge || process.env.CAMPUS_EDGE || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', args, {
         detached: true, windowsHide: Boolean(input.headless), stdio: 'ignore', env: { ...process.env, TEMP: temp, TMP: temp },
       });
       child.on('error', () => {});
@@ -65,15 +67,28 @@ try {
       if (!existing) throw new Error('Login browser did not start');
     }
     await connect(existing.webSocketDebuggerUrl);
+    let desktopTarget;
+    if (process.env.CAMPUS_AUTH_ELECTRON) {
+      for (let n = 0; n < 30 && !desktopTarget; n++) {
+        const {targetInfos} = await call('Target.getTargets');
+        desktopTarget = targetInfos.find(target => target.type === 'page')?.targetId;
+        if (!desktopTarget) await delay(100);
+      }
+      if (!desktopTarget) throw new Error('Login window did not become ready');
+    }
     if (input.device_setup) {
       if (input.url !== 'https://ids.shanghaitech.edu.cn/personalInfo/personCenter/index.html#/accountsecurity') throw new Error('Unexpected device setup destination');
-      const {targetId} = await call('Target.createTarget', {url:'about:blank'});
+      const {targetId} = desktopTarget ? {targetId: desktopTarget} : await call('Target.createTarget', {url:'about:blank'});
       const {sessionId} = await call('Target.attachToTarget', {targetId,flatten:true});
       const source = await readFile(new URL('./ids-device-guide.js', import.meta.url), 'utf8');
       await call('Page.enable', {}, sessionId);
       await call('Page.addScriptToEvaluateOnNewDocument', {source}, sessionId);
       await call('Page.navigate', {url:input.url}, sessionId);
       retainSocket = Boolean(input.keep_alive);
+    } else if (desktopTarget) {
+      const {sessionId} = await call('Target.attachToTarget', {targetId: desktopTarget, flatten: true});
+      await call('Page.enable', {}, sessionId);
+      await call('Page.navigate', {url: input.url}, sessionId);
     } else {
       await call('Target.createTarget', { url: input.url });
     }
@@ -89,7 +104,14 @@ try {
     const version = await endpoint();
     await connect(version.webSocketDebuggerUrl);
     if (input.action === 'close') {
-      await call('Browser.close');
+      if (process.env.CAMPUS_AUTH_ELECTRON) {
+        const {targetInfos} = await call('Target.getTargets');
+        for (const target of targetInfos.filter(item => item.type === 'page')) {
+          await call('Target.closeTarget', {targetId: target.targetId});
+        }
+      } else {
+        await call('Browser.close');
+      }
       for (let n = 0; n < 50; n++) {
         await delay(100);
         try { await endpoint(); } catch { break; }

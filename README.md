@@ -46,6 +46,8 @@ PDF 与 PPTX 资料支持按页提取文字和引用，扫描件可配置图片�
 
 ## 开始使用
 
-当前提供 Windows 本地网页体验。准备运行环境后，双击根目录的 `run.cmd` 打开工作台，在设置中连接校园服务并填写模型 API Key。
+Windows 桌面安装包支持选择安装目录，携带所需运行环境。安装后打开 CampusMate，在设置中连接校园服务并配置 AI；用户数据、缓存和日志保存在安装目录的 `.private/`。下载见 [GitHub Releases](https://github.com/David-goldenman/Shanghaitech-2026-Hackthon/releases)。
+
+源码运行继续使用 `run.cmd`。桌面安装、升级与构建见 [桌面说明](packaging/electron/README.md)。
 
 安装、启动和配置见 [使用指南](docs/PROJECT_GUIDE.md#启动)；品牌图标与宣传素材见 [品牌介绍](docs/BRAND.md)。
