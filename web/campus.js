@@ -43,7 +43,7 @@ export async function sourcePanel(container, context, render) {
   const button = container.querySelector('[data-sync]');
   const networkHost = container.querySelector('[data-network]');
   const diagnose = bindSyncNetwork(networkHost,context,async () => {await context.api('/sync',{method:'POST'});await refresh();});
-  const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'正在同步', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
+  const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'后台同步中，可离开此页', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
   async function refresh() {
     clearTimeout(timer);
     const snapshot = await context.api('/snapshot');
@@ -58,7 +58,7 @@ export async function sourcePanel(container, context, render) {
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
     diagnose.update(snapshot.network_failure ? [snapshot.network_failure] : snapshot.network_failures || []);
     await render(container.querySelector('[data-content]'), snapshot, context, refresh);
-    if (snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
+    if (!context.signal.aborted && snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
   }
   button.addEventListener('click', async () => {
     button.disabled = true;

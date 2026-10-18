@@ -10,6 +10,8 @@ from ..auth.network import failure_context
 from .data import digest, validate_bundle
 from .remote import Remote
 
+REFRESH_SECONDS = 60
+
 
 class Source:
     def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, direct=None, stale_after=21600):
@@ -26,6 +28,14 @@ class Source:
         state = context.store.read(self.sync_key, {})
         if state.get("status") == "syncing":
             context.store.write(self.sync_key, {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
+        self.refresh_thread = threading.Thread(target=self.refresh_loop, name=context.id + '-refresh', daemon=True)
+        self.refresh_thread.start()
+        if getattr(context, 'runtime', None):
+            context.runtime.watch('缓存刷新', self.refresh_thread)
+
+    def refresh_loop(self):
+        while not self.cancelled.wait(REFRESH_SECONDS):
+            self.snapshot()
 
     def owner(self):
         return digest(self.context.auth.get_account_revision(self.provider))
@@ -41,11 +51,12 @@ class Source:
                 saved = {"data": validate_bundle({}), "updated_at": None}
             result = {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
             # 过期快照保留当前内容，并复用模块自己的同步队列。
-            if self._is_stale(saved) and result["status"] == "ready":
+            if self._is_stale(saved) and result["status"] in {"ready", "partial"}:
                 result["status"] = "cached"
                 result["message"] = "本地缓存，待核实"
                 if not self.cancelled.is_set():
                     self.sync()
+                    result.update(status="syncing", message="正在后台更新，先显示已保存的资料。可以离开此页。")
             return result
 
     def _is_stale(self, saved):
@@ -127,6 +138,7 @@ class Source:
     def close(self):
         with self.lock:
             self.cancelled.set()
+        self.refresh_thread.join()
         self.executor.shutdown(wait=True, cancel_futures=True)
 
 

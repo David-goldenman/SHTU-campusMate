@@ -2,6 +2,7 @@ import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -71,7 +72,7 @@ def check_source():
 
         source.fetch = refresh
         cached = source.snapshot()
-        assert cached["status"] == "cached" and cached["data"] == original
+        assert cached["status"] == "syncing" and cached["data"] == original
         assert entered.wait(2)
         assert source.sync()["queued"] is False and source.snapshot()["status"] == "syncing"
         release.set()
@@ -107,6 +108,31 @@ def check_source():
         context.store.write(source.sync_key, {"owner": source.owner(), "status": "ready"})
         assert source.snapshot()["status"] == "cached", "A stopped source can expose cached data without queuing work"
     assert validate_bundle({"courses": [{"id": "x:1", "source": "x"}]})["courses"]
+
+
+def check_background_refresh():
+    entered, release = threading.Event(), threading.Event()
+    with sandbox('background') as context, patch('backend.services.campus.source.REFRESH_SECONDS', .02):
+        source = Source(context, 'ids', ['example.edu'], lambda remote, previous: previous)
+        try:
+            source.run()
+            saved = context.store.read(source.snapshot_key)
+            def refresh(remote, previous):
+                entered.set()
+                assert release.wait(3)
+                return previous
+            source.fetch = refresh
+            context.store.write(source.snapshot_key, {**saved, 'updated_at': (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()})
+            assert entered.wait(2), 'Expired connected caches refresh without a mounted page'
+            assert source.snapshot()['status'] == 'syncing'
+            assert source.sync()['queued'] is False
+            release.set()
+            source.future.result(timeout=2)
+            assert source.snapshot()['status'] == 'ready'
+        finally:
+            release.set()
+            source.close()
+        assert not source.refresh_thread.is_alive()
 
 
 def check_download():
@@ -160,6 +186,7 @@ def check_auth_cancellation():
 if __name__ == "__main__":
     check_remote()
     check_source()
+    check_background_refresh()
     check_download()
     check_auth_cancellation()
     print("campus: retries, pagination bounds, malformed JSON, cache preservation, account isolation and worker cleanup passed")

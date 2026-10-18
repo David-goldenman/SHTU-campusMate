@@ -1,4 +1,6 @@
 export async function mount(container, context) {
+  let poll;
+  context.signal.addEventListener('abort', () => clearTimeout(poll), {once:true});
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const cleanup = () => { removeStyle(); container.replaceChildren(); };
   const e = context.ui.escape, options = {signal: context.signal};
@@ -59,9 +61,22 @@ export async function mount(container, context) {
 
   function updateSyncButton() {
     const report = reports[selected()];
-    find('[data-more-sync]').disabled = !selected() || report?.next_offset == null;
+    find('[data-more-sync]').disabled = !selected() || report?.status === 'syncing' || report?.next_offset == null;
     find('[data-more-sync]').textContent = report?.status === 'partial' || report?.status === 'error' ? '重试未完成页' : '继续采集下一页';
-    find('[data-sync]').disabled = !selected();
+    find('[data-sync]').disabled = !selected() || report?.status === 'syncing';
+  }
+
+  async function refreshCollection() {
+    clearTimeout(poll);
+    const value = await context.api('/courses');
+    if (context.signal.aborted) return;
+    const previous = reports[selected()]?.status;
+    reports = value.status;
+    updateSyncButton();
+    if (reports[selected()]?.status === 'syncing') status(reports[selected()].message);
+    else if (previous === 'syncing') await loadPosts(offset);
+    if (!context.signal.aborted && Object.values(reports).some(report => report.status === 'syncing'))
+      poll = setTimeout(() => refreshCollection().catch(error => {if (!context.signal.aborted) status(error.message);}), 1200);
   }
 
   async function loadCourses() {
@@ -75,6 +90,7 @@ export async function mount(container, context) {
     find('[data-courses]').value = value.courses.map(course => course.id + ' ' + course.name).join('\n');
     updateSyncButton();
     await loadPosts(0);
+    if (Object.values(reports).some(report => report.status === 'syncing')) await refreshCollection();
   }
 
   async function loadPosts(start = 0) {
@@ -134,10 +150,10 @@ export async function mount(container, context) {
       if (button.hasAttribute('data-sync') || button.hasAttribute('data-more-sync')) {
         const course = selected();
         const start = button.hasAttribute('data-more-sync') ? reports[course].next_offset : 0;
-        status('正在采集本页帖子与回复…');
+        status('正在后台采集本页帖子与回复，可离开此页。');
         try {
           reports[course] = await context.api('/courses/' + encodeURIComponent(course) + '/sync', {method: 'POST', body: {offset: start}});
-          await loadPosts(0);
+          await refreshCollection();
         } catch (error) {
           reports[course] = {status: 'error', next_offset: start};
           status(error.message); throw error;
