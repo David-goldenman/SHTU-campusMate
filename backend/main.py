@@ -119,7 +119,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
             return error_response(request, 403, '请刷新工作台后重试。')
         response = await catch_errors(request, call_next)
         response.headers["Cache-Control"] = (
-            "private, max-age=31536000, immutable" if request.url.path.startswith("/module-assets/") else "no-store")
+            "private, max-age=31536000, immutable" if response.status_code == 200 and request.url.path.startswith("/module-assets/") else "no-store")
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
