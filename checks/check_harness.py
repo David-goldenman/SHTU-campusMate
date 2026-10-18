@@ -28,7 +28,7 @@ async def check(directory):
     study = directory / "modules" / "study"
     shutil.copytree(PROJECT / "modules" / "academic-assistant" / "harness", study / "harness")
     (study / "module.json").write_text(json.dumps({**manifest, "id": "study", "name": "学习工具"}), encoding="utf-8")
-    for alias, module in [('mail-tools','mail'), ('background-tools','campus-agent')]:
+    for alias, module in [('mail-tools','mail'), ('background-tools','campus-agent'), ('group-tools','group-messages')]:
         target = directory / 'modules' / alias
         shutil.copytree(PROJECT / 'modules' / module / 'harness', target / 'harness')
         (target / 'module.json').write_text(json.dumps({**manifest, 'id':alias}), encoding='utf-8')
@@ -78,7 +78,7 @@ async def check(directory):
             requests.append((body, self.headers.get("Authorization")))
             study_task = any(tool['function']['name'] == 'study_query' for tool in body['tools'])
             names = {tool['function']['name'] for tool in body['tools']}
-            extension = 'mail_submit' if 'mail_submit' in names else 'campus_read' if 'campus_read' in names else None
+            extension = 'group_submit' if 'group_submit' in names else 'mail_submit' if 'mail_submit' in names else 'campus_read' if 'campus_read' in names else None
             first = not any(message["role"] == "tool" for message in body["messages"])
             if first:
                 started.set()
@@ -97,6 +97,8 @@ async def check(directory):
                         calls.append({'index':len(calls),'id':name,'type':'function','function':{'name':name,'arguments':json.dumps(arguments)}})
                 if extension:
                     arguments = {'decision':{'bucket':'digest'}} if extension == 'mail_submit' else {'module_id':'courses','path':'/snapshot'}
+                    if extension == 'group_submit':
+                        arguments = {'result': {'items': []}}
                     calls = [{'index':0,'id':'extension-call','type':'function','function':{'name':extension,'arguments':json.dumps(arguments)}}]
                 delta, finish = {"tool_calls": calls}, "tool_calls"
             else:
@@ -207,7 +209,7 @@ async def check(directory):
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
                     assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)
-                    for alias, prefix, tools in [('mail-tools','MAIL',{'mail_submit'}),('background-tools','AGENT',{'campus_read','campus_mail','campus_classify','campus_propose','campus_notice','campus_sync'})]:
+                    for alias, prefix, tools in [('mail-tools','MAIL',{'mail_submit'}),('background-tools','AGENT',{'campus_read','campus_mail','campus_classify','campus_propose','campus_notice','campus_sync'}),('group-tools','GROUP',{'group_submit'})]:
                         result = await asyncio.to_thread(app.state.ai.run, prompt='合成原生插件验证', plugins=[alias],
                             plugin_env={f'CAMPUS_PLUGIN_{prefix}_URL':f'http://127.0.0.1:{server.server_port}', f'CAMPUS_PLUGIN_{prefix}_TOKEN':'synthetic-tool-token'})
                         assert result['tools'][0]['is_error'] is False, result
