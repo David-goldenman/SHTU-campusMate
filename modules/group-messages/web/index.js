@@ -53,7 +53,7 @@ export async function mount(container, context) {
   function renderSource(source) {
     const root=card(source), config=state.sources[source];
     drafts.delete(source);
-    const connection=source==='wechat'?`<form data-connect="wechat"><button type="button" class="button button-secondary" data-discover>检测本机微信</button><p class="gm-hint">Windows 本机实验读取，首次仅扫描你选定的本人微信实例；密钥由系统加密保存。</p><label>微信数据目录<input name="database_dir" autocomplete="off" placeholder="选择本人账号的 db_storage 文件夹" value="${e(config.database_dir||'')}"></label><div data-folders></div><label>微信实例<select name="pid" required><option value="">先检测本机微信</option></select></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权只读访问本人微信，用于整理随后选择的群聊；了解本机非官方读取可能受版本变化影响。</label><button class="button button-primary" type="submit">授权并读取群列表</button></form><details class="gm-snapshot"><summary>导入已有可读快照</summary><form data-snapshot><label>快照目录<input name="path" autocomplete="off" placeholder="包含 message/message_*.db 的目录" required></label><p class="gm-hint">接受已完成导出的微信 4 可读快照。选择后仅同步快照内的数据。</p><button class="button button-secondary" type="submit">检查并读取群列表</button></form></details>`:
+    const connection=source==='wechat'?`<form data-connect="wechat"><button type="button" class="button button-secondary" data-discover>检测本机微信</button><p class="gm-hint">Windows 本机实验读取，首次仅扫描你选定的本人微信实例；密钥由系统加密保存。</p><label>微信数据目录<input name="database_dir" autocomplete="off" placeholder="选择本人账号的 db_storage 文件夹" value="${e(config.database_dir||'')}"></label><div data-folders></div><label>微信主实例<select name="pid" required><option value="">先检测本机微信</option></select></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权只读访问本人微信，用于整理随后选择的群聊；了解本机非官方读取可能受版本变化影响。</label><button class="button button-primary" type="submit">授权并读取群列表</button></form><details class="gm-snapshot"><summary>导入已有可读快照</summary><form data-snapshot><label>快照目录<input name="path" autocomplete="off" placeholder="包含 message/message_*.db 的目录" required></label><p class="gm-hint">接受已完成导出的微信 4 可读快照。选择后仅同步快照内的数据。</p><button class="button button-secondary" type="submit">检查并读取群列表</button></form></details>`:
       `<form data-connect="qq"><p class="gm-hint">使用已经运行并登录本人账号的 NapCat／OneBot 本机 HTTP 服务。接入后仅轮询所选群。</p><label>本机服务地址<input name="base_url" type="url" value="${e(config.base_url||'http://127.0.0.1:3000')}" required></label><label>Access Token<input name="access_token" type="password" autocomplete="new-password" required></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权读取本人 QQ 中随后选择的群聊。</label><button class="button button-primary" type="submit">验证连接并读取群列表</button></form>`;
     root.innerHTML=`<div class="gm-source-heading"><h3>${names[source]}</h3><span class="gm-badge" data-source-state></span></div><p class="gm-hint" data-source-status></p><p class="gm-error" data-source-error></p>
       <details class="gm-connect" ${config.connected?'':'open'}><summary>${config.connected?'重新连接 / 更换账号':'连接消息来源'}</summary>${connection}</details>
@@ -171,12 +171,12 @@ export async function mount(container, context) {
       if(button.hasAttribute('data-discover')){
         const value=await api('/wechat/discovery');if(stopped)return;
         const root=card('wechat'), form=root.querySelector('[data-connect]');
-        form.elements.pid.innerHTML='<option value="">请选择本人微信实例</option>'+value.processes.map(row=>`<option value="${e(String(row.pid))}">${e(row.name||'微信')} · ${e(String(row.pid))}</option>`).join('');
+        form.elements.pid.innerHTML='<option value="">请选择本人微信主实例</option>'+value.processes.map(row=>`<option value="${e(String(row.pid))}">${e(row.name||'微信主实例')} · ${e(String(row.pid))}</option>`).join('');
         if(value.processes.length===1)form.elements.pid.value=String(value.processes[0].pid);
         if(value.folders.length===1)form.elements.database_dir.value=value.folders[0];
         root.querySelector('[data-folders]').innerHTML=value.folders.length>1?`<label>已检测目录<select data-folder><option value="">请选择本人账号目录</option>${value.folders.map(path=>`<option value="${e(path)}">${e(path)}</option>`).join('')}</select></label>`:'';
         const picker=root.querySelector('[data-folder]');if(picker)on(picker,'change',()=>{form.elements.database_dir.value=picker.value;});
-        feedback(value.available?'检测完成，请核对目录和微信实例。':'当前环境不支持本机读取，可以导入已有快照。');return;
+        feedback(!value.available?'当前环境不支持本机读取，可以导入已有快照。':value.processes.length?`检测到 ${value.processes.length} 个微信主实例，请核对本人目录和实例。`:'未检测到可读取的本人微信主实例，请先登录微信后重试。');return;
       }
       if(button.hasAttribute('data-senders')){
         const result=await api('/senders?'+new URLSearchParams({source,group_id:gid}));if(stopped)return;
