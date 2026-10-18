@@ -365,8 +365,14 @@ class Service:
             self.save_source(owner, source, current)
 
     async def deliver(self, owner):
-        for item in self.items()['items']:
+        for item in self.all_items(owner).values():
             self.check(owner, job=True)
+            if not self.visible(item, self.sources(owner)):
+                try:
+                    await self.effects.publish(owner, item)
+                except HTTPException:
+                    pass  # Retry withdrawal when the optional notification module is available.
+                continue
             config, group = self.selected_group(owner, item['source'], item['group_id'])
             if config.get('enabled') and config.get('allow_ai') and group.get('auto_apply') and item['status'] == 'pending' and item.get('automatic_ready') and not item.get('apply_error'):
                 try:

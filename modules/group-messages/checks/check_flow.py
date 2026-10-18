@@ -96,6 +96,12 @@ async def check():
         assert duplicate['target']==applied['target']
         await service.effects.publish(owner,applied);await service.effects.publish(owner,service.current_item(owner,item['id']))
         assert sum(name=='notifications' for name,_,_ in calls)==1
+        service.save_source(owner,'qq',{**config,'connection':'different-chat-account'})
+        await service.effects.publish(owner,service.all_items(owner)[item['id']])
+        assert calls[-1][2]['body']['active'] is False and not service.items()['items']
+        service.save_source(owner,'qq',config)
+        await service.effects.publish(owner,service.current_item(owner,item['id']))
+        assert calls[-1][2]['body']['active'] is True
         # Date change updates the existing local plan, with stable origin and exact revision.
         cache.ingest(owner,'qq','conn','g1',[raw(2,'作业1延期到2026年10月22日23:59截止')],since)
         message=cache.rows(owner,'qq','conn','g1')['items'][0]

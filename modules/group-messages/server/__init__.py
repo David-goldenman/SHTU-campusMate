@@ -127,7 +127,8 @@ def create_router(context):
     def snapshot():
         """Only confirmed findings; no client connection details or raw chat history."""
         data = {key: [] for key in ('courses', 'assignments', 'materials', 'announcements', 'posts', 'lessons', 'timetable', 'messages')}
-        all_items = service.items()['items']
+        scope = service.items()
+        all_items = scope['items']
         for item in all_items:
             if item['status'] not in {'accepted', 'applied'} or item['action'] in {'question', 'uncertain', 'cancel'}:
                 continue
@@ -138,7 +139,7 @@ def create_router(context):
                 'title': item['title'], 'body_text': item['summary'] + '\n原文依据：\n' + '\n'.join(ref['quote'] for ref in item['citations']),
                 'url': '#group-messages', 'updated_at': item['updated_at'], 'term': course.get('term', ''), 'managed_notification': True})
         data.update(metadata={'managed_notifications': True, 'scope': '用户确认或按可信规则应用的课程群事项',
-                              'managed_calendar_ids': [item['target']['id'] for item in all_items if (item.get('target') or {}).get('module') == 'timetable']}, issues=[])
+                              'managed_calendar_ids': [item['target']['id'] for item in service.all_items(scope['account_revision']).values() if (item.get('target') or {}).get('module') == 'timetable']}, issues=[])
         return {'status': 'ready', 'data': data, 'updated_at': max((item['updated_at'] for item in data['announcements']), default=None)}
 
     @router.get('/facts/{item_id}')

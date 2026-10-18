@@ -31,11 +31,13 @@ class Effects:
                 + '\n来源：' + item['group_name'] + '\n' + refs)[:1900]
 
     async def publish(self, owner, item):
-        current = self.service.current_item(owner, item['id'])
-        if current['revision'] != item['revision']:
-            return
-        active = item['status'] != 'dismissed'
-        revision = item['content_revision'] + ':' + item['status']
+        with self.service.lock:
+            self.service.check(owner)
+            current = self.service.all_items(owner).get(item['id'])
+            if current is None or current['revision'] != item['revision']:
+                return
+            active = item['status'] != 'dismissed' and self.service.visible(item, self.service.sources(owner))
+        revision = item['content_revision'] + ':' + item['status'] + ':' + str(active)
         if item.get('published_revision') == revision:
             return
         body = {'account_revision': owner, 'id': 'group:' + item['id'], 'title': (('待核实 · ' if item['status'] == 'pending' else '') + item['title'])[:120],
@@ -45,8 +47,8 @@ class Effects:
         await self.api(owner, 'notifications', '/imports', body=body)
         with self.service.lock:
             self.service.check(owner)
-            fresh = self.service.current_item(owner, item['id'])
-            if fresh['revision'] == item['revision']:
+            fresh = self.service.all_items(owner).get(item['id'])
+            if fresh and fresh['revision'] == item['revision']:
                 fresh.update(published_revision=revision, publish_error=None)
                 self.service.save_item(owner, fresh)
 
