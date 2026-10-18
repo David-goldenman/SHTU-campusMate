@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {escape} from '../web/shared.js';
 
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis,'sessionStorage');
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis,'document');
 const originalRandom = Math.random;
 const data = new Map(), writes = [];
 const storage = {
@@ -10,10 +11,10 @@ const storage = {
   setItem:(key,value) => { writes.push([key,value]);data.set(key,String(value)); },
 };
 let serial = 0, draws = 0;
-const load = async (value, target = storage) => {
+const load = async (value, target = storage, source = '../web/themes/campus-copy.js') => {
   Object.defineProperty(globalThis,'sessionStorage',{configurable:true,value:target});
   Math.random = () => {draws++;return value;};
-  return import('../web/themes/campus-copy.js?check=' + serial++);
+  return import(source + '?check=' + serial++);
 };
 try {
   const first = await load(0);
@@ -37,9 +38,16 @@ try {
     assert.ok(!first.copyCatalog.general.includes(item),'Scenario pools do not leak into general');
   }
   for (const topic of ['__proto__','constructor','unknown',null,{},'Grades']) assert.equal(first.quoteFor(topic),general,'Unknown topics fall back to general');
-  const refreshed = await load(.99);
-  assert.equal(refreshed.quoteFor().id,general.id,'A refresh restores the session quote instead of choosing again');
-  assert.equal(refreshed.quoteFor('grades').id,grades.id,'Each topic has its own remembered ID');
+  const refreshed = await load(0);
+  for (const topic of ['general','deadlines','timetable']) {
+    assert.notEqual(refreshed.quoteFor(topic).id,first.quoteFor(topic).id,'A refresh selects a different quote even with the same random draw');
+    assert.equal(refreshed.quoteFor(topic),refreshed.quoteFor(topic),'The new quote remains stable within the page');
+  }
+  for (const topic of ['grades','documents']) {
+    assert.equal(refreshed.quoteFor(topic).id,first.quoteFor(topic).id,'Single-quote topics remain valid after refresh');
+  }
+  const refreshedAgain = await load(.99);
+  assert.notEqual(refreshedAgain.quoteFor().id,refreshed.quoteFor().id,'Every page load excludes its immediate predecessor');
 
   data.set('campus.copy.v1.general',grades.id);
   const recovered = await load(.5);
@@ -69,9 +77,26 @@ try {
   assert.equal((home.match(/class="study-bilingual-quote"/g)||[]).length,1,'The real homepage slot contains a greeting without needing a chat draft');
   assert.ok(home.includes('lang="en"') && home.includes('lang="zh-CN"'));
   assert.ok(first.copyCatalog.general.every(item=>item.id!=='portal-somewhere'),'The random greeting must not repeat the fixed hero heading');
-  console.log('campus copy: bilingual escaping, stable per-topic session IDs, scoped GPA, invalid-ID recovery and blocked-storage fallback passed');
+  const openingNode = {textContent:''};
+  Object.defineProperty(globalThis,'document',{configurable:true,value:{querySelector:() => openingNode}});
+  const previousOpening = '知识没有尽头，浏览器的内存有。';
+  data.set('campus.opening-line.v1',previousOpening);
+  const opening = await load(0,storage,'../web/opening-lines.js');
+  const openingText = opening.openingLine();
+  assert.notEqual(openingText,previousOpening,'Opening lines skip the previous page selection');
+  assert.equal(openingNode.textContent,openingText,'The top bar and chat use the same opening line');
+  assert.equal(opening.openingLine(),openingText,'Navigation does not change the opening line');
+  const openingRefreshed = await load(0,storage,'../web/opening-lines.js');
+  assert.notEqual(openingRefreshed.openingLine(),openingText,'Refreshing redraws the opening line even with the same random value');
+  assert.equal(openingNode.textContent,openingRefreshed.openingLine());
+  const openingFallback = await load(.5,blocked,'../web/opening-lines.js');
+  assert.ok(openingFallback.openingLine());
+  assert.equal(openingFallback.openingLine(),openingFallback.openingLine(),'Opening lines remain stable when storage is unavailable');
+  console.log('campus copy: refresh variation, stable page selections, single-quote topics, bilingual escaping, scoped GPA and blocked-storage fallback passed');
 } finally {
   Math.random = originalRandom;
   if (originalStorage) Object.defineProperty(globalThis,'sessionStorage',originalStorage);
   else delete globalThis.sessionStorage;
+  if (originalDocument) Object.defineProperty(globalThis,'document',originalDocument);
+  else delete globalThis.document;
 }
