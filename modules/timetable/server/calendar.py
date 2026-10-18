@@ -118,6 +118,8 @@ def class_events(data, week_one, periods, adjustments):
     anchor, events = date.fromisoformat(week_one), []
     closed = {item['date'] for item in data['events'] if item.get('source') == 'calendar'}
     for lesson in data['timetable']:
+        # Course-center display metadata is absent from the source used by commands.
+        revision_fields = {key: value for key, value in lesson.items() if key not in {'department', 'appearance'}}
         for week in lesson['weeks']:
             day = anchor + timedelta(days=(week - 1) * 7 + lesson['weekday'] - 1)
             rules = [rule for rule in adjustments if rule['lesson_id'] == lesson['id'] and
@@ -127,7 +129,7 @@ def class_events(data, week_one, periods, adjustments):
                 continue
             item = apply_clock({**lesson, 'id': lesson['id'] + ':' + day.isoformat(), 'lesson_id': lesson['id'],
                                 'event_type': 'class', 'date': day.isoformat(), 'original_date': day.isoformat(),
-                                'status': 'scheduled', 'revision': digest([lesson, week_one, rule])}, periods)
+                                'status': 'scheduled', 'revision': digest([revision_fields, week_one, rule])}, periods)
             if not rule or rule['action'] == 'restore':
                 events.append(item)
                 continue
