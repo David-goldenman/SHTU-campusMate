@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" data-ui-theme="nord-refined" data-art-theme="observatory">
+<html lang="zh-CN" data-ui-theme="nord-refined" data-theme="default" data-opening-lines="hidden">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,21 +11,16 @@
   <!-- Theme overrides stay separate from shared component styles. -->
   <link rel="stylesheet" href="/assets/themes/nord-refined.css">
   <link rel="stylesheet" href="/assets/opening-lines.css">
-  <link rel="stylesheet" href="/assets/themes/art-workspace.css">
-  <link rel="stylesheet" href="/assets/themes/campus-rail.css">
-  <link rel="stylesheet" href="/assets/themes/campus-moments.css">
-  <link rel="stylesheet" href="/assets/themes/observatory.css">
-  <link rel="stylesheet" href="/assets/themes/star-notes.css">
-  <script type="module" src="/assets/themes/appearance.js"></script>
+  <link rel="stylesheet" href="/assets/themes/appearance.css">
   <script type="module" src="/assets/opening-lines.js"></script>
   <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳到主要内容</a>
   <aside class="sidebar" id="sidebar" aria-label="工作台导航">
-    <a class="brand" href="#"><img src="/assets/themes/assets/observatory-mark.svg" alt=""><span><strong>校园工作台</strong><small data-theme-name>观星台</small></span></a>
+    <a class="brand" href="#"><img src="/assets/icon.svg" alt=""><span><strong>校园工作台</strong><small data-theme-name hidden></small></span></a>
     <nav id="navigation" aria-label="主导航"></nav>
-    <a class="sidebar-appearance" href="#settings?tab=appearance"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="4" ry="8" transform="rotate(35 12 12)"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3"/></svg>外观</span><small data-theme-name>观星台</small></a>
+    <a class="sidebar-appearance" href="#settings?tab=appearance"><span>主题与外观</span><small data-theme-name></small></a>
   </aside>
   <button class="menu-scrim" id="menu-scrim" type="button" aria-label="关闭导航" hidden></button>
   <div class="shell">

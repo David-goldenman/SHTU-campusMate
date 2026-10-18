@@ -2,9 +2,10 @@ import {link, time} from '/assets/campus.js';
 import {renderMarkdown} from '/assets/markdown.js';
 import {openingLine} from '/assets/opening-lines.js';
 import {sendOnEnter, fitComposer} from './composer.js';
-import {welcomeMarkup} from './welcome.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
+import {showReaderSettings} from './reader-settings.js';
+import {copyTopic, studyCopyText} from './copy-context.js';
 
 const icons = {
   history:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
@@ -19,12 +20,12 @@ const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 
 export async function mount(container, context) {
   const e = context.ui.escape;
+  const theme = context.theme;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
-  const removeWelcomeStyle = context.ui.useStyle(new URL('./welcome.css',import.meta.url),context.signal);
   const card = container.closest('.module-card');
   const title = card.querySelector('.module-card-heading');
   let busy = false, profileDirty = false, frame, observer, follow = true, saveDraft = () => {};
-  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();removeWelcomeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
+  const cleanup = () => {saveDraft();cancelAnimationFrame(frame);observer?.disconnect();context.focus(false);removeStyle();card.classList.remove('study-chat-card');title.hidden=false;};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let history, profile, ai, presets, conversations;
   try { [history,profile,ai,presets,conversations] = await Promise.all([context.api('/chat'),context.api('/profile'),context.services.ai.settings(),context.api('/presets'),context.api('/conversations')]); }
@@ -35,20 +36,22 @@ export async function mount(container, context) {
   let activeId = history.conversation_id, archived = false, showArchived = false;
   const drafts = chatSession.drafts;
   container.classList.add('academic-chat');
+  context.ui.bindMenus(container,context.signal);
   card.classList.add('study-chat-card');
   title.hidden = true;
   container.innerHTML = `
-    <header class="study-header"><div class="study-heading"><button class="study-icon-button" data-history-toggle type="button" aria-label="历史对话" title="历史对话" aria-expanded="false">${icon('history')}</button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
-      <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu"><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
+    <header class="study-header"><div class="study-heading"><button class="text-button study-history-toggle" data-history-toggle type="button" aria-controls="study-history" aria-expanded="false">${icon('history')}<span>历史对话</span></button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
+      <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu" data-action-menu><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
     <p class="study-opening-line" role="note" aria-label="开场白">${e(openingLine())}</p>
-    <div class="study-layout"><aside class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
+    ${theme.renderSlot('assistant.home',{presets:presets.items},'')}
+    <div class="study-layout"><aside id="study-history" class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><label class="visually-hidden" for="study-message">发消息</label>
           <textarea id="study-message" name="message" rows="2" maxlength="8000" placeholder="给学习助手发消息…" aria-describedby="study-send-hint" required></textarea>
-          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts"><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
-        </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p>
+          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts" data-action-menu><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
+        </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p><div data-study-copy></div>
       </div>
     </section>
     <aside class="study-profile" aria-label="我的学习档案" hidden><div class="study-profile-heading"><h3>学习档案</h3><button class="text-button" data-profile-close type="button">返回对话</button></div><p class="field-hint">保存在本机，供连续学习建议使用。</p><form data-profile-form><fieldset><label>专业<input name="major" maxlength="120"></label><label>入学年份<input name="cohort_year" type="number" min="2000" max="2100" placeholder="例如 2025"></label><label>未来方向<input name="direction" maxlength="1200" placeholder="例如机器人、芯片设计或继续深造"></label><label>每周可用学习时间（小时）<input name="weekly_hours" type="number" min="0" max="168" step="0.5"></label><label>补充偏好<textarea name="notes" rows="3" maxlength="4000" placeholder="学习节奏、关注领域或希望保留的背景"></textarea></label><div class="form-actions"><button class="button button-secondary" type="submit">保存档案</button><button class="text-button danger-text" data-clear-profile type="button">清除档案</button></div></fieldset></form><p class="field-hint" data-academic-records></p><p class="study-error danger-text" data-profile-error role="alert"></p></aside></div><span class="visually-hidden" data-announcement role="status"></span>`;
@@ -66,10 +69,24 @@ export async function mount(container, context) {
   const historyToggle = container.querySelector('[data-history-toggle]');
   const newChat = container.querySelector('[data-new-chat]');
   const conversation = container.querySelector('.study-conversation');
+  const historyScrim=document.createElement('button');historyScrim.type='button';historyScrim.className='study-history-scrim';historyScrim.hidden=true;historyScrim.tabIndex=-1;historyScrim.setAttribute('aria-label','关闭历史对话');
+  container.querySelector('.study-layout').prepend(historyScrim);
+  const drawer=matchMedia('(max-width:1000px)');
+  const updateDrawer=()=>{conversation.inert=drawer.matches&&!historyPanel.hidden;};
+  drawer.addEventListener('change',updateDrawer,{signal:context.signal});
+  historyScrim.onclick=()=>{showHistory(false);historyToggle.focus();};
   const input = form.elements.message;
+  const studyCopy = container.querySelector('[data-study-copy]');
+  function drawStudyCopy(text) {
+    if (context.signal.aborted) return;
+    studyCopy.innerHTML = theme.renderSlot('assistant.footer',{topic:copyTopic(text)},'');
+  }
   const workButton=document.createElement('button');workButton.type='button';workButton.className='text-button';workButton.textContent='学习事务';
   container.querySelector('.study-menu>div').prepend(workButton);
   workButton.onclick=context.ui.safeAction(workButton,()=>showWorkspace(context));
+  const readerButton=document.createElement('button');readerButton.type='button';readerButton.className='text-button';readerButton.textContent='资料读取';
+  container.querySelector('.study-menu>div').append(readerButton);
+  readerButton.onclick=context.ui.safeAction(readerButton,()=>showReaderSettings(context));
   input.value = drafts.get(activeId || '') || '';
   saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
   const retry = container.querySelector('[data-retry]');
@@ -82,11 +99,16 @@ export async function mount(container, context) {
   const generating = () => chatSession.current?.status==='running';
   function resizeInput() {conversation.classList.toggle('is-drafting',!!input.value.trim());fitComposer(input);send.disabled=!configured||archived||generating()||!input.value.trim();}
   input.addEventListener('input',resizeInput,{signal:context.signal});
+  input.addEventListener('blur',() => drawStudyCopy(studyCopyText(history.messages,input.value)),{signal:context.signal});
   search.addEventListener('input',drawConversations,{signal:context.signal});
   retry.onclick = () => form.requestSubmit();
   function focusChat(active) {context.focus(active);const home=container.querySelector('[data-home]');home.setAttribute('aria-pressed',String(!active));home.textContent=active?'查看今日待办':'进入对话';}
   container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
-  function showHistory(open) {historyPanel.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));if(open) {focusChat(true);showProfile(false);}}
+  container.querySelectorAll('[data-enter-study]').forEach(button => button.addEventListener('click',() => {
+    if (context.signal.aborted) return;
+    focusChat(true);input.focus({preventScroll:true});
+  },{signal:context.signal}));
+  function showHistory(open) {historyPanel.hidden=!open;historyScrim.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));updateDrawer();if(open) {focusChat(true);showProfile(false);search.focus({preventScroll:true});}}
   historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
   container.querySelector('[data-history-close]').onclick = () => {showHistory(false);historyToggle.focus();};
   container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
@@ -99,10 +121,11 @@ export async function mount(container, context) {
     cancelAnimationFrame(frame);frame=null;container.querySelector('.study-composer').prepend(progress);messages.replaceChildren();
     history = {...history,messages:value.messages,conversation_id:identity};
     if(value.messages.length)value.messages.forEach(append);else empty();
-    form.elements.message.value=drafts.get(identity)||'';resizeInput();retry.hidden=true;
+    form.elements.message.value=drafts.get(identity)||'';drawStudyCopy(studyCopyText(value.messages,input.value));resizeInput();retry.hidden=true;
     errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
     focusChat(true);scrollToLatest();drawConversations();showHistory(false);
     restoreTurn(chatSession.current);
+    (archived||busy?messages:input).focus({preventScroll:true});
   }
   function drawConversations() {
     const items=conversations.items.map(item=>item.title==='新对话'&&item.id===chatSession.current?.conversationId ? {...item,title:chatSession.current.message.replace(/\s+/g,' ').slice(0,36)} : item);
@@ -110,7 +133,7 @@ export async function mount(container, context) {
     container.querySelector('[data-chat-title]').textContent=selected?.title && selected.title!=='新对话' ? selected.title : '学习助手';
     container.querySelectorAll('[data-history-filter]').forEach(button=>button.setAttribute('aria-pressed',String((button.dataset.historyFilter==='archived')===showArchived)));
     const query=search.value.trim().toLocaleLowerCase();
-    container.querySelector('[data-conversations]').innerHTML=items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''}><strong>${e(item.title)}</strong><span>${generating()&&item.id===chatSession.current.conversationId?'正在生成…':e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu"><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
+    container.querySelector('[data-conversations]').innerHTML=items.filter(item=>item.archived===showArchived&&item.title.toLocaleLowerCase().includes(query)).sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(item=>`<article class="study-history-item ${item.id===activeId?'selected':''}"><button class="text-button" data-open-chat="${e(item.id)}" type="button" ${item.id===activeId?'aria-current="true"':''}><strong>${e(item.title)}</strong><span>${generating()&&item.id===chatSession.current.conversationId?'正在生成…':e(time(item.updated_at))}</span></button><details class="study-menu study-history-menu" data-action-menu><summary class="study-icon-button" aria-label="管理对话：${e(item.title)}">${icon('more')}</summary><div><button class="text-button" data-archive-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>${item.archived?'恢复':'归档'}</button><button class="text-button danger-text" data-delete-chat="${e(item.id)}" type="button" ${generating()?'disabled':''}>删除</button></div></details></article>`).join('')||`<p class="field-hint">${query?'没有找到匹配的对话。':'这里暂时没有对话。'}</p>`;
     container.querySelectorAll('[data-open-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,()=>openConversation(button.dataset.openChat)));
     container.querySelectorAll('[data-archive-chat]').forEach(button=>button.onclick=context.ui.safeAction(button,async()=>{
       const item=conversations.items.find(item=>item.id===button.dataset.archiveChat);
@@ -135,7 +158,7 @@ export async function mount(container, context) {
   }
   profileToggle.onclick = () => showProfile(profileToggle.getAttribute('aria-expanded') !== 'true');
   container.querySelector('[data-profile-close]').onclick = () => {showProfile(false);profileToggle.focus();};
-  container.addEventListener('keydown',event => {if(event.key!=='Escape')return;if(profileToggle.getAttribute('aria-expanded')==='true'){showProfile(false);profileToggle.focus();}else if(!historyPanel.hidden){showHistory(false);historyToggle.focus();}},{signal:context.signal});
+  container.addEventListener('keydown',event => {if(event.defaultPrevented||event.key!=='Escape')return;if(profileToggle.getAttribute('aria-expanded')==='true'){showProfile(false);profileToggle.focus();}else if(!historyPanel.hidden){showHistory(false);historyToggle.focus();}},{signal:context.signal});
   function scrollToLatest() {messages.scrollTop = messages.scrollHeight;follow = true;latest.hidden = true;}
   messages.addEventListener('scroll',() => {follow = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;latest.hidden = follow;},{signal:context.signal});
   latest.onclick = scrollToLatest;
@@ -147,7 +170,7 @@ export async function mount(container, context) {
       if (!groups.has(key)) groups.set(key,{...source,quotes:[]});
       groups.get(key).quotes.push({...source,index:index + 1});
     });
-    return citations.length ? `<details class="study-references"><summary>参考资料 <span>${groups.size} 份 · ${citations.length} 处引文</span></summary><div class="study-reference-list">${[...groups.values()].map(source => `<article><h4>${e(source.title)}</h4>${source.quotes.map(quote => `<div class="study-quote-label">[${quote.index}]${quote.page && quote.kind !== 'text' ? ' · 第 ' + quote.page + ' 页' : ''}</div><blockquote>${e(quote.quote)}</blockquote>`).join('')}<div class="study-source-links">${source.url ? link(source.url,'打开来源 ↗',e) : ''}${source.download_url ? link(source.download_url,'下载原文件',e) : ''}</div></article>`).join('')}</div></details>` : '';
+    return citations.length ? `<details class="study-references"><summary>参考资料 <span>${groups.size} 份 · ${citations.length} 处引文</span></summary><div class="study-reference-list">${[...groups.values()].map(source => `<article><h4>${e(source.title)}</h4>${source.quotes.map(quote => `<div class="study-quote-label">[${quote.index}]${quote.page && quote.kind !== 'text' ? ' · 第 ' + quote.page + ' 页' : ''}${quote.evidence_type === 'model_interpretation' ? ' · 图像解释（AI）' : quote.read_method === 'vision' ? ' · 识图转录' : quote.read_method === 'ocr' ? ' · OCR 转录' : ''}</div>${quote.uncertain ? '<p class="field-hint">待核对：' + e(quote.uncertain) + '</p>' : ''}<blockquote>${e(quote.quote)}</blockquote>`).join('')}<div class="study-source-links">${source.url ? link(source.url,'打开来源 ↗',e) : ''}${source.download_url ? link(source.download_url,'下载原文件',e) : ''}</div></article>`).join('')}</div></details>` : '';
   }
   function renderBody(node, text, settled = false) {
     node.innerHTML = renderMarkdown(text);
@@ -179,10 +202,12 @@ export async function mount(container, context) {
     messages.append(node);return node;
   }
   function empty() {
+    drawStudyCopy('');
     conversation.classList.add('is-empty');
-    messages.innerHTML = welcomeMarkup();
+    messages.innerHTML = context.theme.renderSlot('assistant.welcome',{},'<div class="study-welcome"><div><span class="study-welcome-mark" aria-hidden="true">✧</span><h3>今天，想一起解决什么？</h3></div><p>理解知识、调整日程，一起安排作业、复习和学习计划。</p></div>');
   }
   if (history.messages.length) {history.messages.forEach(append);scrollToLatest();} else empty();
+  drawStudyCopy(studyCopyText(history.messages,input.value));
   archived=conversations.items.find(item=>item.id===activeId)?.archived || false;
   resizeInput();drawConversations();focusChat(false);
   function fillProfile(value) {
@@ -211,7 +236,7 @@ export async function mount(container, context) {
     }
     const completedLive = busy;
     if (displayedTurn !== value) {
-      displayedTurn=value;messages.replaceChildren();value.messages.forEach(append);
+      displayedTurn=value;drawStudyCopy(value.message);messages.replaceChildren();value.messages.forEach(append);
       pending=append({role:'user',text:value.message});draft=append({role:'assistant',text:''});
       draft.querySelector('.study-text').before(progress);draft.classList.add('study-streaming');
       input.value=value.message;retry.hidden=true;errorNode.textContent='';showProfile(false);
@@ -261,7 +286,7 @@ export async function mount(container, context) {
     catch(error) {errorNode.textContent=error.message;}
   };
   form.elements.message.addEventListener('keydown',event => sendOnEnter(event,form),{signal:context.signal});
-  container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');resizeInput();container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
+  container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {focusChat(true);form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');drawStudyCopy(input.value);resizeInput();container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
   clearChat.onclick = context.ui.safeAction(clearChat,async () => {
     if(activeId)await deleteConversation(activeId);latest.hidden=true;container.querySelector('.study-menu').open=false;
   });

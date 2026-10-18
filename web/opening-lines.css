@@ -1,4 +1,5 @@
-/* A quiet opening line, separate from the active UI theme. */
+/* Opening lines are opt-in; existing responsive rules still choose their placement. */
+:root:not([data-opening-lines="enabled"]) :is(.opening-line,.study-opening-line) { display:none!important; }
 .topbar:has(.opening-line) { flex-wrap:wrap; row-gap:4px; }
 .topbar .opening-line {
   flex:1 1 24rem;

@@ -54,7 +54,7 @@ export function apply(ctx) {
   register('study_search','search','在课程资料、讨论和录播原文中检索。先 query courses 获取课程中心的 record_id 并作为 course_id；q 只搜索材料标题和正文，列出课程文件时留空，不用课程名搜索文件。检索转写使用 collection=lessons 和 q。材料结果的 record_id 可交给 study_document 读取真实页码。',{
     collection:{type:'string',enum:['materials','lessons','posts']},q:string,course_id:string,...pagination,
   });
-  register('study_document','document','按 record_id 下载作业题目或课程文件并读取 PDF/PPTX 页级文字。record_id 必须来自本次查询或检索；可以使用作业 ID。q 用于在页内定位知识点；page 从 1 开始。扫描图片不推测内容。',{
+  register('study_document','document','按 record_id 读取 PDF/PPTX、文本或图片。PDF/图片按用户设置直接识图或本地 OCR；PPTX 读取文字。record_id 必须来自本次查询或检索；可用作业 ID。page 从 1 开始，每次最多 4 页，按 next_page 继续。q 优先检索已有文字层，未读扫描页不能算作无结果。遵守 warnings；model_interpretation 是模型解释，不是原文。',{
     record_id:{type:'string',required:true},q:string,page:{type:'integer'},limit:pagination.limit,
   });
   register('study_course_search','course-search','查询学校课程目录，q 为课程名或代码；提供 syllabus_id 则读取该课程教学大纲及先修信息。目录查询不代表未来某学期已确定开课。结果包含大纲 ID 与可核对来源。',{

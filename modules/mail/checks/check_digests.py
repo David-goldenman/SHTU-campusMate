@@ -42,6 +42,15 @@ with sandbox('mail') as context:
             assert client.post('/digests',json={'anchor':'2026-10-17'}).status_code == 502
             client.post('/labels',json={'message_id':'mail:0','label':'手动重点','bucket':'focus'})
             assert client.get('/digests?anchor=2026-10-17').json()['report'] is None
+            client.post('/labels',json={'message_id':'mail:1','label':'已筛选活动','bucket':'filter'})
+            context.ai.result['content']['highlights'][0]['message_id']='mail:1'
+            assert client.post('/digests',json={'anchor':'2026-10-17'}).status_code==502, 'A summary cannot promote a filtered mail'
+            client.post('/labels',json={'message_id':'mail:0','label':'已筛选活动','bucket':'filter'})
+            def no_model(**kwargs):
+                raise AssertionError('An entirely filtered period does not need AI')
+            context.ai.generate=no_model
+            filtered=client.post('/digests',json={'anchor':'2026-10-17'})
+            assert filtered.status_code==200 and filtered.json()['report']['highlights']==[] and filtered.json()['counts']['filter']==2
             context.auth.revision = 'another-account'
             isolated = client.get('/digests?anchor=2026-10-17').json()
             assert isolated['entries'] == [] and isolated['report'] is None

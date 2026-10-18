@@ -1,6 +1,6 @@
 # 时间表
 
-课程课表与手机日程按课程中心 `GET /appearance` 提供的开课院系配色，带院系文字标签；体育课显示 Font Awesome 跑步图标，书院与体育均为红色。课程中心停用时保留可用课表和原有中性色，时间表不自行推断院系。配色只作用于课程，截止事项、考试和活动保留各自类型标记。
+课程课表与手机日程按课程中心 `GET /appearance` 提供的开课院系配色，图例与课程详情保留院系文字；体育课显示 Font Awesome 跑步图标，书院与体育均为红色。课程中心停用时保留可用课表和原有中性色，时间表不自行推断院系。配色只作用于课程，截止事项、考试和活动保留各自类型标记。
 
 `GET /schedule` 额外返回 `network_failures` 数组，转发来源的网络故障标记；页面在课表上方自动显示检测结果、处理建议和重试同步按钮。恢复后清除旧故障，不影响已缓存课程或本地安排。
 
@@ -27,7 +27,7 @@
 | `POST /commands` | 带账号版本、幂等操作 ID 和预期记录版本的新增、修改、删除与课程调整 |
 | `GET /changes` | 当前学校账号最近 50 条成功操作回执 |
 
-`/schedule` 返回 `{status,updated_at,data,sources,calendar,homework}`。`homework` 固定以北京时间当前教学周为基准，覆盖上周、本周、下周与下下周：`{week_start,start,end,items,pending,late}`，每项含 `id/title/url/source/course_title/due_at/category/week_start/offset/late`；只收录这两个来源中未确认已提交、来源开放且截止时间落在窗口内的作业，`offset=-1..2` 对应四周。窗口不随查询的 `week_start` 改变，便于始终看到近四周待办。`data` 保留原始集合，增加按时间排序的 `events`、无有效日期的事项计数 `undated` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
+`/schedule` 返回 `{status,updated_at,data,sources,calendar,homework}`。`homework` 固定以北京时间当前教学周为基准，覆盖上周、本周、下周与下下周：`{week_start,start,end,items,pending,late}`，每项含 `id/title/url/source/course_title/due_at/category/week_start/offset/late`；只收录这两个来源中未确认已提交、来源开放且截止时间落在窗口内的作业，`offset=-1..2` 对应四周。窗口不随查询的 `week_start` 改变，便于始终看到近四周待办。`data` 保留原始集合，增加按时间排序的 `events` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
 个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
 
@@ -35,7 +35,7 @@
 
 ## 近四周网格
 
-页面顶部固定显示近四周作业日程表，位于上一周、本周、下一周按钮上方；它是 5 行 × 8 列的网格（1 行表头 + 4 个教学周，1 列周次 + 7 个星期），覆盖上周、本周、下周和下下周。每个单元格列出该日的作业截止和待完成／迟交作业，显示 Blackboard 或 Gradescope 提交平台，迟交项目带醒目标记。表格独立于课程周表，切换周按钮或筛选不会改变它，但“今天”高亮会随日期推移自动更新。点击卡片可查看详情；课程周表、冲突检查和移动端逐日安排保留在下方折叠的“本周详情”中。
+页面顶部提供可展开的近四周作业日程，位于上一周、本周、下一周按钮上方；它是 5 行 × 8 列的网格（1 行表头 + 4 个教学周，1 列周次 + 7 个星期），覆盖上周、本周、下周和下下周。每个单元格列出该日的作业截止和待完成／迟交作业，显示 Blackboard 或 Gradescope 提交平台，迟交项目带醒目标记。表格独立于课程周表，切换周按钮或筛选不会改变它，“今天”高亮随日期推移更新。下方本周课程与日程默认展开，包含冲突检查；移动端按日浏览。课程格子每节高 76px，课名最多两行，单节课一行，时间与地点各一行；点击查看完整名称、院系、地点和课程调整，卡片内部不滚动。
 
 课程 `adjustment` 为 `{lesson_id,on_date,action,scope?,until_date?,to_date?,starts_at?,ends_at?,period_start?,period_end?,location?,notes?}`。动作 `leave/cancel/move/restore`，范围 `once`（默认）或 `following`（从这一次起、截至可选日期的同一排课系列，不自动扩展到课程的其他排课系列）。只调地点也用 `move`。调整按学校账号与学期保存，同一原始上课日期以最新适用规则为准；`restore` 恢复原教务安排。跨周调课在原位置标注“已调课”，目标周显示新安排；只改地点不生成重复卡片。缺失来源课程 ID 时保留覆盖并提示。
 
@@ -50,4 +50,4 @@
 所有聚合通过公开 API；来源停用时提示原因，其余来源仍显示。读取期间切换账号返回 409。`stop` 取消后续请求并等待后台结束，页面卸载取消请求、轮询和样式。运行 `python modules/timetable/checks/check_timetable.py`，界面验证使用 `node checks/check_web.mjs`，所有夹具为合成资料。
 
 
-页面末尾可显示蓝白校园图片轮播，在设置 → 外观中独立开关。图片不附场景说明，默认 20 秒切换；可暂停、手动切换，并在离屏或减动态时停表。装饰使用共享 campus-moments 组件并随模块清理，不参与数据同步、课程布局或日程计算。
+观星台／星夜手记主题的页面末尾可显示蓝白校园图片轮播，在设置 → 外观中独立开关。图片不附场景说明，默认 20 秒切换；可暂停、手动切换，并在离屏或减动态时停表。装饰使用共享 campus-moments 组件并随模块清理，不参与数据同步、课程布局或日程计算。

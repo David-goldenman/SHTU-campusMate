@@ -10,6 +10,7 @@ from fastapi.concurrency import run_in_threadpool
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.data import digest
 from .documents import extract
+from .reader import Reader, cached_json, save_json
 from .models import Profile
 from .workspace import WorkCommand, Workspace
 
@@ -26,7 +27,7 @@ def read_profile(context):
 
 
 class Task:
-    def __init__(self, context, message, workspace=None):
+    def __init__(self, context, message, workspace=None, reader=None):
         self.context, self.message = context, message
         self.owner, self.school_owner = account_revision(context), profile_owner(context)
         self.references, self.activity, self.navigation = {}, [], None
@@ -35,8 +36,13 @@ class Task:
         self.work = workspace or Workspace(context)
         self.work_records, self.assignment_records = {}, {}
         self.emit = lambda event: None
+        self.reader = reader or Reader(context)
+        self.cancel_event = None
+        self.finished = False
 
     def check(self):
+        if self.finished or self.cancel_event is not None and self.cancel_event.is_set():
+            raise HTTPException(409, '本次资料读取已停止。')
         if account_revision(self.context) != self.owner:
             raise HTTPException(409, "账号已切换，请重新发送问题。")
 
@@ -303,29 +309,47 @@ class Task:
         revision = data['metadata'].get('source_metadata', {}).get(source, {}).get('updated_at')
         directory = self.context.data_dir / 'documents' / self.owner
         directory.mkdir(parents=True, exist_ok=True)
-        filename = directory / (digest([item['id'], item.get('download_url'), revision]) + '.json')
-        if filename.exists():
-            document = json.loads(filename.read_text(encoding='utf-8'))
-        else:
+        identity = digest(['reader-v1', item['id'], item.get('download_url')])
+        filename = directory / (identity + '.source')
+        metadata = directory / (identity + '.metadata.json')
+        saved_metadata = cached_json(metadata)
+        if not filename.exists() or not saved_metadata or saved_metadata.get('revision') != revision:
             response = await self.context.api(source, url.path[len(prefix):] + '?' + url.query)
             self.check()
             if response.status_code != 200:
                 raise HTTPException(409, '题目文件下载失败，请检查来源连接或在原站确认访问权限。')
-            document = await run_in_threadpool(extract, response.content, response.headers.get('content-type', ''), item['title'])
+            if not response.content or len(response.content) > 30 * 1024 * 1024:
+                raise HTTPException(422, '资料应为非空且至多 30 MB 的文件。')
+            pending = filename.with_suffix('.download')
+            pending.write_bytes(response.content)
             self.check()
-            filename.write_text(json.dumps(document, ensure_ascii=False), encoding='utf-8')
-        pages = [(index + 1, text) for index, text in enumerate(document['pages']) if index + 1 >= body.page]
-        if body.q:
-            terms = body.q.casefold().split()
-            pages = sorted(((page, text) for page, text in pages if any(term in text.casefold() for term in terms)), key=lambda row: (-sum(row[1].casefold().count(term) for term in terms), row[0]))
+            pending.replace(filename)
+            for suffix in ('.native.json', '.pages.json'):
+                (directory / (identity + suffix)).unlink(missing_ok=True)
+            save_json(metadata, {'media_type': response.headers.get('content-type', ''), 'revision': revision}, self.check)
+        document = await run_in_threadpool(self.reader.read, filename, directory / (identity + '.native.json'),
+                                           directory / (identity + '.pages.json'), body,
+                                           media_type=json.loads(metadata.read_text(encoding='utf-8'))['media_type'], title=item['title'], check=self.check)
+        self.check()
+        latest = await self.api('courses')
+        if latest['data']['metadata'].get('source_metadata', {}).get(source, {}).get('updated_at') != revision:
+            raise HTTPException(409, '读取期间课程资料已更新，请重新读取当前版本。')
         records = []
-        for page, text in pages[:body.limit]:
-            if not text:
-                continue
-            position = min((text.casefold().find(term) for term in body.q.casefold().split() if term in text.casefold()), default=0)
-            excerpt = text[max(0, position - 500):max(0, position - 500) + 6000]
-            records.append(self.source(item['id'] + ':page:' + str(page), item['title'], excerpt, item.get('url', ''), page=page, kind=document['kind'], record_id=item['id'], download_url=item['download_url']))
-        return {'kind': document['kind'], 'pages_total': len(document['pages']), 'matching_pages': len(pages), 'items': records}
+        for page in document.pop('pages'):
+            for field in ('text', 'description'):
+                text = page[field]
+                if not text:
+                    continue
+                position = min((text.casefold().find(term) for term in body.q.casefold().split() if term in text.casefold()), default=0)
+                excerpt = text[max(0, position - 500):max(0, position - 500) + 6000]
+                identity = item['id'] + ':page:' + str(page['page']) + (':description' if field == 'description' else '')
+                records.append(self.source(identity, item['title'], excerpt, item.get('url', ''), page=page['page'],
+                    kind=document['kind'], record_id=item['id'], download_url=item['download_url'], read_method=page['method'],
+                    evidence_type='model_interpretation' if field == 'description' else 'recognized_text' if page['method'] != 'text' else 'original_text',
+                    warnings=page['warnings'], uncertain=page['uncertain']))
+            document['warnings'].extend(page['warnings'])
+        document['warnings'] = list(dict.fromkeys(document['warnings']))
+        return {**document, 'matching_pages': len({row['page'] for row in records}), 'items': records}
 
     async def course_search(self, body):
         if body.syllabus_id is not None:

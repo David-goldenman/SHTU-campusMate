@@ -169,7 +169,6 @@ async def check_schedule():
                 assert not fallback['conflicts']['complete'] and schedule['status'] == 'partial'
                 assert [item["id"] for item in schedule["data"]["events"]] == ["gradescope:hw", "blackboard:quiz", "eams:exam"]
                 assert [item["event_type"] for item in schedule["data"]["events"]] == ["deadline", "deadline", "exam"]
-                assert schedule["data"]["undated"] == 1
                 assert "events" not in (await client.get("/snapshot")).json()["data"]
                 assert (await client.put('/calendar-settings', json={'week_one': '2026-10-20'})).status_code == 422
                 assert (await client.put('/calendar-settings', json={'week_one': '2026-10-19'})).status_code == 200

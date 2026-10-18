@@ -20,7 +20,11 @@ async def build_context(context, course_id=None, context_ids=None):
         raise HTTPException(409, "请启用课程中心并同步来源资料。")
     if response.status_code != 200:
         raise HTTPException(response.status_code, response.json().get("detail", "课程资料暂时不可用。"))
-    return response.json()
+    selected = response.json()
+    if any(item.get('kind') == 'messages' or item.get('source') == 'mail' for item in selected['items']):
+        # Mail owns classification and reminders; a second raw-mail pass bypasses user preferences.
+        return await build_context(context, course_id, [item['id'] for item in selected['items'] if item.get('kind') != 'messages' and item.get('source') != 'mail'])
+    return selected
 
 
 class Notice(BaseModel):
@@ -80,7 +84,7 @@ class Notifications:
                 saved = {}
             ai = self.context.ai.settings()
             imported = self.context.store.read('imports:' + owner, [])
-            items = sorted([*imported, *saved.get('items', [])], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
+            items = sorted([item for item in [*imported, *saved.get('items', [])] if not item.get('hidden_reason')], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
             return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"])}
 
     async def reconcile_assignments(self):
@@ -102,6 +106,40 @@ class Notifications:
                 self.context.store.write(key, imported)
             saved = self.context.store.read('notifications', {})
             if saved.get('owner') == owner and reconcile(saved.get('items', []), assignments, now):
+                self.context.store.write('notifications', saved)
+
+    async def reconcile_mail(self):
+        owner = account_revision(self.context)
+        response = await self.context.api('mail', '/intelligence')
+        mail = {item['id']: item['classification'] for item in response.json().get('messages', [])} if response.status_code == 200 else {}
+        response = await self.context.api('campus-agent', '/proposals')
+        proposals = response.json().get('items', []) if response.status_code == 200 else []
+        inactive = {item['id'] for item in proposals if item['state'] in {'dismissed', 'withdrawn'}}
+        declined = {item['source_id'] for item in proposals if item['module'] == 'mail' and item['state'] == 'dismissed'}
+        def reconcile_items(items, generated=False):
+            changed = False
+            for item in items:
+                ids = [source['id'].removeprefix('messages:') for source in item.get('citations', []) if source.get('source') == 'mail' or source['id'].startswith(('mail:', 'messages:mail:'))]
+                reason = 'mail_classifier' if generated and ids else None
+                if item.get('proposal_id') in inactive or any(identity in declined for identity in ids):
+                    reason = 'participation'
+                elif any(identity in mail and (mail[identity]['bucket'] not in {'focus', 'recommend'} or mail[identity].get('review_pending')) for identity in ids):
+                    reason = 'classification'
+                elif ids and not all(identity in mail for identity in ids):
+                    reason = reason or item.get('hidden_reason')
+                if item.get('hidden_reason') != reason:
+                    item['hidden_reason'] = reason
+                    changed = True
+            return changed
+        with self.state_lock:
+            if owner != account_revision(self.context) or self.stopping.is_set():
+                return
+            key = 'imports:' + owner
+            imported = self.context.store.read(key, [])
+            if reconcile_items(imported):
+                self.context.store.write(key, imported)
+            saved = self.context.store.read('notifications', {})
+            if saved.get('owner') == owner and reconcile_items(saved.get('items', []), generated=True):
                 self.context.store.write('notifications', saved)
 
     def import_notice(self, body):
@@ -217,6 +255,7 @@ class Notifications:
                 break
             try:
                 asyncio.run(self.reconcile_assignments())
+                asyncio.run(self.reconcile_mail())
             except HTTPException:
                 pass
             ai = self.context.ai.settings()

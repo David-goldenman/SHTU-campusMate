@@ -22,6 +22,17 @@ class GenerateRequest(BaseModel):
     format: Literal["text", "json"] = "text"
 
 
+class VisionSettings(BaseModel):
+    enabled: bool = False
+    base_url: str = Field(default='https://api.openai.com/v1', max_length=2048)
+    protocol: Literal['openai-completions', 'openai-responses', 'anthropic-messages'] = 'openai-completions'
+    model: str = Field(default='', max_length=200)
+    supports_images: bool = False
+    quality_confirmed: bool = False
+    api_key: SecretStr | None = None
+    delete_key: bool = False
+
+
 class RunRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=16000)
     context: str | None = Field(default=None, max_length=120000)
@@ -60,6 +71,14 @@ def create_router(service):
     @router.get('/catalog', summary='读取官方 Harness 的内置提供商和模型目录')
     def catalog():
         return service.catalog()
+
+    @router.get('/vision/settings', summary='读取独立图片模型配置，密钥不回显')
+    def vision_settings():
+        return service.vision_settings()
+
+    @router.put('/vision/settings', summary='配置图片模型及用户确认的识图能力')
+    def save_vision_settings(body: VisionSettings):
+        return service.save_vision_settings(body)
 
     @router.put("/settings", summary="设置 AI 提供商、模型与加密密钥")
     def save_settings(body: AISettings):

@@ -1,0 +1,307 @@
+/* PRTS Campus: shared semantic tokens keep every installed module readable. */
+:root[data-theme="arknights"] {
+  --bg:#e5e8e7; --paper:#fafbf9; --surface-low:#f0f2ef; --surface:#e5eae8;
+  --surface-raised:#fff; --text:#20272b; --muted:#566266; --border:#c5cdcb; --outline:#8c9c9f;
+  --accent:#08afcf; --link:#00667b; --primary-container:#d7edf0;
+  --nord7:#629c9e; --nord8:#08afcf; --nord9:#347f95; --nord10:#00667b;
+  --nord11:#ae3b42; --nord12:#b85b25; --nord13:#d9ba65; --nord14:#48734f;
+  --sidebar-width:184px; --radius:0px; --shadow:0 8px 24px #15212616;
+  --popup-shadow:0 16px 48px #0d1b2633; --scroll-thumb:#819598;
+  --ark-black:#171b1e; --ark-cyan:#08afcf; --ark-orange:#d76d30;
+  --ark-display:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",serif;
+  --ark-mono:"Bahnschrift","DIN Alternate","Consolas",monospace;
+  background:var(--bg); color:var(--text); color-scheme:light;
+}
+html[data-theme="arknights"] body {
+  background:linear-gradient(135deg,#f4f6f1aa,transparent 55%),repeating-linear-gradient(90deg,transparent 0 79px,#7e929007 79px 80px),var(--bg);
+}
+html[data-theme="arknights"] :focus-visible { outline:3px solid var(--link); outline-offset:4px; }
+html[data-theme="arknights"] :is(button,a,input,textarea,summary) { -webkit-tap-highlight-color:#08afcf33; }
+html[data-theme="arknights"] :is(input,select,textarea,.button,.text-button,.icon-button,dialog,.status-badge,.module-status) { border-radius:0; }
+html[data-theme="arknights"] :is(input,select,textarea) { border-color:#94a3a3; }
+html[data-theme="arknights"] :is(input,textarea)::placeholder { color:#647175; }
+html[data-theme="arknights"] .button { font-weight:600; letter-spacing:.25px; }
+html[data-theme="arknights"] .button-primary { background:var(--ark-black); border-color:var(--ark-black); color:#fff; box-shadow:inset 3px 0 var(--ark-cyan); }
+html[data-theme="arknights"] .button-primary:hover { background:#304349; }
+html[data-theme="arknights"] .button-secondary { color:var(--text); background:var(--surface-low); border-color:#9daead; }
+html[data-theme="arknights"] .danger-text { color:#9d303a; }
+html[data-theme="arknights"] .sidebar { padding:28px 12px 14px; background:var(--ark-black); border-right:1px solid #3c494d; }
+html[data-theme="arknights"] .brand { padding:0 7px; gap:10px; color:#f7f8f5; }
+html[data-theme="arknights"] .brand img { width:34px; height:34px; }
+html[data-theme="arknights"] .brand strong { font-size:14px; letter-spacing:1px; font-weight:500; }
+html[data-theme="arknights"] .brand>span::after { content:"PRTS / CAMPUS"; display:block; margin-top:4px; font:9px var(--ark-mono); letter-spacing:1.4px; color:#a9bfc3; }
+html[data-theme="arknights"] #navigation { gap:5px; margin-top:38px; counter-reset:nav; }
+html[data-theme="arknights"] #navigation a { counter-increment:nav; min-height:48px; padding:11px 12px; gap:12px; border-radius:0; color:#cbd2d2; font-size:13px; }
+html[data-theme="arknights"] #navigation a::after { content:"0" counter(nav); margin-left:auto; font:10px var(--ark-mono); color:#8c9fa3; }
+html[data-theme="arknights"] #navigation a:hover { color:#fff; background:#2b383d; }
+html[data-theme="arknights"] #navigation a.active { color:#17262c; background:#eff3f0; box-shadow:inset 3px 0 var(--ark-cyan); }
+html[data-theme="arknights"] #navigation a.active::after { color:#00667b; }
+html[data-theme="arknights"] .nav-icon { color:inherit; }
+html[data-theme="arknights"] .nav-divider { margin:14px 8px 10px; background:#37494e; }
+html[data-theme="arknights"] .sidebar :focus-visible { outline-color:#5fdcf1; }
+html[data-theme="arknights"] .sidebar-appearance { display:grid; gap:4px; margin-top:auto; padding:20px 12px 8px; border-top:1px solid #415157; color:#c7d1d1; font-size:12px; }
+html[data-theme="arknights"] .sidebar-appearance small { color:#8eb5bd; font-size:11px; }
+html[data-theme="arknights"] .topbar { min-height:56px; padding:10px 154px 10px 26px; background:#252e32; color:#d8e0e0; border-bottom:2px solid #08afcf; }
+html[data-theme="arknights"] #workspace-date { font:12px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .topbar>.opening-line { max-width:none; margin-right:0; color:#bdcdd0; font-size:12px; }
+html[data-theme="arknights"] .topbar .icon-button { color:#fff; }
+html[data-theme="arknights"] .shell:has(.study-chat-card.module-focused)>.topbar { display:flex; min-height:56px; }
+html[data-theme="arknights"] .shell:has(.study-chat-card.module-focused)>.topbar .opening-line { display:none; }
+html[data-theme="arknights"] main { --ark-section:"PERSONAL LEARNING TERMINAL / PRTS"; padding:22px 26px 48px; max-width:1800px; }
+html[data-theme="arknights"] body:has([data-nav="mail"][aria-current]) main { --ark-section:"04 / COMMUNICATIONS"; }
+html[data-theme="arknights"] body:has([data-nav="timetable"][aria-current]) main { --ark-section:"01 / WEEKLY SCHEDULE"; }
+html[data-theme="arknights"] body:has([data-nav="courses"][aria-current]) main { --ark-section:"03 / COURSE ARCHIVE"; }
+html[data-theme="arknights"] body:has([data-nav="assignments"][aria-current]) main { --ark-section:"02 / TASK OPERATIONS"; }
+html[data-theme="arknights"] body:has([data-nav="notifications"][aria-current]) main { --ark-section:"05 / INTELLIGENCE"; }
+html[data-theme="arknights"] body:has([data-nav="eams"][aria-current]) main { --ark-section:"ACADEMIC RECORDS"; }
+html[data-theme="arknights"] body:has([data-nav="assistant"][aria-current]) main { --ark-section:"AI / TOOLKIT"; }
+html[data-theme="arknights"] body:has([data-nav="settings"][aria-current]) main { --ark-section:"SYSTEM / CONFIGURATION"; }
+html[data-theme="arknights"] .page-heading { display:flex; gap:12px; align-items:center; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #9fadae; }
+html[data-theme="arknights"] .page-heading::before { content:""; width:6px; height:26px; background:var(--ark-black); box-shadow:3px 3px var(--ark-cyan); }
+html[data-theme="arknights"] h1 { font:700 27px/1.4 var(--ark-display); letter-spacing:2px; }
+html[data-theme="arknights"] :is(h1,.ark-command-heading h2,.ark-tile>strong,.ark-operator-name strong,.ark-welcome h3) { font-synthesis:weight; }
+html[data-theme="arknights"] .page-heading::after { content:var(--ark-section); margin-left:auto; font:10px var(--ark-mono); letter-spacing:1.5px; color:#596c71; }
+html[data-theme="arknights"] .panel { border-radius:0; border-color:var(--border); background:var(--paper); }
+html[data-theme="arknights"] .module-zone { gap:24px; }
+html[data-theme="arknights"] .module-card-heading h2 { font-family:var(--ark-display); letter-spacing:1px; }
+html[data-theme="arknights"] :is(.settings-tabs,.course-content-tabs,.assignment-tabs) { gap:0; border-bottom:1px solid #929f9f; }
+html[data-theme="arknights"] :is(.settings-tabs,.course-content-tabs,.assignment-tabs) button { border-radius:0; font-weight:500; }
+html[data-theme="arknights"] :is(.settings-tabs,.course-content-tabs) button[aria-selected=true],
+html[data-theme="arknights"] .assignment-tabs [aria-pressed=true] { background:var(--ark-black); border-bottom:3px solid var(--ark-cyan); color:#fff; }
+html[data-theme="arknights"] :is(.settings-section,.settings-compact) { max-width:none; border-top:3px solid #2a3539; }
+html[data-theme="arknights"] .section-heading h2 { font:700 22px/1.5 var(--ark-display); }
+html[data-theme="arknights"] :is(.provider-expanded,.ai-provider-row,.module-settings-row) { background:var(--paper); }
+html[data-theme="arknights"] dialog { border:1px solid #7b979b; border-top:4px solid var(--ark-cyan); background:var(--surface-raised); }
+html[data-theme="arknights"] dialog::backdrop { background:#10232c88; backdrop-filter:blur(5px); }
+html[data-theme="arknights"] details[data-action-menu]>div { border-radius:0; background:var(--surface-raised); }
+html[data-theme="arknights"] details[data-action-menu]>div>:is(a,button) { border-radius:0; }
+html[data-theme="arknights"] :is(.campus-item,.source-state-body,.record-preview,.mail-options>div) { border-radius:0; }
+html[data-theme="arknights"] .source-toolbar { padding:12px 0; margin:0; font-size:12px; }
+html[data-theme="arknights"] .source-state-body { border-left-color:var(--ark-cyan); }
+html[data-theme="arknights"] .campus-agent-widget { top:10px; right:26px; padding:0; }
+html[data-theme="arknights"] .campus-agent-button { display:flex; gap:8px; width:auto; min-width:104px; height:36px; padding:0 10px; color:#d4e7e9; background:transparent; border-left:1px solid #6d8388; border-radius:0; }
+html[data-theme="arknights"] .campus-agent-button>svg { order:1; width:20px; height:20px; }
+html[data-theme="arknights"] .campus-agent-button::after { content:"通知"; order:2; margin-right:auto; font-size:12px; }
+html[data-theme="arknights"] .campus-agent-button:hover { background:#40535a; color:#fff; text-decoration:none; }
+html[data-theme="arknights"] .campus-agent-button[data-state=error] { color:#ffb68c; }
+html[data-theme="arknights"] .campus-agent-button [data-agent-count] { position:static; order:3; min-width:20px; height:20px; line-height:20px; background:#b7463e; border-radius:0; }
+html[data-theme="arknights"] .campus-agent-peek { top:46px; border-radius:0; border-top:3px solid var(--ark-cyan); }
+html[data-theme="arknights"] .art-theme-card { border-radius:0; }
+html[data-theme="arknights"] .art-theme-grid { grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+
+/* The command deck composes the original overview and its complete controls. */
+html[data-theme="arknights"] .module-zone:has(.ark-dashboard)>.overview-card { order:-1; border:0; background:transparent; }
+html[data-theme="arknights"] .overview-card>.ark-dashboard { padding:0; }
+html[data-theme="arknights"] main:has(.ark-dashboard):not(:has(.module-focus)) { max-width:none; padding:0 0 32px; }
+html[data-theme="arknights"] main:has(.ark-dashboard)>.page-heading { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); }
+html[data-theme="arknights"] .ark-terminal { position:relative; isolation:isolate; display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,1.25fr); min-height:640px; overflow:hidden; background:url('./assets/rhodes-deck-left.png') left center/50% 100% no-repeat,url('./assets/rhodes-deck-right.png') right center/50% 100% no-repeat; }
+html[data-theme="arknights"] .ark-terminal::before { content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(0deg,#10262eaa,transparent 45%),linear-gradient(90deg,#132a321a,#e4eeed22); }
+html[data-theme="arknights"] .ark-operator { position:relative; min-width:0; min-height:640px; isolation:isolate; }
+html[data-theme="arknights"] .ark-operator-meta { position:absolute; z-index:2; top:26px; left:26px; right:20px; display:flex; justify-content:space-between; gap:10px; color:#233e47; font:10px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-operator-meta>span { padding:3px 6px; color:#e4f2f2; background:#19313bdc; }
+html[data-theme="arknights"] .ark-operator-meta>span:last-child { font:11px var(--font); letter-spacing:0; }
+html[data-theme="arknights"] .ark-operator-grid { position:absolute; inset:60px 20px 26px 26px; }
+html[data-theme="arknights"] .ark-operator-grid::before { content:"+"; position:absolute; top:-11px; right:-6px; color:#faffff; font:20px var(--ark-mono); }
+html[data-theme="arknights"] .ark-operator-word { position:absolute; left:26px; top:78px; color:#f6ffff77; font:112px/1 var(--ark-mono); letter-spacing:-5px; }
+html[data-theme="arknights"] .ark-operator-word>span { display:block; margin-top:9px; color:#d7ecea; font:10px var(--ark-mono); letter-spacing:4px; }
+html[data-theme="arknights"] .ark-portrait { position:absolute; z-index:1; top:8px; left:55%; width:auto; max-width:none; height:calc(100% + 80px); transform:translateX(-48%); filter:drop-shadow(12px 5px 14px #0d1e2b70); }
+html[data-theme="arknights"] .ark-operator-name { position:absolute; z-index:2; left:26px; bottom:194px; padding:8px 10px; border-left:3px solid var(--ark-cyan); color:#fff; background:#152a33dd; }
+html[data-theme="arknights"] .ark-operator-name>span { display:block; font:9px var(--ark-mono); letter-spacing:1.3px; color:#bed9dc; }
+html[data-theme="arknights"] .ark-operator-name strong { font:700 25px/1.6 var(--ark-display); letter-spacing:2px; }
+html[data-theme="arknights"] .ark-operator-name small { margin-left:8px; font:10px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-voice { position:absolute; z-index:2; bottom:76px; left:26px; right:20px; max-width:360px; padding:16px; border-top:1px solid #d5e9e8aa; color:#fff; background:#17252ae3; }
+html[data-theme="arknights"] .ark-voice>span { color:#a5dbe3; font:9px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-voice p { margin:5px 0 0; color:#f4f8f6; font-size:13px; line-height:1.8; }
+html[data-theme="arknights"] .ark-voice i { position:absolute; bottom:10px; right:10px; width:0; height:0; border:4px solid transparent; border-top-color:#e6ffff; }
+html[data-theme="arknights"] .ark-operator-tools { position:absolute; left:26px; bottom:24px; z-index:2; display:flex; gap:10px; }
+html[data-theme="arknights"] .ark-operator-tools>a { display:grid; gap:2px; min-width:126px; padding:8px 14px; color:#fff; background:#20343ce6; border-left:2px solid #84bcc5; font-size:13px; }
+html[data-theme="arknights"] .ark-operator-tools>a:hover { background:#3b5963; text-decoration:none; }
+html[data-theme="arknights"] .ark-operator-tools span { color:#a8ccd2; font:8px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-command { position:relative; z-index:3; align-self:center; min-width:0; padding:36px 32px 32px 8px; }
+html[data-theme="arknights"] .ark-command-heading { display:flex; align-items:center; gap:12px; justify-content:space-between; margin:0 0 18px 38px; padding:12px 16px; color:#fff; background:#1a303ad9; border-top:1px solid #b9d5d76b; }
+html[data-theme="arknights"] .ark-eyebrow { font:9px var(--ark-mono); letter-spacing:2px; color:#415d65; }
+html[data-theme="arknights"] .ark-command-heading .ark-eyebrow { color:#b9d9de; font-size:8px; letter-spacing:1.4px; }
+html[data-theme="arknights"] .ark-command-heading h2 { margin-top:5px; font:700 22px/1.4 var(--ark-display); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-connection-stat { display:flex; align-items:center; gap:12px; padding-left:14px; border-left:1px solid #829c9e; color:#b4d0d5; font-size:11px; white-space:nowrap; }
+html[data-theme="arknights"] .ark-connection-stat strong { color:#fff; font:28px var(--ark-mono); }
+html[data-theme="arknights"] .ark-destinations { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px 10px; }
+html[data-theme="arknights"] .ark-tile { display:grid; position:relative; grid-column:span 2; align-content:center; min-width:0; min-height:82px; padding:12px 18px; border:1px solid #fff; background:#fdfefbf2; color:var(--text); box-shadow:2px 3px #7c969e1a; overflow:hidden; transition:transform .18s,box-shadow .18s; }
+html[data-theme="arknights"] .ark-tile:hover { text-decoration:none; transform:translateY(-2px); box-shadow:2px 5px #406e7d33; }
+html[data-theme="arknights"] .ark-tile::after { content:""; position:absolute; bottom:10px; right:12px; width:24px; height:4px; background:repeating-linear-gradient(90deg,currentColor 0 1px,transparent 1px 3px); opacity:.28; }
+html[data-theme="arknights"] .ark-tile-code { position:relative; z-index:1; font:9px/1.4 var(--ark-mono); letter-spacing:1px; color:#52666d; }
+html[data-theme="arknights"] .ark-tile>strong { position:relative; z-index:1; font:700 25px/1.4 var(--ark-display); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-tile-description { position:relative; z-index:1; margin-top:2px; font-size:11px; color:#52666d; }
+html[data-theme="arknights"] .ark-tile>svg { position:absolute; right:18px; top:50%; width:66px; height:66px; transform:translateY(-50%) rotate(-8deg); opacity:.1; }
+html[data-theme="arknights"] .ark-tile-timetable { grid-column:1/-1; grid-template-columns:minmax(130px,.8fr) minmax(0,1.4fr); column-gap:18px; margin-left:38px; min-height:148px; padding:18px; border-bottom:4px solid var(--ark-orange); }
+html[data-theme="arknights"] .ark-tile-timetable>.ark-tile-code { grid-column:1; }
+html[data-theme="arknights"] .ark-tile-timetable>strong { grid-column:1; font-size:40px; }
+html[data-theme="arknights"] .ark-tile-timetable>svg { width:102px; height:102px; right:auto; left:76px; opacity:.06; }
+html[data-theme="arknights"] .ark-agenda-preview { display:grid; grid-template-columns:auto minmax(0,1fr); align-content:center; gap:4px 12px; grid-column:2; grid-row:1/4; min-width:0; padding-left:18px; border-left:1px solid #b2c1bf; color:#405a62; font-size:13px; }
+html[data-theme="arknights"] .ark-agenda-day { grid-column:1/-1; margin-bottom:5px; color:#52666d; font-size:11px; }
+html[data-theme="arknights"] .ark-agenda-preview>time { color:#145566; font:26px var(--ark-mono); }
+html[data-theme="arknights"] .ark-agenda-preview>span { min-width:0; }
+html[data-theme="arknights"] .ark-agenda-preview strong { display:block; color:#1c3037; font-size:13px; line-height:1.6; }
+html[data-theme="arknights"] .ark-agenda-preview>span>small { display:block; margin-top:4px; font-size:11px; }
+html[data-theme="arknights"] :is(.ark-tile-assignments,.ark-tile-courses) { grid-column:span 3; min-height:164px; padding:16px; }
+html[data-theme="arknights"] :is(.ark-tile-assignments,.ark-tile-courses)>strong { padding-right:76px; }
+html[data-theme="arknights"] .ark-tile-metric { position:absolute; top:18px; right:16px; display:grid; justify-items:end; color:#2d444c; }
+html[data-theme="arknights"] .ark-tile-metric>b { font:48px/1 var(--ark-mono); }
+html[data-theme="arknights"] .ark-tile-metric>small { margin-top:5px; color:#576d71; font-size:10px; }
+html[data-theme="arknights"] .ark-task-preview { min-width:0; margin-top:14px; padding-top:10px; border-top:1px solid #c4cfcc; }
+html[data-theme="arknights"] [data-ark-task] { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+html[data-theme="arknights"] .ark-task-preview .deadline-stamp { flex-direction:row; flex-wrap:wrap; gap:3px 8px; align-items:baseline; margin-top:6px; }
+html[data-theme="arknights"] .ark-task-preview .deadline-stamp :is(time,.deadline-date,.deadline-relative) { font-size:11px; }
+html[data-theme="arknights"] .ark-course-library { margin-top:14px; padding-top:10px; border-top:1px solid #c4cfcc; color:#335360; font-size:13px; }
+html[data-theme="arknights"] .ark-course-library>b { font:22px var(--ark-mono); }
+html[data-theme="arknights"] .ark-course-library>span { display:block; margin-top:4px; color:#52666d; font-size:11px; }
+html[data-theme="arknights"] .ark-tile-assignments { border-bottom:3px solid var(--ark-orange); }
+html[data-theme="arknights"] .ark-tile-mail { color:#082d38; background:#1ab5d0; border-color:#53cadd; }
+html[data-theme="arknights"] .ark-tile-mail :is(.ark-tile-code,.ark-tile-description) { color:#103e4d; }
+html[data-theme="arknights"] :is(.ark-tile-notifications,.ark-tile-assistant) { background:#2c373c; color:#fff; border-color:#52686f; }
+html[data-theme="arknights"] :is(.ark-tile-notifications,.ark-tile-assistant) :is(.ark-tile-code,.ark-tile-description) { color:#b5d1d5; }
+html[data-theme="arknights"] .ark-tile-assistant { border-left:3px solid var(--ark-cyan); }
+html[data-theme="arknights"] .ark-terminal-footer { display:flex; justify-content:space-between; gap:10px; margin-top:20px; color:#e0e9e8; font:9px var(--ark-mono); letter-spacing:1px; }
+html[data-theme="arknights"] .ark-briefing-label { display:flex; align-items:center; gap:12px; margin:24px 24px 0; padding:11px 16px; color:#eef3f1; background:#2a3539; border-left:4px solid var(--ark-cyan); }
+html[data-theme="arknights"] .ark-briefing-label>span:first-child { color:#8ed6e2; font:10px var(--ark-mono); letter-spacing:1.6px; }
+html[data-theme="arknights"] .ark-briefing-label>span:nth-child(2) { font-size:13px; letter-spacing:1px; }
+html[data-theme="arknights"] .ark-briefing-label>span:last-child { margin-left:auto; }
+html[data-theme="arknights"] .ark-overview { margin-inline:24px; padding:20px 22px 8px; background:var(--paper); border:1px solid var(--border); border-top:0; }
+html[data-theme="arknights"] .module-zone:has(.ark-dashboard)>.study-chat-card:not(.module-focused) { margin:0 24px; }
+html[data-theme="arknights"] .campus-overview .overview-focus-heading { margin-bottom:14px; }
+html[data-theme="arknights"] .campus-overview .overview-focus-heading h2 { font:700 23px/1.4 var(--ark-display); }
+html[data-theme="arknights"] .campus-overview .overview-attention { margin-bottom:18px; padding:12px 0; background:var(--surface-low); border-block:1px solid var(--border); }
+html[data-theme="arknights"] .overview-attention a strong { font-family:var(--ark-mono); font-size:29px; font-weight:500; }
+html[data-theme="arknights"] .overview-attention a[data-tone=urgent] strong { color:#9d4722; }
+html[data-theme="arknights"] .overview-attention a[data-tone=overdue] strong { color:#aa3540; }
+html[data-theme="arknights"] .campus-overview .overview-heading h3 { font-size:14px; letter-spacing:.5px; }
+html[data-theme="arknights"] .campus-overview .overview-columns { gap:28px; padding-top:0; }
+html[data-theme="arknights"] .campus-overview .overview-task { border-radius:0; border-left:3px solid #8babad; padding:12px; background:var(--surface-low); }
+html[data-theme="arknights"] .campus-overview .overview-task[data-priority=urgent] { border-left-color:var(--ark-orange); }
+html[data-theme="arknights"] .campus-overview .overview-task[data-priority=overdue] { border-left-color:var(--nord11); }
+html[data-theme="arknights"] .campus-overview .overview-task h4 { font-size:14px; }
+html[data-theme="arknights"] .campus-overview .overview-agenda { padding-left:20px; border-left:1px solid var(--border); }
+html[data-theme="arknights"] .overview-day h4 { font-family:var(--ark-mono); }
+html[data-theme="arknights"] .overview-stats strong { font-family:var(--ark-mono); }
+html[data-theme="arknights"] .overview-sources { border-top:1px solid var(--border); }
+
+/* Reading and forms retain their original actions and information density. */
+html[data-theme="arknights"] .study-chat-card { border-top:3px solid var(--ark-cyan); }
+html[data-theme="arknights"] .academic-chat .study-header { border-bottom:1px solid var(--border); background:var(--surface-low); }
+html[data-theme="arknights"] .academic-chat .study-new-button { border-radius:0; }
+html[data-theme="arknights"] .academic-chat .study-starters button>span[aria-hidden] { display:none; }
+html[data-theme="arknights"] .academic-chat :is(.study-composer form,.study-starters button,.study-history,.study-profile,.study-user .study-text,.study-progress,.study-table) { border-radius:0; }
+html[data-theme="arknights"] .academic-chat .study-composer form { border-color:#8b9ea0; box-shadow:3px 3px #19333c0c; }
+html[data-theme="arknights"] .academic-chat .study-send-button { border-radius:0; background:#1e353e; color:#fff; }
+html[data-theme="arknights"] .ark-welcome { position:relative; padding:38px 20px 28px; text-align:center; }
+html[data-theme="arknights"] .ark-welcome-symbol { display:grid; place-items:center; width:44px; height:44px; margin:18px auto; border:1px solid #8ba6aa; background:#e2eff0; color:#00667b; font-size:30px; }
+html[data-theme="arknights"] .ark-welcome h3 { font:700 34px/1.5 var(--ark-display); letter-spacing:2px; }
+html[data-theme="arknights"] .ark-welcome p { margin-top:14px; font-size:14px; color:var(--muted); }
+html[data-theme="arknights"] .ark-welcome-foot { display:block; margin-top:30px; color:#61747b; font:9px var(--ark-mono); letter-spacing:1.5px; }
+html[data-theme="arknights"] .study-chat-card:not(.module-focused) .ark-welcome { padding:20px; }
+html[data-theme="arknights"] .study-chat-card:not(.module-focused) .ark-welcome :is(.ark-welcome-symbol,.ark-welcome-foot) { display:none; }
+html[data-theme="arknights"] .study-chat-card:not(.module-focused) .ark-welcome h3 { font-size:24px; }
+html[data-theme="arknights"] :is(.mail-columns,.mail-summary,.mail-folder,.assignment-rows,.assignment-view-filters button,.notice-item,.notice-event,.notice-read,.course-columns>nav) { border-radius:0; }
+html[data-theme="arknights"] .mail-folders { background:#e8edeb; border-right-color:#b6c6c4; }
+html[data-theme="arknights"] .mail-folder[aria-pressed=true] { background:#29383e; color:#fff; box-shadow:inset 3px 0 var(--ark-cyan); }
+html[data-theme="arknights"] .mail-table-heading { background:#e1e7e4; }
+html[data-theme="arknights"] .mail-list-heading h3 { font-family:var(--ark-display); font-size:21px; }
+html[data-theme="arknights"] .mail-reader-header h3 { font-family:var(--ark-display); }
+html[data-theme="arknights"] .assignment-view-filters button[aria-pressed=true] { background:#d1e8eb; border-color:#648e98; }
+html[data-theme="arknights"] .assignment-card { border-left:3px solid #9ab2b1; }
+html[data-theme="arknights"] .assignment-card[data-priority=urgent] { border-left-color:var(--ark-orange); }
+html[data-theme="arknights"] .assignment-card[data-priority=overdue] { border-left-color:var(--nord11); }
+html[data-theme="arknights"] .notice-item.unread { border-left:3px solid var(--ark-cyan); }
+html[data-theme="arknights"] .notice-event { border-left-color:var(--ark-cyan); }
+html[data-theme="arknights"] .course-choice.selected { box-shadow:inset 3px 0 var(--ark-cyan); }
+html[data-theme="arknights"] .course-detail>header h3 { font-family:var(--ark-display); font-size:26px; }
+html[data-theme="arknights"] .week-planner .planner-heading h2 { font-family:var(--ark-display); }
+html[data-theme="arknights"] .week-planner :is(.week-grid,.week-event,.planner-overview,.planner-event) { border-radius:0; }
+html[data-theme="arknights"] .week-planner [data-today=true] { background:#e0eff0; }
+
+@media (min-width:1300px) {
+  html[data-theme="arknights"] .ark-terminal { grid-template-columns:minmax(320px,.9fr) minmax(0,1.2fr); }
+}
+@media (max-width:1050px) {
+  html[data-theme="arknights"] .ark-terminal { grid-template-columns:minmax(230px,.8fr) minmax(0,1.2fr); min-height:620px; }
+  html[data-theme="arknights"] .ark-operator { min-height:620px; }
+  html[data-theme="arknights"] .ark-operator-meta>span:last-child { display:none; }
+  html[data-theme="arknights"] .ark-operator-word { left:18px; font-size:84px; }
+  html[data-theme="arknights"] .ark-command { padding:28px 20px 24px 0; }
+  html[data-theme="arknights"] .ark-command-heading { margin-left:20px; padding:10px 12px; }
+  html[data-theme="arknights"] .ark-command-heading h2 { font-size:20px; }
+  html[data-theme="arknights"] .ark-connection-stat { gap:8px; padding-left:10px; }
+  html[data-theme="arknights"] .ark-connection-stat strong { font-size:24px; }
+  html[data-theme="arknights"] .ark-tile { padding:12px; }
+  html[data-theme="arknights"] .ark-tile>strong { font-size:22px; }
+  html[data-theme="arknights"] .ark-tile-code { font-size:8px; letter-spacing:.4px; }
+  html[data-theme="arknights"] .ark-tile-timetable { grid-template-columns:minmax(96px,.65fr) minmax(0,1.4fr); margin-left:20px; }
+  html[data-theme="arknights"] .ark-tile-timetable>strong { font-size:32px; }
+  html[data-theme="arknights"] :is(.ark-tile-assignments,.ark-tile-courses)>strong { padding-right:64px; }
+  html[data-theme="arknights"] .ark-tile-metric { right:12px; }
+  html[data-theme="arknights"] .ark-tile-metric>b { font-size:38px; }
+  html[data-theme="arknights"] .ark-terminal-footer>span:last-child { display:none; }
+  html[data-theme="arknights"] .campus-overview .overview-agenda { border-left:0; padding-left:0; }
+}
+@media (max-width:850px) {
+  html[data-theme="arknights"] .sidebar { width:220px; }
+  html[data-theme="arknights"] main { padding:20px 16px 36px; }
+  html[data-theme="arknights"] .topbar { padding:10px 142px 10px 16px; }
+  html[data-theme="arknights"] .campus-agent-widget { right:16px; }
+  html[data-theme="arknights"] .page-heading::after { font-size:9px; letter-spacing:.5px; }
+}
+@media (max-width:600px) {
+  html[data-theme="arknights"] .topbar { padding:8px 96px 8px 16px; }
+  html[data-theme="arknights"] .campus-agent-widget { top:6px; right:12px; }
+  html[data-theme="arknights"] .campus-agent-button { min-width:44px; height:44px; padding-inline:6px; }
+  html[data-theme="arknights"] .campus-agent-button::after { display:none; }
+  html[data-theme="arknights"] .campus-agent-peek { top:52px; }
+  html[data-theme="arknights"] .page-heading { margin-bottom:14px; padding-bottom:10px; }
+  html[data-theme="arknights"] .page-heading::after { content:"PRTS / CAMPUS"; }
+  html[data-theme="arknights"] .ark-terminal { display:flex; flex-direction:column; background:url('./assets/rhodes-deck-left.png') center top/auto 510px no-repeat,#82999b; }
+  html[data-theme="arknights"] .ark-operator { min-height:280px; overflow:hidden; }
+  html[data-theme="arknights"] .ark-operator-meta { top:12px; left:14px; right:14px; }
+  html[data-theme="arknights"] .ark-operator-meta>span:last-child { display:none; }
+  html[data-theme="arknights"] .ark-portrait { width:210px; height:auto; top:8px; left:auto; right:0; transform:none; }
+  html[data-theme="arknights"] .ark-operator-word { font-size:74px; top:48px; left:14px; }
+  html[data-theme="arknights"] .ark-operator-word>span { font-size:8px; letter-spacing:2px; }
+  html[data-theme="arknights"] .ark-operator-name { left:14px; bottom:144px; padding:5px 8px; }
+  html[data-theme="arknights"] .ark-operator-name>span { font-size:8px; }
+  html[data-theme="arknights"] .ark-operator-name strong { font-size:20px; }
+  html[data-theme="arknights"] .ark-voice { left:14px; bottom:58px; right:auto; max-width:calc(100% - 28px); padding:8px 11px; }
+  html[data-theme="arknights"] .ark-voice p { font-size:12px; }
+  html[data-theme="arknights"] .ark-operator-tools { bottom:10px; left:14px; gap:8px; }
+  html[data-theme="arknights"] .ark-operator-tools>a { min-width:120px; min-height:44px; padding:6px 12px; }
+  html[data-theme="arknights"] .ark-command { padding:18px 14px; width:100%; background:linear-gradient(#d7e1dcd9,#b6c9c2cc),url('./assets/rhodes-deck-right.png') center/cover; }
+  html[data-theme="arknights"] .ark-command-heading { margin:0 0 16px; padding:12px; }
+  html[data-theme="arknights"] .ark-command-heading h2 { font-size:22px; }
+  html[data-theme="arknights"] .ark-destinations { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; transform:none; }
+  html[data-theme="arknights"] .ark-tile { grid-column:auto; min-height:86px; padding:12px; }
+  html[data-theme="arknights"] .ark-tile>strong { font-size:22px; }
+  html[data-theme="arknights"] .ark-tile-code { font-size:8px; letter-spacing:.3px; }
+  html[data-theme="arknights"] .ark-tile-description { font-size:10px; }
+  html[data-theme="arknights"] .ark-tile-timetable { grid-column:1/-1; grid-template-columns:minmax(88px,.7fr) minmax(0,1.3fr); margin-left:0; column-gap:12px; min-height:134px; padding:14px; }
+  html[data-theme="arknights"] .ark-tile-timetable>strong { font-size:30px; }
+  html[data-theme="arknights"] .ark-agenda-preview { gap:4px 8px; padding-left:12px; }
+  html[data-theme="arknights"] .ark-agenda-preview>time { font-size:22px; }
+  html[data-theme="arknights"] :is(.ark-tile-assignments,.ark-tile-courses) { grid-column:1/-1; min-height:142px; padding:16px; }
+  html[data-theme="arknights"] .ark-tile-metric>b { font-size:44px; }
+  html[data-theme="arknights"] .ark-tile-assistant { grid-column:1/-1; min-height:74px; }
+  html[data-theme="arknights"] .ark-briefing-label { margin:16px 12px 0; padding-inline:12px; gap:10px; }
+  html[data-theme="arknights"] .ark-overview { margin-inline:12px; padding:16px 12px 6px; }
+  html[data-theme="arknights"] .module-zone:has(.ark-dashboard)>.study-chat-card:not(.module-focused) { margin-inline:12px; }
+  html[data-theme="arknights"] .campus-overview .overview-attention a { padding:0 8px; }
+  html[data-theme="arknights"] .campus-overview .overview-attention span { font-size:11px; }
+  html[data-theme="arknights"] .campus-overview .overview-focus-heading h2 { font-size:21px; }
+  html[data-theme="arknights"] .campus-overview .overview-focus-heading .button { font-size:11px; padding-inline:8px; }
+  html[data-theme="arknights"] .overview-attention a strong { font-size:25px; }
+  html[data-theme="arknights"] .ark-welcome h3 { font-size:28px; }
+}
+@media (pointer:coarse) {
+  html[data-theme="arknights"] :is(.button,.text-button,.icon-button,.assignment-view-filters button,.mail-folder) { min-height:44px; }
+  html[data-theme="arknights"] .campus-agent-widget { top:6px; }
+  html[data-theme="arknights"] .campus-agent-button { height:44px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html[data-theme="arknights"] *,html[data-theme="arknights"] *::before,html[data-theme="arknights"] *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }
+}
+html[data-theme="arknights"][data-art-motion="reduced"] *,html[data-theme="arknights"][data-art-motion="reduced"] *::before,html[data-theme="arknights"][data-art-motion="reduced"] *::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; }

@@ -3,7 +3,7 @@
 .campus-moment-picture { position:relative; width:100%; aspect-ratio:1.6; overflow:hidden; border-radius:3px; background:#fffefa; }
 .campus-moment-picture>img { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:cover; object-position:50% 50%; opacity:0; transition:opacity .45s ease; }
 .campus-moment-picture>img.is-active { opacity:1; }
-.campus-moment-controls { position:absolute; right:6px; bottom:6px; display:flex; gap:2px; opacity:0; transition:opacity .15s; }
+.campus-moment-controls { position:absolute; right:6px; bottom:6px; display:flex; gap:8px; opacity:0; transition:opacity .15s; }
 .campus-moment:hover .campus-moment-controls,.campus-moment:focus-within .campus-moment-controls { opacity:1; }
 .campus-moment-control { display:grid; place-items:center; width:44px; height:44px; padding:0; border:1px solid #c8d3e8; border-radius:3px; color:#2348ac; background:#fffefa; cursor:pointer; }
 .campus-moment-control:hover { background:#eaf0fc; }
@@ -26,3 +26,5 @@
 @media (hover:none) { .campus-moment-controls { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .campus-moment-picture>img,.campus-moment-controls { transition:none; } }
 [data-art-motion="reduced"] .campus-moment-picture>img,[data-art-motion="reduced"] .campus-moment-controls { transition:none; }
+
+.art-moments-section[hidden] { display:none; }

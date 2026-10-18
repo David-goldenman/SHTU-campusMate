@@ -1,0 +1,13 @@
+{
+  "id": "arknights",
+  "name": "PRTS · 学习终端",
+  "description": "阿米娅值守的校园终端。黑白工业面板、青蓝信号与任务简报，连接课程、作业、邮件和每一天。",
+  "api_version": 1,
+  "styles": ["terminal.css"],
+  "preview": "preview.jpg",
+  "entry": "index.js",
+  "views": {
+    "dashboard": "dashboard.js",
+    "academic-assistant": "assistant.js"
+  }
+}

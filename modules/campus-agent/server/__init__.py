@@ -91,6 +91,17 @@ def create_router(context):
     def settings(body: Settings):
         return service.set_settings(body.enabled)
 
+    @router.get('/queue')
+    def queue():
+        value = service.status()
+        return {key: value[key] for key in ('available', 'enabled', 'running', 'pending_count', 'error')}
+
+    @router.post('/refresh', status_code=202)
+    def refresh():
+        service.retry_at = 0
+        service.wake.set()
+        return {'queued': service.settings()['enabled']}
+
     @router.post('/check', status_code=202)
     def check(request: Request):
         if request.url.hostname in {'127.0.0.1', 'localhost', '::1'}:

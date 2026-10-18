@@ -160,7 +160,7 @@ def create_router(context):
         course_styles = {member: item for item in appearance.get("courses", []) for member in item["course_ids"]}
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
-        events, issues, undated = local_events(), [], 0
+        events, issues = local_events(), []
         if not dates['week_one'] and values['timetable']['data']['timetable']:
             issues.append(MISSING_WEEK_ONE)
         for item in dates.get('closures', []):
@@ -178,7 +178,6 @@ def create_router(context):
             for item in data["assignments"]:
                 at = timestamp(item.get("due_at"))
                 if not at:
-                    undated += 1
                     continue
                 events.append({**item, "at": at, "event_type": "exam" if name == "eams" else "deadline", "course_title": courses.get(item.get("course_id"), "")})
         if unavailable:
@@ -188,7 +187,7 @@ def create_router(context):
         updated = max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None)
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取时间表。")
-        data = {**values['timetable']['data'], 'events': events, 'undated': undated, 'issues': issues}
+        data = {**values['timetable']['data'], 'events': events, 'issues': issues}
         data['timetable'] = [{**item, **{key: course_styles[item['course_id']][key] for key in ('department', 'appearance')}}
                              if item.get('course_id') in course_styles else item for item in data['timetable']]
         adjustments = context.store.read(adjustments_key(source), [])

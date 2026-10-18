@@ -44,7 +44,7 @@ def complete(messages, model, api_key, format="text", transport=None):
         raise HTTPException(502, "AI 返回的数据格式不完整，请重试。") from None
 
 
-def complete_with_harness(messages, config, api_key, runtime_root, format='text'):
+def complete_with_harness(messages, config, api_key, runtime_root, format='text', *, check_cancelled=lambda: None):
     """One model call through the same official adapter as plugin workflows."""
     temporary = runtime_root / 'tmp'
     temporary.mkdir(parents=True, exist_ok=True)
@@ -53,16 +53,19 @@ def complete_with_harness(messages, config, api_key, runtime_root, format='text'
         route, rows = runtime_route(config)
         output = directory / 'response.json'
         instructions = [{'role': 'system', 'content': '请将回答输出为一个合法的 JSON 对象。'}] if format == 'json' else []
-        rows.append({'insert': [{'id': 'campus-completion', 'name': str(Path(__file__).with_name('completion.mjs')),
+        if config.get('image_input'):
+            rows.append({'insert': [{'id': 'campus-image-storage', 'name': '@deepseek-ai/dsh-attachment-local'}]})
+        entry = 'image-completion.mjs' if config.get('image_input') else 'completion.mjs'
+        rows.append({'insert': [{'id': 'campus-completion', 'name': str(Path(__file__).with_name(entry)),
                      'config': {'provider': route, 'model': config['model'], 'messages': [*instructions, *messages], 'output': str(output)}}]})
         patch = directory / 'request.patch.yml'
         patch.write_text(json.dumps(rows, ensure_ascii=False), encoding='utf-8')
         env = {**os.environ, 'DSH_HOME': str(directory / 'home'), 'CAMPUS_AI_API_KEY': api_key,
                'TMP': str(temporary), 'TEMP': str(temporary), 'TMPDIR': str(temporary)}
         try:
-            subprocess.run([*resolve_bundled_launch_args(), '--profile', 'sdk-minimal', '--patch', str(patch)],
-                           cwd=directory, env=env, input='', text=True, encoding='utf-8', capture_output=True,
-                           check=True, timeout=120, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            from .harness import prepare
+            prepare([*resolve_bundled_launch_args(), '--profile', 'sdk-minimal', '--patch', str(patch)],
+                    cwd=directory, env=env, timeout=120, check_cancelled=check_cancelled)
             result = json.loads(output.read_text(encoding='utf-8'))
             if result.get('finish') != 'stop':
                 raise HTTPException(502, 'AI 回答未完整生成，请检查模型配置、凭据或网络后重试。')

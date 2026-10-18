@@ -1,11 +1,79 @@
+/* Observatory is the night edition; other themes keep their own surfaces. */
 :root[data-art-theme="observatory"] {
-  --bg:#f4f5f8; --paper:#fffefa; --surface:#edf1f9; --text:#182a4c; --muted:#56627c;
-  --border:#d4dcec; --link:#2348ac; --accent:#5274ce;
-  --nord0:#182a4c; --nord1:#243e74; --nord2:#36528c; --nord3:#56627c;
-  --nord4:#d5deef; --nord5:#edf1f9; --nord6:#fffefa;
-  --nord7:#5871b3; --nord8:#b9cbfb; --nord9:#6885ce; --nord10:#3159b5;
-  --rail-bg:#192f68; --rail-text:#f5f6fc; --rail-muted:#c4d1f3;
-  --rail-active-bg:#f8f9ff; --rail-active-text:#1b3e9b; --rail-hover:#29437e;
-  --art-blue:#2348ac; --art-paper:#f8f7f2; --art-radius:6px;
+  color-scheme:dark;
+  --bg:#151e2d; --paper:#202c40; --surface-low:#1b2638; --surface:#2a3951;
+  --surface-raised:#2b3b54; --primary-container:#304366;
+  --text:#e8edf7; --muted:#bac6da; --border:#42516b; --outline:#7385a3;
+  --link:#b3c9ff; --accent:#98b5ee; --scroll-thumb:#7385a3;
+  --nord0:#e8edf7; --nord1:#25344d; --nord2:#34445f; --nord3:#bac6da;
+  --nord4:#7385a3; --nord5:#2a3951; --nord6:#202c40;
+  --nord7:#9eced3; --nord8:#9ab9ff; --nord9:#a8bdeb; --nord10:#b3c9ff;
+  --nord11:#f2afb7; --nord12:#efbf9e; --nord13:#f2ce94; --nord14:#a9d6b1; --nord15:#d1b8e8;
+  --rail-bg:#142441; --rail-text:#e8edf7; --rail-muted:#b4c0d5;
+  --rail-active-bg:#304366; --rail-active-text:#dce6ff; --rail-hover:#253857;
+  --night-button-bg:#b3c9ff; --night-button-text:#172744;
+  --night-danger-bg:#3b2939; --night-warning-bg:#3d3540; --night-success-bg:#273e3a;
+  --art-blue:#b3c9ff; --art-paper:#202c40; --art-radius:6px;
+  --popup-shadow:0 14px 36px #080f1f66;
   --art-welcome-image:url('/assets/themes/assets/observatory-hero.webp');
+}
+
+:root[data-art-theme="observatory"] :is(input,select,textarea) { border-color:var(--outline); }
+:root[data-art-theme="observatory"] :is(input,textarea)::placeholder { color:var(--muted); opacity:1; }
+:root[data-art-theme="observatory"] .button-primary {
+  background:var(--night-button-bg); border-color:var(--night-button-bg); color:var(--night-button-text);
+}
+:root[data-art-theme="observatory"] .button-primary:hover { background:#c7d7ff; border-color:#c7d7ff; }
+:root[data-art-theme="observatory"] .button-secondary { border-color:var(--outline); }
+:root[data-art-theme="observatory"] .button-secondary:hover { background:var(--surface); }
+:root[data-art-theme="observatory"] .button-danger {
+  background:var(--night-danger-bg); border-color:#b5798d; color:var(--nord11);
+}
+:root[data-art-theme="observatory"] .button-danger:hover { background:#4b3446; }
+:root[data-art-theme="observatory"] :is(.danger-text,.provider-message.danger-text,.mail-body .mail-important) { color:var(--nord11); }
+:root[data-art-theme="observatory"] .notice { background:var(--surface); border-color:var(--outline); color:var(--text); }
+:root[data-art-theme="observatory"] :is(.status-error,.auth-verification_required,.auth-login_required) {
+  background:var(--night-warning-bg); border-color:#9c8563; color:var(--nord13);
+}
+:root[data-art-theme="observatory"] :is(.status-ready,.auth-ready) {
+  background:var(--night-success-bg); border-color:#698d7e; color:var(--nord14);
+}
+:root[data-art-theme="observatory"] dialog::backdrop,
+:root[data-art-theme="observatory"] .menu-scrim,
+:root[data-art-theme="observatory"] .academic-chat .study-history-scrim:not([hidden]) { background:#080f1fa6; }
+:root[data-art-theme="observatory"] #toast { background:var(--surface-raised); border-color:var(--outline); color:var(--text); }
+
+/* Keep pale blue ink and paper illustrations, softened against the reading area. */
+:root[data-art-theme="observatory"] .academic-chat .study-welcome-illustration { filter:brightness(.76); }
+:root[data-art-theme="observatory"] .academic-chat .study-welcome-copy {
+  background:linear-gradient(90deg,var(--art-paper) 86%,transparent);
+}
+:root[data-art-theme="observatory"] .academic-chat [data-chat-form] { border-color:var(--outline); }
+:root[data-art-theme="observatory"] .academic-chat .study-send-button {
+  background:var(--night-button-bg); color:var(--night-button-text);
+}
+:root[data-art-theme="observatory"] .academic-chat .study-send-button:hover { background:#c7d7ff; }
+:root[data-art-theme="observatory"] .academic-chat .study-send-button:disabled { background:var(--border); color:var(--muted); }
+:root[data-art-theme="observatory"] .campus-moment-picture { background:var(--paper); }
+:root[data-art-theme="observatory"] .campus-moment-picture>img { filter:brightness(.82); }
+:root[data-art-theme="observatory"] .campus-moment-control {
+  border-color:var(--outline); background:var(--surface-raised); color:var(--link);
+}
+:root[data-art-theme="observatory"] .campus-moment-control:hover { background:var(--surface); }
+
+/* Course colors arrive as light-theme data. Retain their accent, not their pale fill. */
+:root[data-art-theme="observatory"] .week-planner .calendar-event[data-department],
+:root[data-art-theme="observatory"] .course-choice[data-department].selected {
+  background:color-mix(in srgb,var(--record-accent) 16%,var(--paper)); color:var(--text);
+}
+:root[data-art-theme="observatory"] .week-planner .calendar-event[data-department] strong,
+:root[data-art-theme="observatory"] .week-planner .calendar-event .calendar-department,
+:root[data-art-theme="observatory"] .course-choice[data-department] strong,
+:root[data-art-theme="observatory"] .course-hub .course-department,
+:root[data-art-theme="observatory"] .course-detail>header[data-department] h3 { color:var(--text); }
+
+@media(max-width:600px) {
+  :root[data-art-theme="observatory"] .academic-chat .study-welcome-copy {
+    background:linear-gradient(90deg,var(--art-paper) 96%,transparent);
+  }
 }

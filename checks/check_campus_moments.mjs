@@ -72,7 +72,7 @@ globalThis.cancelAnimationFrame=()=>{};
 const preferences={moments:{dashboard:true,timetable:true},rotation:{autoplay:true,seconds:20},reduceMotion:false};
 globalThis.__campusMomentPreferences=preferences;
 const source=await readFile(new URL('../web/themes/campus-moments.js',import.meta.url),'utf8');
-const isolated=source.replace(/import\s*\{\s*getAppearance\s*\}\s*from\s*['"]\.\/appearance\.js['"];?/, 'const getAppearance=()=>globalThis.__campusMomentPreferences;');
+const isolated=source.replace(/import\s*\{\s*getCampusPreferences\s*\}\s*from\s*['"]\.\/appearance\.js['"];?/, 'const getCampusPreferences=()=>globalThis.__campusMomentPreferences;');
 assert.notEqual(isolated,source,'isolate only the appearance dependency');
 const {mountCampusMoment,campusImages}=await import('data:text/javascript;base64,'+Buffer.from(isolated).toString('base64'));
 const host=new Element('div'),controller=new AbortController();

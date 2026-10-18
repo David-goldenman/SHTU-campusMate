@@ -1,4 +1,4 @@
-import {getAppearance} from './appearance.js';
+import {getCampusPreferences} from './appearance.js';
 
 export const campusImages = Object.freeze(['campus-water','campus-windows','campus-courtyard','campus-tower','campus-canopy']);
 const starts = {dashboard:1,timetable:0};
@@ -26,7 +26,7 @@ export function mountCampusMoment(host,location,signal) {
   function listen(target,type,fn) {target.addEventListener(type,fn);listeners.push(()=>target.removeEventListener(type,fn));}
   function sync() {
     clearTimeout(timer);timer=undefined;
-    const prefs=getAppearance(),reduced=prefs.reduceMotion||media.matches;
+    const prefs=getCampusPreferences(),reduced=prefs.reduceMotion||media.matches;
     pause.hidden=!prefs.rotation.autoplay||reduced;
     const title=paused?'继续图片轮播':'暂停图片轮播';pause.setAttribute('aria-label',title);pause.title=title;pause.innerHTML=icon(paused?'play':'pause');
     if (!disposed && inView && !figure.hidden && !document.hidden && !reduced && !paused && !hovered && !focused && prefs.rotation.autoplay && ready && !loading) timer=setTimeout(()=>show((index+1)%campusImages.length),prefs.rotation.seconds*1000);
@@ -43,7 +43,7 @@ export function mountCampusMoment(host,location,signal) {
     target.src='/assets/themes/assets/'+campusImages[nextIndex]+'.webp';
   }
   function draw() {
-    figure.hidden=!getAppearance().moments[location];
+    figure.hidden=!getCampusPreferences().moments[location];
     if (figure.hidden && loading) {++revision;loading=false;frames.forEach(frame=>{frame.onload=null;frame.onerror=null;});}
     if (!figure.hidden && inView && !ready && !loading) show(index);
     sync();

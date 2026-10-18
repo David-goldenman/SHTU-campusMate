@@ -5,10 +5,11 @@ import {resolve} from 'node:path';
 
 const base=process.argv[2]||'http://127.0.0.1:16666';
 const bootstrap=await(await fetch(base+'/api/v1/bootstrap')).json();
-const modules=bootstrap.modules.filter(item=>['courses','blackboard','gradescope','mail','notifications','campus-agent'].includes(item.id));
+const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
+const modules=bootstrap.modules.filter(item=>['courses','blackboard','gradescope','mail','notifications','piazza','campus-agent'].includes(item.id));
 const profile=resolve('.codex/tmp/campus-workspace-'+process.pid);await mkdir(profile,{recursive:true});
 function browser(action){const result=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);}
-function fixture(modules,categories){
+function fixture(modules,categories, themeCatalog){
  const original=window.fetch.bind(window),state=window.workspaceCheck={unexpected:[],notices:[],prefs:{degree:'bachelor',year:null,major:'',courses:[],shape:'unknown',mental:'unknown',interests:{},requirements:''},proposals:[{id:'p1',state:'pending',event:{title:'合成科研讲座',starts_at:'2030-10-18T14:00:00+08:00',location:'教学楼'},quote:'讲座时间：2030年10月18日 14:00。'}]};
  const sources=[{id:'bb:1',source:'blackboard',title:'合成课程',code:'CS100',term:'2026-fall',url:'https://example.edu/bb'},{id:'gs:1',source:'gradescope',title:'Synthetic Course',code:'CS100',term:'2026-fall',url:'https://example.edu/gs'}];
  sources[0].grades=[{title:'合成测试',score:88,max_score:100}];
@@ -20,6 +21,7 @@ function fixture(modules,categories){
  window.fetch=async(url,options={})=>{
   const target=new URL(url,location.origin);if(!target.pathname.startsWith('/api/v1/'))return original(url,options);
   const path=target.pathname.replace('/api/v1',''),method=options.method||'GET';
+  if(path==='/themes')return json(themeCatalog);
   if(path==='/bootstrap')return json({csrf_token:'synthetic',modules,categories});
   if(path==='/modules')return json({modules,categories});
   if(path==='/modules/campus-agent/status'||path==='/modules/notifications/agent/status')return json(agent());
@@ -46,14 +48,24 @@ try{
  socket.addEventListener('message',({data})=>{const message=JSON.parse(data);if(message.method==='Runtime.exceptionThrown')errors.push(message.params.exceptionDetails.text);const task=pending.get(message.id);if(task){pending.delete(message.id);clearTimeout(task.timer);message.error?task.no(new Error(JSON.stringify(message.error))):task.ok(message.result);}});
  const command=(method,params={})=>new Promise((ok,no)=>{const id=++serial,timer=setTimeout(()=>no(new Error(method)),20000);pending.set(id,{ok,no,timer});socket.send(JSON.stringify({id,method,params}));});
  const evaluate=expression=>command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}).then(result=>{assert(!result.exceptionDetails,JSON.stringify(result.exceptionDetails));return result.result.value;});
- await command('Page.enable');await command('Runtime.enable');await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)});`});
+ await command('Page.enable');await command('Runtime.enable');await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})(${JSON.stringify(modules)},${JSON.stringify(bootstrap.categories)},${JSON.stringify(themeCatalog)});`});
  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
  await command('Page.navigate',{url:base+'/#mail'});
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<180;i++){if(condition())return;await new Promise(r=>setTimeout(r,60));}throw new Error('Workspace UI timed out');};waitFor(()=>document.querySelector('[data-bucket=focus]'))`);
  assert.equal(await evaluate(`document.querySelector('[data-bucket=focus]').getAttribute('aria-pressed')`),'true','Mail starts with priority messages');
+ await evaluate(`document.querySelector('.mail-options>summary').click()`);
+ assert(await evaluate(`document.querySelector('.mail-options').open && getComputedStyle(document.querySelector('.mail-options>div')).backgroundColor!==getComputedStyle(document.querySelector('.mail-columns')).backgroundColor`),'Action menus have a distinct surface');
+ await evaluate(`document.querySelector('[data-batch]').focus();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}))`);
+ assert(await evaluate(`!document.querySelector('.mail-options').open && document.activeElement.matches('.mail-options>summary')`),'Escape closes the menu and returns focus');
+ await evaluate(`document.querySelector('.mail-options>summary').click();document.querySelector('.page-heading').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))`);
+ assert(await evaluate(`!document.querySelector('.mail-options').open`),'Pointer outside dismisses the action menu');
  assert.equal(await evaluate(`document.querySelectorAll('[data-message]').length`),0,'Recommendations remain in their own level');
  await evaluate(`document.querySelector('[data-bucket=recommend]').click();document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  assert.equal(await evaluate(`document.querySelectorAll('.mail-body p').length`),2);
+ assert(await evaluate(`getComputedStyle(document.querySelector('.mail-inbox')).display==='none' && document.querySelector('.mail-reader').getBoundingClientRect().width>700`),'Reading uses the main pane');
+ await evaluate(`document.querySelector('[data-mail-back]').click()`);
+ assert(await evaluate(`!document.querySelector('.mail-columns').classList.contains('mail-reading') && document.activeElement.matches('[data-message]')`),'Return restores the list and keyboard focus');
+ await evaluate(`document.querySelector('[data-message]').click();waitFor(()=>document.querySelector('.mail-body p'))`);
  assert(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.mail-body p')).marginBottom)>=14`),'Readable paragraph spacing');
  assert(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.mail-body')).lineHeight)>26`));
  await writeFile(resolve('.codex/tmp/workspace-mail-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
@@ -66,7 +78,7 @@ try{
  await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
  await writeFile(resolve('.codex/tmp/workspace-mail-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
- await evaluate(`document.querySelector('[data-digest=day]').click();waitFor(()=>document.querySelector('[data-generate-digest]'))`);
+ await evaluate(`document.querySelector('[data-mail-back]').click();document.querySelector('[data-digest=day]').click();waitFor(()=>document.querySelector('[data-generate-digest]'))`);
  await evaluate(`document.querySelector('[data-generate-digest]').click();waitFor(()=>document.querySelector('.mail-digest-overview'))`);
  assert(await evaluate(`document.querySelector('.mail-digest-overview').textContent.includes('合成日总结')`));
  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile mail summary fits');
@@ -85,6 +97,11 @@ try{
  assert.equal(await evaluate(`document.querySelectorAll('.campus-agent-widget').length`),1,'Background entry survives navigation once');
  await evaluate(`location.hash='notifications';waitFor(()=>document.querySelector('[data-attend]'))`);
  assert.equal(await evaluate(`document.querySelectorAll('.notice-summary strong').length`),1);
+ assert.equal(await evaluate(`document.querySelectorAll('.module-tabs [data-view]').length`),2,'Learning notices and Piazza use separate tabs');
+ assert(await evaluate(`!document.querySelector('[data-notice-id]').open && !document.querySelector('dialog[open]')`),'Notices start as readable summaries');
+ await evaluate(`document.querySelector('[data-open-settings]').click()`);
+ assert(await evaluate(`document.querySelector('.notice-automation').open`),'Automation controls remain available');
+ await evaluate(`document.querySelector('[data-close-settings]').click();document.querySelector('[data-notice-id]').open=true`);
  await evaluate(`document.querySelector('[data-attend]').click();waitFor(()=>workspaceCheck.proposals[0].state==='accepted'&&!document.querySelector('[data-attend]'))`);
  assert(await evaluate(`document.querySelector('.notice-event').textContent.includes('已加入时间表')`));
  await writeFile(resolve('.codex/tmp/workspace-notifications-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));

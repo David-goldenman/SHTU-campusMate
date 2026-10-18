@@ -27,6 +27,8 @@ async def check():
         unavailable, switch = False, False
 
         async def api(module, path='/snapshot', **options):
+            if module in {'mail', 'campus-agent'}:
+                return httpx.Response(404,json={'detail':'Optional module unavailable'})
             assert module == 'assignments' and path == '/snapshot' and not options
             if switch:
                 context.auth.revision = 'new-owner'
