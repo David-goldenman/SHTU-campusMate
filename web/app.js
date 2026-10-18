@@ -278,7 +278,7 @@ async function start() {
   await render();
 }
 
-window.addEventListener('hashchange',() => { if (state) render(true).catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
+window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
 window.addEventListener('pagehide',() => { void dispose();void stopBackground(); });
 
 try { await start(); }
