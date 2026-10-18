@@ -3,5 +3,6 @@
   "name": "Default · Nord",
   "description": "Nord 配色，清楚的分区、紧凑列表与安静的阅读界面。",
   "api_version": 1,
-  "styles": []
+  "styles": [],
+  "entry": "index.js"
 }

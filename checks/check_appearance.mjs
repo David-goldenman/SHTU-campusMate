@@ -8,7 +8,8 @@ function environment(saved,blocked=false) {
   globalThis.window = new EventTarget();
   globalThis.location = {reload:()=>{globalThis.reloaded=true;}};globalThis.reloaded=false;
   const meta = {};
-  globalThis.document = {documentElement:{dataset:{}},querySelector:selector=>selector.startsWith('meta')?{setAttribute:(key,value)=>{meta[key]=value;}}:null,querySelectorAll:()=>[]};
+  const logo={src:''},favicon={setAttribute:(name,value)=>{favicon[name]=value;}};
+  globalThis.document = {documentElement:{dataset:{}},querySelector:selector=>selector==='.brand img'?logo:selector==='link[rel="icon"]'?favicon:selector.startsWith('meta')?{setAttribute:(key,value)=>{meta[key]=value;}}:null,querySelectorAll:()=>[]};
   return data;
 }
 const data = environment({theme:'observatory',companions:{observatory:'female','star-notes':'male'}});
@@ -85,6 +86,15 @@ const html=await readFile(new URL('../web/index.html',import.meta.url),'utf8');
 const openingCSS=await readFile(new URL('../web/opening-lines.css',import.meta.url),'utf8');
 assert.match(html,/<html[^>]+data-opening-lines="hidden"/,'Initial HTML must hide opening lines before themes load');
 assert.ok(openingCSS.includes(':root:not([data-opening-lines="enabled"]) :is(.opening-line,.study-opening-line) { display:none!important; }'),'The opt-out gate covers both responsive placements');
+const brandCatalog={items:['default','observatory','star-notes','arknights'].map(id=>({...minimal(id),entry:new URL('../web/themes/'+(['observatory','star-notes'].includes(id)?'art.js':id+'/index.js'),import.meta.url).href}))};
+for (const [id,icon] of [['default','/assets/themes/default/campusmate.svg'],['observatory','/assets/themes/assets/observatory-mark.svg'],['star-notes','/assets/themes/assets/observatory-mark.svg'],['arknights','/assets/themes/arknights/assets/terminal-mark.svg']]) {
+  ui.setAppearance({theme:id});await ui.initializeThemes(brandCatalog);
+  assert.equal(document.querySelector('.brand img').src,icon,id+' uses its own brand mark');
+  assert.equal(document.querySelector('link[rel="icon"]').href,id==='default'?icon:'/assets/icon.svg',id+' retains its browser icon');
+}
+const terminal=await readFile(new URL('../web/themes/arknights/dashboard.js',import.meta.url),'utf8');
+assert.ok(terminal.includes('PERSONAL LEARNING TERMINAL'),'PRTS retains its terminal identity');
+
 environment(null,true);
 const fallback=await import('../web/themes/appearance.js?test=blocked');
 await fallback.initializeThemes(catalog);
