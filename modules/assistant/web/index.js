@@ -5,7 +5,7 @@ export async function mount(container,context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const cleanup = () => removeStyle();
   context.signal.addEventListener('abort',cleanup,{once:true});
-  const sounds = await import('/assets/sounds.js').catch(() => null);
+  const sounds = await import('/web/sounds.js').catch(() => null);
   if (context.signal.aborted) return cleanup;
   container.innerHTML = '<p class="field-hint">回答使用所选缓存文字，并发送至设置中选择的模型服务。邮件、讨论与转写按已读取范围提供。</p><div class="campus-toolbar"><label>资料范围<select data-course><option value="">本学期与校园邮件</option></select></label><button type="button" class="button button-secondary" data-refresh>刷新资料</button><a class="text-button" href="#settings">AI 设置</a><button type="button" class="text-button" data-clear>清除当前对话</button></div><details><summary data-coverage>选择资料</summary><div class="assistant-context" data-items></div></details><div class="assistant-messages" data-history aria-live="polite"></div><form class="campus-form" data-form><label>处理方式<select name="task"><option value="chat">连续对话</option><option value="summarize">总结资料</option><option value="classify">分类建议</option><option value="report">生成报告</option><option value="run">插件任务</option></select></label><label data-plugins hidden>执行插件<select name="plugin"></select></label><label>问题或要求<textarea name="message" required maxlength="8000" placeholder="概括本周课程安排，整理仍可处理的作业并标注来源。"></textarea></label><button class="button button-primary" type="submit">发送</button></form><section data-result aria-live="polite"></section>';
   const course = container.querySelector('[data-course]');
@@ -17,28 +17,26 @@ export async function mount(container,context) {
     const data = await context.api('/context?' + new URLSearchParams(course.value ? {course_id:course.value} : {}));
     const selected = course.value;
     course.innerHTML = '<option value="">本学期与校园邮件</option>' + data.courses.map(item => `<option value="${e(item.id)}">${e(item.title + ' · ' + item.term)}</option>`).join('');
-    course.value = selected;
-    container.querySelector('[data-coverage]').textContent = `本次可用资料 ${data.context.included} 条${data.context.truncated ? ' · 已限制范围' : ''}`;
-    const kinds = {courses:'课程',assignments:'作业',materials:'资料',announcements:'公告',messages:'邮件',posts:'讨论',lessons:'录播',timetable:'课表'};
-    container.querySelector('[data-items]').innerHTML = data.items.map(item => `<label class="checkbox-label"><input type="checkbox" data-context value="${e(item.id)}" checked>${e(kinds[item.kind])} · ${e(item.title)}${item.body_text ? ' · 已缓存文字' : ''}</label>`).join('') || '<p>先连接账号并同步资料，即可选择分析范围。</p>';
-    const history = await context.api('/chat?' + new URLSearchParams(course.value ? {course_id:course.value} : {}));
-    container.querySelector('[data-history]').innerHTML = history.messages.map(show).join('');
-    const plugins = await context.services.ai.plugins();
-    const ready = plugins.plugins.filter(item => item.status === 'ready');
-    container.querySelector('[name=plugin]').innerHTML = ready.filter(item => !item.has_frontend).map(item => `<option value="${e(item.id)}">${e(item.name)}</option>`).join('') || '<option value="">请启用工具插件，或打开下方专用页面</option>';
-    pluginPages.innerHTML = ready.filter(item => item.has_frontend).map(item => `<a href="#${e(item.category)}">打开${e(item.name)}</a>`).join(' · ');
-    container.querySelector('[data-result]').replaceChildren();
+    course.value = data.courses.some(item => item.id === selected) ? selected : '';
+    container.querySelector('[data-items]').innerHTML = data.items.map(item => `<label><input type="checkbox" data-context value="${e(item.id)}" checked> ${e(item.title)}</label>`).join('');
+    if (!data.items.length) container.querySelector('[data-coverage]').textContent = '暂无可用资料';
+    const plugins = await context.api('/plugins');
+    const select = form.elements.plugin;
+    select.innerHTML = plugins.map(item => `<option value="${e(item.id)}">${e(item.name)}</option>`).join('');
+    container.querySelector('[data-plugins]').hidden = !plugins.length;
+    pluginPages.hidden = true;
   }
-  course.onchange = () => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); });
-  const refreshButton = container.querySelector('[data-refresh]');
-  refreshButton.onclick = context.ui.safeAction(refreshButton,refresh);
-  const clear = container.querySelector('[data-clear]');
-  clear.onclick = context.ui.safeAction(clear,async () => {
-    if (!await context.ui.confirmDialog('清除当前对话','将删除当前资料范围的本地对话记录。')) return;
-    await context.api('/chat?' + new URLSearchParams(course.value ? {course_id:course.value} : {}),{method:'DELETE'}); await refresh();
-  });
   const form = container.querySelector('[data-form]');
-  form.elements.task.onchange = () => { container.querySelector('[data-plugins]').hidden = form.elements.task.value !== 'run'; pluginPages.hidden = form.elements.task.value !== 'run' || !pluginPages.childElementCount; };
+  const clear = container.querySelector('[data-clear]');
+  const refreshButton = container.querySelector('[data-refresh]');
+  refreshButton.onclick = () => refresh().catch(error => context.ui.toast(error.message));
+  course.onchange = refreshButton.onclick;
+  form.elements.task.onchange = () => { container.querySelector('[data-plugins]').hidden = form.elements.task.value !== 'run'; };
+  clear.onclick = async () => {
+    if (!await confirmDialog('清除当前对话','当前课程的对话记录将被清空，此操作无法撤销。','清除')) return;
+    await context.api('/chat',{method:'DELETE',body:course.value ? {course_id:course.value} : {}});
+    container.querySelector('[data-history]').innerHTML = '';container.querySelector('[data-result]').innerHTML = '';
+  };
   form.onsubmit = async event => {
     event.preventDefault();
     const button = form.querySelector('button');
