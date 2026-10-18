@@ -60,7 +60,7 @@ patch 和合并后的完整外观各限制为 UTF-8 JSON 64 KiB、最多 8 层�
 
 `runtime` 为本次模块实例的内存状态：`loaded_at,active_requests,pending_calls,last_request:{at,status,duration_ms}|null,last_success_at,last_error,workers`。最近错误保留至重新加载，即使后来请求成功也不会抹去；若来自统一错误处理器，还带 `code/request_id`。状态页手动读取，不用高频轮询；`ready` 只表示加载成功。worker 为 `{name,kind:thread|task,status:running|stopped|idle|cancelled|error}`；线程存活不代表一次业务检查成功，Future 的 idle 只表示正常结束，来源同步结果仍以业务 snapshot 为准。刷新与重启重置状态，不落盘保存历史。
 
-前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js?v=<revision>`。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。停用或更新后，旧版本资源返回 404。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
+前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js`。`revision` 是模块 `web/` 目录文件路径与内容的指纹；资源内容不变时，重载、重新启用与重启沿用同一地址，任一子资源变化产生新版本。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。成功的模块资源响应使用 `private, max-age=31536000, immutable`；API、共享界面资源及错误响应使用 `no-store`。停用模块或过期版本的源站请求返回 404；浏览器可复用此前已缓存的静态文件，业务 API 仍遵守模块启停状态。后端每次加载使用独立导入命名空间。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 
 ## 共享认证
 

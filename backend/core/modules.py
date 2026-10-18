@@ -6,6 +6,7 @@ import shutil
 import sys
 import threading
 import types
+import hashlib
 import uuid
 import time
 from contextlib import contextmanager
@@ -167,12 +168,20 @@ class ModuleManager:
             if not info["enabled"]:
                 info["status"] = "disabled"
                 return entry
-            revision = uuid.uuid4().hex
+            # 前端内容指纹支持跨重启复用缓存。
+            digest = hashlib.sha1()
+            web_root = folder / "web"
+            if web_root.is_dir():
+                for item in sorted(web_root.rglob("*")):
+                    if item.is_file():
+                        digest.update(item.relative_to(web_root).as_posix().encode())
+                        digest.update(item.read_bytes())
+            revision = digest.hexdigest()[:12]
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
             entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
             if backend.is_file():
-                name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
+                name = "framework_module_" + manifest.id.replace("-", "_") + "_" + uuid.uuid4().hex
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
                 entry.package = importlib.util.module_from_spec(spec)
                 sys.modules[name] = entry.package
@@ -186,8 +195,8 @@ class ModuleManager:
                 entry.app.middleware('http')(catch_errors)
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
-            info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
-            info['background_url'] = f'/module-assets/{manifest.id}/{revision}/web/background.js?v={revision}' if background.is_file() else None
+            info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js" if frontend.is_file() else None)
+            info['background_url'] = f'/module-assets/{manifest.id}/{revision}/web/background.js' if background.is_file() else None
         except Exception as error:
             try:
                 self._stop(entry)

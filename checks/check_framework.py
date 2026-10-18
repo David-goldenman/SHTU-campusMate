@@ -120,7 +120,11 @@ async def check(root):
             assert [item["id"] for item in categories] == ["research", "courses", "settings"]
             assert categories[0]["label"] == "Research <lab>"
             assert first["has_frontend"] is True
-            assert (await client.get(first["frontend_url"])).status_code == 200
+            asset = await client.get(first["frontend_url"])
+            assert asset.status_code == 200
+            assert asset.headers["cache-control"] == "private, max-age=31536000, immutable"
+            assert (await client.get("/api/v1/bootstrap")).headers["cache-control"] == "no-store"
+            assert (await client.get("/assets/styles.css")).headers["cache-control"] == "no-store"
             traversal = first["frontend_url"].split("web/")[0] + "web/%2e%2e/server/__init__.py"
             assert (await client.get(traversal)).status_code == 404
             assert (await client.get("/api/v1/modules/alpha/state")).json()["version"] == "one"
@@ -139,19 +143,31 @@ async def check(root):
             assert (await client.put("/api/v1/settings", json={"port": 17667}, headers={"Authorization": "Bearer synthetic-alpha"})).status_code == 403
             assert (await client.put("/api/v1/modules/alpha/state", headers={"Authorization": "Bearer synthetic-alpha", "Origin": "https://untrusted.example"})).status_code == 403
             client.headers["X-Framework-Token"] = csrf_token
+            initial_package = app.state.modules.entries["alpha"].package.__name__
             (alpha / "server" / "helpers.py").write_text("VALUE = 'new'\n")
             updated = (await client.post("/api/v1/modules/reload")).json()["modules"]
-            second = next(item for item in updated if item["id"] == "alpha")
-            assert first["frontend_url"] != second["frontend_url"]
-            assert (await client.get(first["frontend_url"])).status_code == 404
+            unchanged = next(item for item in updated if item["id"] == "alpha")
+            assert first["frontend_url"] == unchanged["frontend_url"], "Backend reload preserves unchanged frontend URLs"
+            assert initial_package != app.state.modules.entries["alpha"].package.__name__, "Backend instances keep separate import namespaces"
             assert (await client.get("/api/v1/modules/alpha/state")).json() == {"version": "new", "value": "alpha", "has_secret": True}
+            (alpha / "web" / "styles.css").write_text("body { color: blue; }\n")
+            updated = (await client.post("/api/v1/modules/reload")).json()["modules"]
+            second = next(item for item in updated if item["id"] == "alpha")
+            assert first["frontend_url"] != second["frontend_url"], "Nested assets participate in the content revision"
+            expired = await client.get(first["frontend_url"])
+            assert expired.status_code == 404 and expired.headers["cache-control"] == "no-store"
+            assert (await client.get(second["frontend_url"])).status_code == 200
             disabled = await client.put("/api/v1/modules/alpha", json={"enabled": False})
             assert disabled.status_code == 200
             assert (await client.get("/api/v1/modules/alpha/state")).status_code == 404
             assert (await app.state.modules.call_api("alpha", "/state")).status_code == 404
-            assert (await client.get(second["frontend_url"])).status_code == 404
+            unavailable = await client.get(second["frontend_url"])
+            assert unavailable.status_code == 404 and unavailable.headers["cache-control"] == "no-store"
             assert (await client.get("/api/v1/modules/beta/state")).status_code == 200
-            await client.put("/api/v1/modules/alpha", json={"enabled": True})
+            enabled = (await client.put("/api/v1/modules/alpha", json={"enabled": True})).json()["modules"]
+            resumed = next(item for item in enabled if item["id"] == "alpha")
+            assert resumed["frontend_url"] == second["frontend_url"], "Re-enabling preserves unchanged assets"
+            assert (await client.get(resumed["frontend_url"])).status_code == 200
             assert (await client.get("/api/v1/modules/alpha/state")).json()["value"] == "alpha"
             assert (await client.get("/api/v1/modules/alpha/openapi.json")).json()["paths"]["/state"]
             active = app.state.modules.entries["alpha"]
