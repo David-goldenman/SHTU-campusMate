@@ -16,8 +16,9 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 | --- | --- | --- |
 | GET | `/bootstrap` | `{version, csrf_token, categories, settings, modules}`；分类按侧栏顺序返回 |
 | GET | `/health` | `{application:"campus-framework",version,launch_id}`；启动器校验本次服务已可访问 |
-| GET | `/settings` | `{port, active_port, restart_required, storage:{directory,encryption}}` |
+| GET | `/settings` | `{port, active_port, restart_required, appearance:{revision,resetRevision,value}, storage:{directory,encryption}}` |
 | PUT | `/settings` | 请求 `{port:16666}`，返回完整设置；修改后重启生效 |
+| PATCH | `/settings/appearance` | `{revision:0,patch:{theme?,companions?,reduceMotion?,options?}}` → `{revision,resetRevision,value}`；原子比较版本并合并外观，旧版本返回 409 |
 | GET | `/themes` | `{api_version:1,default:"default",items:[Theme],errors:[]}`；发现本地主题、样式和界面入口，详见 [主题契约](UI_THEME.md) |
 | POST | `/data/clear` | `{scope:"credentials"\|"modules"\|"all", confirmation:"CLEAR"}` → `{cleared:scope,backup:BackupInfo\|null}` |
 | GET | `/data/backups` | `{backups:[BackupInfo]}`，新备份在前；损坏项 `valid:false`，仍可删除 |
@@ -26,6 +27,15 @@ HTTP 400 表示参数或本地环境不符合要求（保留现有 RuntimeError 
 | DELETE | `/data/backups/{id}` | `{confirmation:"DELETE_BACKUP"}` → `{deleted:id}`，只删除该备份 |
 
 端口范围为 1024–65535，浏览器限制端口在系统边界拒绝。默认保存端口 16666，`--port` 只覆盖当次运行端口。
+
+外观独立保存在当前项目目录的 SQLite `core/appearance`，不包含凭据。首次没有记录时返回 `{revision:0,resetRevision:0,value:null}`；`bootstrap.settings.appearance` 与 `GET /settings` 返回相同记录。客户端首次可将本浏览器已规范化的旧偏好作为 patch 迁入；有服务端记录时以服务端为准。首次成功保存产生 revision 1、resetRevision 0 和完整 `value:{theme:"default",companions:{},reduceMotion:false,options:{}}`（提供的字段覆盖默认值）。端口 `PUT /settings` 不覆盖外观，外观 PATCH 不修改端口；服务重启后沿用同一数据库恢复。清除凭据或模块数据保留外观；清除 `all` 删除其他 core 数据，并保存显式默认外观（版本继续递增，value 不回到 null），避免旧浏览器再次迁入刚清除的偏好；真正从未保存过外观的数据库才返回 null。模块数据备份不包含框架外观。
+
+`resetRevision` 表示最近一次明确重置的版本屏障，取整数 0 至 revision；读取没有此字段的旧两字段记录时补 0。普通 PATCH 保持此值，清除 `all` 后将其设置为新的 revision。客户端发现此屏障变化时应采用服务器默认外观并取消重置前排队的修改，不得按普通 409 重放旧 patch；请求仍只含 revision 和 patch。
+
+每次 PATCH 携带最近读取的 revision，后端在 SQLite 写事务中比较并递增；旧版本返回 409 且不写入，客户端应重新读取并仅重试尚未保存的局部 patch，不能用旧快照覆盖新记录。PATCH 保留未提供的字段；嵌套对象递归合并，数组、标量和 options 内的 null 显式替换。顶层仅接收 theme、companions、reduceMotion、options；主题/人物选项 ID 格式为 `[a-z][a-z0-9-]{0,47}`，companions 以主题 ID 分区，options 每个主题对应任意受限 JSON 对象。不要求主题目前已安装，也不枚举主题或过滤其未知配置键，因此暂缺/未来主题的偏好可保留。
+
+patch 和合并后的完整外观各限制为 UTF-8 JSON 64 KiB、最多 8 层、4096 个值节点；对象/数组每层最多 128 项，键最长 128 字符，文字最长 8192 字符，数字须有限且绝对值不超过 `2^53-1`。递归拒绝 `__proto__`、`constructor`、`prototype` 键、非法字段和类型，返回 422。revision 是 0 至 `2^53-1` 的整数（不接受布尔值/字符串）；同样要求写请求 CSRF 令牌。主题展示仍按主题契约决定，服务端保存某主题并不表示该主题已安装。
+
 
 `launch_id` 是每次启动的公开实例标识，不是认证凭据，不能替代 CSRF token。Windows 启动器将健康响应与本目录 `.private/runtime/launcher/server.json` 匹配后打开 Edge。健康接口沿用 Host/Origin 与本机访问限制，不返回路径、账号或密钥。
 

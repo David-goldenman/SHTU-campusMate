@@ -2,7 +2,15 @@
 
 ## 主题契约 v1
 
-设置 → 外观提供 `default`（当前 Nord 界面）、`observatory`（观星台）和 `star-notes`（星夜手记）。首次使用选择 `default`；之后按当前浏览器的 `campus.appearance.v1` 保存用户选择，服务重启和页面刷新继续使用。切换主题保存后重新打开当前页面，以统一卸载页面、后台组件与样式。原有艺术主题及人物偏好继续读取；主题暂时缺失时显示 Default，并保留原选择供重新安装后恢复。
+设置 → 外观提供 `default`（当前 Nord 界面）、`observatory`（观星台）和 `star-notes`（星夜手记）。首次使用选择 `default`；之后将外观保存在本机工作台，通过 `bootstrap.settings.appearance` 跨浏览器恢复。`campus.appearance.v1` 仅作为浏览器缓存和首次迁移旧偏好使用；服务端已有设置时以服务端为准，空浏览器不会自动把 Default 写回。切换主题保存后重新打开当前页面，以统一卸载页面、后台组件与样式。原有艺术主题及人物偏好继续读取；主题暂时缺失时显示 Default，并保留原选择供重新安装后恢复。
+
+本机记录为 `{revision,value,resetRevision}`，尚未保存时为 `{revision:0,value:null,resetRevision:0}`；旧记录缺少 `resetRevision` 时视为 0。`GET /api/v1/settings` 与初始化接口返回此记录；`PATCH /api/v1/settings/appearance` 接收 `{revision,patch:{theme?,companions?,reduceMotion?,options?}}` 并返回新记录。版本过时返回 409；前端重新读取版本后，仅重试原来的明确改动。写入串行执行，主题保存成功后才重新加载页面；失败显示未保存并保留服务端已确认的设置。端口设置与外观记录独立。“全部清除”产生新的显式 Default 记录，`revision` 单调递增，并将 `resetRevision` 设置为该新版本。客户端一旦读到重置版本推进，即采用服务端设置并取消在旧重置代际中排队或在途的外观修改；这些修改不能在 409 后重放。观察到重置之后的新显式选择仍可正常保存。全部清除成功后整页重载，旧浏览器缓存不能再次迁移回去。
+
+`companions` 与 `options` 按对象递归合并，数组与标量按明确值替换；其他主题、未安装主题和未来主题的配置全部保留，不用缺省值覆盖它们。主题的 `savePreferences(value)` 以调用时的当前偏好计算提供字段的改动，只发送当前主题的变化；省略字段保留原值，需要清空的值应显式给出，例如 `null`。首次迁移只在浏览器确有合法旧主题选择且服务端为空时进行；若迁移遇到 409，直接采用服务端记录，不能以旧浏览器偏好覆盖它。禁用浏览器存储时仍可通过服务端保存并在重开后恢复。
+
+主题上下文的 `select(id)` 现在返回 `Promise<void>`；调用方应 `await` 并处理保存失败。启用本机持久化桥后，`setAppearance(patch)` 和 `savePreferences(value)` 返回 `Promise<boolean>`，成功为 `true`，失败为 `false`；未注入桥的独立组件与旧合成检查仍返回同步布尔值。调用方统一使用 `await` 可兼容两种情况。选择器及蓝白轮播设置只提交用户改动的字段，不能把旧整份 `options` 当作一次新改动上传。
+
+自动验证应使用隔离服务数据或合成 Store；本机外观跨浏览器共享，仅隔离浏览器配置不足以防止检查修改用户的日常主题。
 
 `GET /api/v1/themes` 自动发现 `web/themes/<id>/theme.json`，返回 `{api_version:1,default:"default",items,errors}`。添加主题只需提交自己的目录和清单；清单错误单独列出，其他主题继续使用。资源路径相对清单目录解析，必须指向 `web/themes/` 内的本地文件。
 
@@ -43,7 +51,7 @@
 | `context.focus(active)` | 请求内容区使用完整工作区 |
 | `context.defaultView(container)` | 挂载当前模块原界面，返回其清理函数，适合组合原有功能 |
 | `context.theme.id / list() / select(id)` | 当前主题、安装清单、保存并切换主题 |
-| `context.theme.preferences() / savePreferences(value)` | 读取副本、保存当前主题专属的展示偏好 |
+| `context.theme.preferences() / savePreferences(value)` | 读取副本；以提供字段的变化合并保存当前主题专属偏好，使用 `await` 等待结果 |
 | `context.theme.renderSlot(name, props, fallback)` | 模块声明的可替换展示区域 |
 | `context.signal` | 切页、模块停用或刷新时结束组件资源 |
 

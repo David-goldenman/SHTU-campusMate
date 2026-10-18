@@ -31,6 +31,7 @@ const copy=ui.getAppearance();copy.companions.observatory='hidden';
 assert.equal(ui.getAppearance().companions.observatory,'female');
 for (const theme of ['__proto__','../unknown',null]) assert.equal(ui.normalizeAppearance({theme}).theme,'default');
 assert.equal(ui.normalizeAppearance({companions:{observatory:'invalid'},reduceMotion:'false'}).reduceMotion,false);
+assert.equal(ui.normalizeAppearance({companions:{'future-theme':'robot'}}).companions['future-theme'],'robot','Unknown theme companion IDs survive normalization');
 const event=new Event('storage');
 Object.assign(event,{key:'campus.appearance.v1',newValue:JSON.stringify({theme:'star-notes',companions:{'star-notes':'male'}})});
 window.dispatchEvent(event);

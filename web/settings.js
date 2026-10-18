@@ -120,12 +120,13 @@ export async function mount(container, context) {
   bindModules();
 
   // Reload the frontend after lifecycle changes, including rejected or failed operations.
-  async function dataAction(path, options, message) {
+  async function dataAction(path, options, message, reload = false) {
+    let completed=false;
     try {
       await context.beforeClear();
       await api(path,options);
-      toast(message);
-    } finally { await context.refresh(); }
+      completed=true;toast(message);
+    } finally { if(completed && reload)location.reload();else await context.refresh(); }
   }
   async function loadBackups() {
     const list = container.querySelector('#backup-list');
@@ -308,7 +309,7 @@ export async function mount(container, context) {
   dataForm.onsubmit = safeAction(dataForm.querySelector('button'),async () => {
     const scope = scopeInput.value;
     if (!await confirmDialog('清除本地数据',clearDescriptions[scope],'清除数据')) return;
-    await dataAction('/data/clear',{method:'POST',body:{scope,confirmation:'CLEAR'}},scope === 'credentials' ? '所选凭据已清除。' : '模块数据已备份，所选数据已清除。');
+    await dataAction('/data/clear',{method:'POST',body:{scope,confirmation:'CLEAR'}},scope === 'credentials' ? '所选凭据已清除。' : '模块数据已备份，所选数据已清除。',scope === 'all');
   });
 }
 
