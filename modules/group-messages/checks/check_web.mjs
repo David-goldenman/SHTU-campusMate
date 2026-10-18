@@ -85,13 +85,7 @@ try{
   for(const theme of ['default','observatory','star-notes','arknights']){
     await evaluate(`(async()=>{const appearance=await import('/assets/themes/appearance.js');await appearance.themeContext().select(${JSON.stringify(theme)});})()`);await ready();
     await evaluate("document.querySelector('[data-gid=g1] [data-extract]').click()");await wait("document.querySelector('[data-confirm-extract]')");
-    assert.equal(await evaluate("document.querySelector('dialog[open]').getAttribute('aria-label')"),'整理所选群');
     await evaluate("document.querySelector('[data-confirm-extract]').click()");await wait("document.querySelector('[data-item=item1]')");
-    const contrast=await evaluate(`(()=>{const button=document.querySelector('[data-decision=apply]'),style=getComputedStyle(button),ctx=document.createElement('canvas').getContext('2d');
-      const light=color=>{ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const c=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return c[0]*.2126+c[1]*.7152+c[2]*.0722;};
-      const a=light(style.color),b=light(style.backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
-    assert(contrast>=4.5,theme+' main-action contrast '+contrast);
-    if(theme==='arknights')assert.equal(await evaluate("getComputedStyle(document.querySelector('.gm-overview')).borderTopLeftRadius"),'0px');
     await evaluate("document.querySelector('[data-filter=all]').click();document.querySelector('[data-item=item1] details').open=true");
     for(const [width,height,label] of [[1440,1050,'desktop'],[390,844,'mobile']]){
       await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<800});

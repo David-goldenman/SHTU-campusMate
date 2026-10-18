@@ -28,6 +28,13 @@ class LoginOptions(BaseModel):
     target: str | None = None
 
 
+class ImapCredentials(BaseModel):
+    username: str = Field(min_length=1, max_length=320)
+    password: str = Field(max_length=4096)
+    port: int = Field(default=993, ge=1, le=65535)
+    ssl: bool = True
+
+
 class DeviceConsent(BaseModel):
     confirmation: Literal["REGISTER_THIS_DEVICE"]
 
@@ -59,6 +66,22 @@ def create_router(service):
     @router.get("/providers")
     def providers():
         return {"providers": service.providers()}
+
+    @router.get("/coremail/imap")
+    def imap_status():
+        return service.get_status("coremail")
+
+    @router.put("/coremail/imap")
+    def save_imap(body: ImapCredentials):
+        return service.save_imap(body.username, body.password, body.port, body.ssl)
+
+    @router.post("/coremail/imap/check")
+    def check_imap():
+        return service.check_imap()
+
+    @router.delete("/coremail/imap")
+    def forget_imap():
+        return service.forget_imap()
 
     @router.get("/{provider}/status")
     def status(provider: str):

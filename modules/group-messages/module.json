@@ -4,11 +4,5 @@
   "version": "0.1.0",
   "category": "group-messages",
   "api_version": 1,
-  "navigation": {
-    "label": "群消息",
-    "icon": "chat",
-    "description": "连接自己的课程群，整理通知、作业和日程变更。",
-    "order": 32,
-    "layout": "primary"
-  }
+  "navigation": {"label": "群消息", "icon": "☷", "description": "连接自己的课程群，整理通知、作业和日程变更。", "order": 32, "layout": "primary"}
 }

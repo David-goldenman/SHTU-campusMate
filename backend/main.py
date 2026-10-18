@@ -38,7 +38,7 @@ async def login_error(request, error):
     verification = isinstance(error, VerificationRequired)
     return error_response(request, 409 if verification else 401, str(error),
                           code='verification_required' if verification else 'login_required',
-                          action='请到设置 → 账号连接，完成官方窗口验证。' if verification else None)
+                          action='请到设置 → 账号连接，检查登录状态并重新连接。' if verification else None)
 
 
 async def network_error(request, error):
