@@ -70,8 +70,14 @@ function fixture(initial, categories, themeCatalog) {
         }
         Object.assign(provider,{status:'ready',has_session:true,message:'',identity_verified:true});
       }
-      if (auth[2] === 'browser') Object.assign(provider,{status:'verification_required',message:'请在官方窗口完成登录后连接。'});
-      if (auth[2] === 'import-session') Object.assign(provider,{status:'ready',has_session:true,message:''});
+      if (auth[2] === 'browser') {
+        Object.assign(provider,{status:'verification_required',message:'请在官方窗口完成登录后连接。'});
+        if (provider.id === 'ids') Object.assign(provider,{browser_target:body.target || 'blackboard',connection:{status:'waiting_for_login'}});
+      }
+      if (auth[2] === 'import-session') {
+        Object.assign(provider,{status:'ready',has_session:true,message:''});
+        if (provider.id === 'ids') Object.assign(provider,{connection:{status:'complete'},services:['blackboard','elrc','ecourse','timetable'].map(id=>({id,status:id==='ecourse'&&body.target!=='ecourse'?'verification_required':'ready'}))});
+      }
       if (auth[2] === 'device/start') provider.device.setup = {status:'waiting',message:'正在等待合成复核。'};
       if (auth[2] === 'status' && provider.device?.setup.status === 'waiting') provider.device = {configured:true,pending:false,enabled:true,setup:{status:'ready',message:'合成设备已绑定。'}};
       return json(provider);
@@ -244,8 +250,19 @@ try {
   assert(imap.saved.configured && imap.saved.officialHidden && imap.saved.passwordCleared,'IMAP is preferred and the official entry is dropped');
   assert.match(imap.saved.state,/imap\.shanghaitech\.edu\.cn:143 · 非 SSL/);
   assert(imap.checked && imap.forgotten && imap.cleared,'IMAP check and removal use dedicated endpoints');
-  await evaluate(`(async()=>{const card=document.querySelector('[data-provider=ids]');card.querySelector('.provider-connection').open=true;card.querySelector('[data-auth-target]').value='elrc';card.querySelector('[data-auth-action=browser]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);card.querySelector('[data-auth-action=import-session]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);card.querySelector('.auth-device').open=true;card.querySelector('[data-device-action=start]').click();await waitFor(()=>document.querySelector('#dialog').open);document.querySelector('#dialog button[value=confirm]').click();await waitFor(()=>card.querySelector('.auth-device>summary').textContent.includes('已绑定'));if(document.querySelector('#ai-form')!==originalAI)throw new Error('Device polling replaced settings');return true;})()`);
-  assert.deepEqual(await evaluate(`webCheck.calls.filter(c=>['/auth/ids/browser','/auth/ids/import-session'].includes(c.path)).map(c=>c.target)`),['elrc','elrc']);
+  await evaluate(`(async()=>{
+    const card=document.querySelector('[data-provider=ids]');card.querySelector('.provider-connection').open=true;
+    card.querySelector('[data-auth-action=browser]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);
+    card.querySelector('[data-auth-action=import-session]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);
+    if(!card.querySelector('[data-school-services]').textContent.includes('已连接 3 / 4'))throw new Error('Partial school-service connection must stay visible');
+    card.querySelector('[data-school-verify=ecourse]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);
+    card.querySelector('[data-auth-action=import-session]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);
+    if(!card.querySelector('[data-school-services]').textContent.includes('已连接 4 / 4'))throw new Error('Per-service verification must preserve the other connections');
+    card.querySelector('.auth-device').open=true;card.querySelector('[data-device-action=start]').click();await waitFor(()=>document.querySelector('#dialog').open);
+    document.querySelector('#dialog button[value=confirm]').click();await waitFor(()=>card.querySelector('.auth-device>summary').textContent.includes('已绑定'));
+    if(document.querySelector('#ai-form')!==originalAI)throw new Error('Device polling replaced settings');return true;
+  })()`);
+  assert.deepEqual(await evaluate(`webCheck.calls.filter(c=>['/auth/ids/browser','/auth/ids/import-session'].includes(c.path)).map(c=>c.target || 'default')`),['default','blackboard','ecourse','ecourse']);
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await evaluate(`document.querySelector('[data-provider=gradescope]').scrollIntoView(); true`);
   await writeFile(resolve('.codex/tmp/web-check-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
@@ -292,8 +309,11 @@ try {
   await evaluate(`waitFor(()=>!document.querySelector('#dialog').open)`);
   assert(await evaluate(`!document.querySelector('#dialog').open`),'Clicking the calendar dialog backdrop closes the zoom view');
   await evaluate(`document.querySelector('.planner-overview').open=true`);
-  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'),overview=body.querySelector('[data-overview]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,overviewCols:overview.querySelectorAll('thead th').length,overviewRows:overview.querySelectorAll('tr').length,overviewWeeks:overview.querySelectorAll('tbody tr').length,todayBeijing:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date()),overviewToday:overview.querySelector('.overview-day.is-today')?.dataset.overviewDate,overviewPinned:Boolean(overview.compareDocumentPosition(body.querySelector('.planner-toolbar'))&Node.DOCUMENT_POSITION_FOLLOWING),homeworkItems:overview.querySelectorAll('.overview-item.is-late').length,platforms:[...overview.querySelectorAll('.overview-platform')].map(item=>item.textContent)};})()`);
+  const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'),overview=body.querySelector('[data-overview]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,overviewCols:overview.querySelectorAll('thead th').length,overviewRows:overview.querySelectorAll('tr').length,overviewWeeks:overview.querySelectorAll('tbody tr').length,todayBeijing:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date()),overviewToday:overview.querySelector('.overview-day.is-today')?.dataset.overviewDate,overviewPinned:Boolean(overview.compareDocumentPosition(body.querySelector('.planner-toolbar'))&Node.DOCUMENT_POSITION_FOLLOWING),homeworkItems:overview.querySelectorAll('.overview-item.is-late').length,platforms:[...overview.querySelectorAll('.overview-platform')].map(item=>item.textContent),exports:[...body.querySelectorAll('[data-export]')].map(item=>({text:item.textContent,href:item.getAttribute('href'),download:item.download}))};})()`);
   assert.match(timetable.content,/合成课程/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
+  assert.deepEqual(timetable.exports.map(item=>item.text),['导出作业日历 (.ics)','导出课程日历 (.ics)']);
+  assert.deepEqual(timetable.exports.map(item=>item.download),['shanghaitech-homework-4-weeks.ics','shanghaitech-courses-semester.ics']);
+  assert(timetable.exports.every(item=>item.href.startsWith('/api/v1/modules/timetable/calendar/export/')),'Both exports use dedicated homework and course routes');
   assert.match(timetable.content,/近四周作业日程/);assert.match(timetable.content,/不随上方周切换按钮变化/);assert.match(timetable.content,/待完成 1 · 迟交 1/);assert.match(timetable.content,/合成迟交作业/);assert.match(timetable.content,/第 5 周/);assert.equal(timetable.overviewCols,8);assert.equal(timetable.overviewRows,5);assert.equal(timetable.overviewWeeks,4);assert.equal(timetable.overviewToday,timetable.todayBeijing);assert(timetable.overviewPinned,'Assignment schedule stays pinned above the week buttons');assert.equal(timetable.homeworkItems,1);assert.deepEqual(timetable.platforms,['Blackboard','Blackboard']);
   const overviewBefore = await evaluate(`document.querySelector('[data-overview]').innerText`);
   const scheduleCalls = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);

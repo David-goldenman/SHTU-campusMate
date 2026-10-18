@@ -129,6 +129,8 @@ def create_router(context):
 
 后台任务、定时器和长连接由模块自己的 `stop` 释放。模块必须使用框架的生命周期钩子启动和结束这些活动；数据库连接由宿主在停止后关闭。热更新以模块为单位，Python 公共依赖或主框架的改动使用服务重启。
 
+来源 SDK `Source` 在模块构造后管理自己的后台刷新线程与单任务队列，`close()` 停止刷新并等待任务结束。已接受的 `POST /sync` 返回 202，任务不依赖页面连接；`GET /snapshot` 返回 `syncing` 时，前端按需轮询，切页取消轮询，重新挂载继续读取。后台每分钟检查当前账号已有的成功或部分缓存，超过默认 6 小时刷新；初次同步、登录错误及失败重试仍由用户发起。聚合模块并行派发独立来源，不把切页取消当作来源任务取消。Piazza 逐页采集的异步契约见其模块文档。
+
 运行状态登记已用于共享 Source 同步、时间表校历更新、校园后台助手、通知检查和学习提醒。在线程 start 或提交 Future 后调用 `context.runtime.watch('简短任务名', worker)`；重复任务使用固定名称，不能按任务 ID 无限添加。框架记录接口时间、HTTP 状态及错误编号，业务成功与数据新鲜度仍由模块 API 表达。状态仅存于当前实例内存，详见 [运行状态响应](API.md#模块管理)。合成上下文可省略 runtime，调用方用 `getattr(context,'runtime',None)` 兼容。
 
 清除模块数据前会自动快照；恢复同时替换所有模块的普通状态和文件，不处理秘密或核心账号状态。快照需要所有模块的 stop 成功后才读取，后台任务必须完成清理才能参与恢复。不得把凭据放入 store/data_dir；备份只遵循这两个公开的非秘密数据边界。使用 `HTTPException(status, '可公开说明')` 报告预期业务错误，未经处理的异常由框架提供通用提示和错误编号。
@@ -143,7 +145,7 @@ def create_router(context):
 
 来源可通过 `Source(..., network_target=共享认证目标)` 选择网络失败诊断；SDK 不选择具体业务目标。网络请求失败的 error/partial 快照附带 `network_failure:{id,target,kind,at,host?}`，重试启动或成功时清除；解析、登录和权限失败不携带该标记。标记按账号版本隔离，不保存原始异常或完整 URL。`Remote.network_error` 仅在内存保留最后一次重试仍失败的 RequestError，供 Source 识别局部失败。聚合页转发 `network_failures` 数组。共享 `sourcePanel` 自动显示，其他页面可用 `/assets/sync-network.js` 的 `bindSyncNetwork(host,context,retry?)`，调用返回对象的 `update(failures)`；同一故障去重，切页中止，恢复后清除。它通过 `context.services.auth.explainNetwork(failures)` 调用公开诊断 API；详见 [AUTH.md](AUTH.md)。结构化 HTTP 错误的 `detail.message` 显示为消息，原公开 detail 保存在前端 Error 的 `details`。
 
-公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。日期带时区，页面以 Asia/Shanghai 展示。
+公共 `backend.services.campus` 提供 `Source` 同步生命周期、`Remote` 来源请求、课程与时间规范化。来源模块公开 `GET /snapshot` 和 `POST /sync`（202），快照为 `{status,data,updated_at,message?}`。`data` 包含 `courses/assignments/materials/announcements/posts/lessons/timetable/messages` 八个数组、`metadata` 范围对象和 `issues` 提示数组；标识带来源前缀，未知提交状态保持 `null`。全局请求失败保留上次成功快照；来源可在 `issues` 标明局部读取失败。 `Source(..., direct=None, stale_after=21600)` 默认将超过 6 小时的 ready 快照标为 `cached`，读取时保留内容并复用模块同步队列后台更新；并发读取只排队一次，停用后保留快照并停止排队。错误、部分结果和登录验证状态继续按原状态返回，账号切换仍隔离缓存。`direct` 返回 true 时由模块自行验证其传输并通过 `fetch(None, previous)` 读取，例如 IMAP；HTTP 来源继续使用共享认证与 `Remote`。日期带时区，页面以 Asia/Shanghai 展示。
 
 时间表分类保持 `timetable` ID 与 `#timetable` 路由。`timetable` 模块的 `/snapshot`、`/sync` 提供教务上课数据；页面使用 `/schedule`、`/schedule/sync` 汇总 Blackboard、Gradescope 和教务考试。聚合只调用各模块公开 API，停用的来源退出时间表，账号变化时丢弃在途结果。数据格式见 [时间表接口](../modules/timetable/README.md)。
 

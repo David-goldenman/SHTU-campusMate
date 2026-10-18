@@ -1,6 +1,7 @@
 """Exercise the same schedule-read / class-adjustment path used by the page."""
 import asyncio
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -33,7 +34,7 @@ async def check():
                                 'timetable': [{'id': 'timetable:lesson', 'course_id': 'timetable:course',
                                                'source': 'timetable', 'title': '合成课程', 'weekday': 2,
                                                'weeks': [1, 2], 'period_start': 3, 'period_end': 4, 'location': '教室 A'}]})
-        context.store.write('snapshot', {'owner': source.owner(), 'data': data, 'updated_at': '2026-10-16T00:00:00Z'})
+        context.store.write('snapshot', {'owner': source.owner(), 'data': data, 'updated_at': datetime.now(timezone.utc).isoformat()})
         context.store.write('sync', {'owner': source.owner(), 'status': 'ready'})
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:

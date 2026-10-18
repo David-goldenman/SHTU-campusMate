@@ -1,0 +1,17 @@
+{
+  "tool": "image_gen (built-in)",
+  "reference": "campusmate-visual-guide.png",
+  "reference_note": "User-provided CampusMate校园品牌视觉指南.png, copied unchanged.",
+  "assets": [
+    {
+      "file": "campusmate-app-icon.png",
+      "transparent_background": true,
+      "prompt": "Use case: background-extraction / precise-object-edit. Edit target: the supplied CampusMate brand visual guide. Produce ONE production app icon, square 1024 x 1024. Extract and faithfully reproduce ONLY the large blue rounded-square app icon at the top of the RIGHT column (in the 1536x1024 reference it is approximately x=990..1285, y=84..395), not the whole guide. Preserve its exact character identity and composition: friendly white robot, very dark navy face, two smiling white arch eyes, small periwinkle smile, tilted dark navy graduation cap with blue highlight, yellow tassel at left, blue ear pad, white hand holding an unfolded pale-cream campus map with mint dotted route and a large periwinkle location pin. Preserve the smooth periwinkle-blue rounded-square background and the original thick clean navy outlines. Keep the character's pose, proportions, cap angle, map, colors and friendly expression as close to the source as possible. The rounded square should fill the square canvas, with actual transparent alpha ONLY outside its rounded corners, no white margin. No redesign, no extra scenery, no text, no typography, no labels, no watermark, no layout sheet. This is extraction of the existing approved icon for use as the application's main brand icon."
+    },
+    {
+      "file": "campusmate-promo.png",
+      "transparent_background": false,
+      "prompt": "Use case: precise-object-edit / ads-marketing. Edit target: the supplied CampusMate brand visual guide. Create a standalone, finished square promotional poster by extracting only the LEFT large campaign illustration and its title, slogan and five feature captions. Do not include any of the guide's right-hand app-icon samples, horizontal-logo examples, monochrome example, separator line or color palette. Faithfully preserve the existing approved illustration: friendly white robot with dark navy face, smiling eyes, periwinkle ear pads, navy graduation cap and golden tassel, backpack, pale folded map with blue location pin, pastel mint shrubs and pale blue campus clock-tower at left, four directional signs at right reading exactly 'CLASSES', 'TIMETABLE', 'RESOURCES', 'CAMPUS LIFE'. Preserve the same navy / periwinkle / pale-blue / mint / warm-yellow colors and thick clean outlines. On a clean near-white background, center the existing robot campus composition above a large wordmark, exact spelling 'CampusMate' (Campus dark navy; Mate periwinkle). Below it preserve the exact two-line slogan: 'This page graduated' / 'without telling anyone.' with small playful periwinkle strokes. Bottom row: five existing matching feature icons, labels and descriptions in five clear columns. Exact text: 'Courses' / 'Lecture notes,' / 'syllabi, and more.'; 'Timetable' / \"Know what’s next,\" / 'always.'; 'Campus Info' / 'Find the right page,' / 'fast.'; 'Deadlines' / 'No more surprises.'; 'Ask Anything' / 'Even the “stupid”' / 'questions.' Keep all text legible and all artwork fully inside a generous safe margin. Output one polished 1536x1536 square promotional graphic. No added claims, no additional wording, no new characters, no watermark. This is a faithful standalone adaptation of the source's left panel, not a new brand concept."
+    }
+  ]
+}

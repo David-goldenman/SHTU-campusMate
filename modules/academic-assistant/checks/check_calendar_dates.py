@@ -2,7 +2,7 @@
 import asyncio
 import copy
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -20,12 +20,12 @@ study, timetable = load('academic-assistant'), load('timetable')
 async def check():
     with sandbox('timetable') as context, sandbox('academic-assistant') as study_context:
         async def sources(name, path='/snapshot', **kwargs):
-            return httpx.Response(200, json={'status': 'ready', 'updated_at': '2027-02-01T00:00:00Z', 'data': validate_bundle({})})
+            return httpx.Response(200, json={'status': 'ready', 'updated_at': datetime.now(timezone.utc).isoformat(), 'data': validate_bundle({})})
         context.api = sources
         app = FastAPI()
         app.include_router(timetable.create_router(context))
         source = timetable._source
-        snapshot = {'owner': source.owner(), 'updated_at': '2027-02-01T00:00:00Z', 'data': validate_bundle({
+        snapshot = {'owner': source.owner(), 'updated_at': datetime.now(timezone.utc).isoformat(), 'data': validate_bundle({
             'metadata': {'semester': '2026-2027学年春季', 'semester_id': 'spring', 'units': 13},
             'timetable': [{'id': 'timetable:synthetic', 'source': 'timetable', 'title': '合成课程',
                            'weekday': 1, 'period_start': 1, 'period_end': 2, 'weeks': [1, 2]}]})}

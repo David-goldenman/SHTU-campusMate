@@ -1,6 +1,7 @@
 """Department evidence and the public courses → timetable appearance contract."""
 import asyncio
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -44,7 +45,7 @@ async def check():
         data = validate_bundle({'courses': [course('timetable', '1', '合成课程', 'QA101', '2026-fall')],
             'timetable': [{'id': 'timetable:lesson', 'source': 'timetable', 'title': '合成课程', 'course_id': 'timetable:1', 'weeks': [1], 'weekday': 1, 'period_start': 1, 'period_end': 2}],
             'metadata': {'semester': '2026-fall'}})
-        timetable.store.write('snapshot', {'owner': source.owner(), 'updated_at': '2026-10-17T00:00:00Z', 'data': data})
+        timetable.store.write('snapshot', {'owner': source.owner(), 'updated_at': datetime.now(timezone.utc).isoformat(), 'data': data})
         timetable.store.write('sync', {'owner': source.owner(), 'status': 'ready'})
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:

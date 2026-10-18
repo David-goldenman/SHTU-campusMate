@@ -2,7 +2,9 @@ import {bindSyncNetwork} from '/assets/sync-network.js';
 
 export async function mount(container, context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
-  const cleanup = () => { removeStyle(); container.replaceChildren(); };
+  let poll, wasSyncing = false;
+  const cleanup = () => { clearTimeout(poll); removeStyle(); container.replaceChildren(); };
+  context.signal.addEventListener('abort', cleanup, {once:true});
   const e = context.ui.escape;
   const options = {signal: context.signal};
   const states = {ready: '已同步', empty: '暂无已发布资料', partial: '部分内容可用', not_synced: '尚未同步', syncing: '同步中', stale: '保留旧缓存，需重试', error: '读取失败'};
@@ -32,6 +34,26 @@ export async function mount(container, context) {
   let revision = 0;
   const term = () => find('[data-term]').value;
 
+  async function watchSync() {
+    clearTimeout(poll);
+    const value = await context.api('/sync');
+    if (context.signal.aborted) return;
+    const running = value.status === 'syncing';
+    find('[data-discover]').disabled = running;
+    container.querySelectorAll('[data-sync]').forEach(button => {button.disabled = running;});
+    diagnose.update(value.network_failure ? [value.network_failure] : []);
+    if (running) {
+      wasSyncing = true;
+      status('后台同步中，可离开此页。' + (value.lesson ? '当前课次：' + value.lesson : '正在读取课程资料…'));
+      poll = setTimeout(() => watchSync().catch(error => {if (!context.signal.aborted) status(error.message);}), 1200);
+    } else if (wasSyncing) {
+      wasSyncing = false;
+      await load();
+      if (activeCourse && !activeLesson) await showCourse(activeCourse);
+      if (value.message) status(value.message);
+    } else if (value.message) status(value.message);
+  }
+
   async function load() {
     const version = ++revision;
     const value = await context.api('/catalog?semester=' + encodeURIComponent(term()));
@@ -42,7 +64,7 @@ export async function mount(container, context) {
     find('[data-courses]').innerHTML = value.courses.length ? value.courses.map(course => `<article class="panel elrc-card"><h3>${e(course.code)} ${e(course.name)}</h3>
       <p>${e(course.semester)} · ${e(states[course.content_status] || course.content_status)}</p>
       <p>${course.lesson_count} 个课次 · ${course.transcript_count} 份转写 · ${course.summary_count} 份学校摘要 · ${course.material_count} 份课件</p>
-      <div class="elrc-actions"><button class="button" data-view="${e(course.id)}">查看内容</button><button class="button button-secondary" data-sync="${e(course.id)}">同步资料</button></div></article>`).join('') : context.ui.empty('还没有课程', '连接学校账号后更新课程目录；已有缓存可离线查看。');
+      <div class="elrc-actions"><button class="button" data-view="${e(course.id)}">查看内容</button><button class="button button-secondary" data-sync="${e(course.id)}" ${wasSyncing ? 'disabled' : ''}>同步资料</button></div></article>`).join('') : context.ui.empty('还没有课程', '连接学校账号后更新课程目录；已有缓存可离线查看。');
     status(`当前显示 ${value.courses.length} 门课程。${value.updated_at ? '目录更新于 ' + new Date(value.updated_at).toLocaleString('zh-CN') : ''}`);
   }
 
@@ -82,11 +104,10 @@ export async function mount(container, context) {
       }
       if (button.dataset.view) await showCourse(button.dataset.view);
       if (button.dataset.sync) {
-        status('正在同步该课程；课次较多时需要几分钟。已保存的内容可继续读取。');
+        status('正在后台同步，可离开此页。已保存的内容可继续读取。');
         await syncAction(async () => {
           await context.api('/courses/' + encodeURIComponent(button.dataset.sync) + '/sync', {method: 'POST', body: {force: false}});
-          await load();
-          await showCourse(button.dataset.sync);
+          await watchSync();
         });
       }
       if (button.dataset.lesson) await showLesson(button.dataset.lesson);
@@ -104,6 +125,6 @@ export async function mount(container, context) {
     if (context.signal.aborted) return;
     find('[data-results]').innerHTML = '<h3>搜索结果</h3>' + (value.items.map(item => `<article class="panel elrc-card"><strong>${e(item.course_name)} · ${e(item.lesson_label)} · ${item.source_kind === 'summary' ? '学校摘要' : '课堂转写'}</strong><p class="elrc-text">${e(item.text)}</p><small>${e(item.source_id)} · ${time(item.start_seconds)}</small></article>`).join('') || '<p>没有匹配资料，请先同步课程或换一个关键词。</p>');
   }), options);
-  try { await load(); } catch (error) { if (!context.signal.aborted) status(error.message); }
+  try { await load(); await watchSync(); } catch (error) { if (!context.signal.aborted) status(error.message); }
   return cleanup;
 }

@@ -18,6 +18,7 @@ html[data-theme="arknights"] body {
 html[data-theme="arknights"] :focus-visible { outline:3px solid var(--link); outline-offset:4px; }
 html[data-theme="arknights"] :is(button,a,input,textarea,summary) { -webkit-tap-highlight-color:#08afcf33; }
 html[data-theme="arknights"] :is(input,select,textarea,.button,.text-button,.icon-button,dialog,.status-badge,.module-status) { border-radius:0; }
+html[data-theme="arknights"] :is(.gm-overview,.gm-group,.gm-badge,.gm-filters button,.group-dialog,.school-services li,.map-panel,.map-agenda,.map-layers,.map-zoom,.map-expand,.map-gates button,.map-route-fields button) { border-radius:0; }
 html[data-theme="arknights"] :is(input,select,textarea) { border-color:#94a3a3; }
 html[data-theme="arknights"] :is(input,textarea)::placeholder { color:#647175; }
 html[data-theme="arknights"] .button { font-weight:600; letter-spacing:.25px; }

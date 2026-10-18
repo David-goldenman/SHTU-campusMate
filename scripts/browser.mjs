@@ -49,7 +49,7 @@ try {
     let existing;
     try { existing = await endpoint(); } catch {}
     if (!existing) {
-      const args = [`--user-data-dir=${input.profile}`, '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', `--disk-cache-dir=${join(input.profile, 'cache')}`, '--disable-background-mode', '--window-size=1300,900'];
+      const args = [`--user-data-dir=${input.profile}`, '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check', `--disk-cache-dir=${join(input.profile, 'cache')}`, '--disable-background-mode', '--disable-sync', '--window-size=1300,900'];
       args.push(...proxyArguments(input.url));
       if (input.headless) args.push('--headless=new', '--disable-gpu');
       args.push('about:blank');

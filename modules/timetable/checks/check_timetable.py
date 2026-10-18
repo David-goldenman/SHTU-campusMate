@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -18,6 +18,24 @@ from backend.services.campus import SourceError
 from backend.services.campus.data import validate_bundle
 
 module = load("timetable")
+
+
+def ics_blocks(value, name):
+    blocks, current = [], None
+    for line in value.replace('\r\n ', '').split('\r\n'):
+        if line == 'BEGIN:' + name:
+            assert current is None
+            current = []
+        elif line == 'END:' + name:
+            assert current is not None
+            blocks.append(current)
+            current = None
+        elif current is not None:
+            current.append(line)
+    assert current is None
+    return blocks
+
+
 reader = module.fetch.__globals__
 weeks, parse = reader["weeks"], reader["parse"]
 assert weeks("0" * 49 + "1100", 2026, 50, 1, 10) == [1, 2]
@@ -116,6 +134,52 @@ assert [week['teaching_week'] for week in grid['weeks']] == [4, 5, 6, 7]
 assert len(grid['weeks'][1]['days']) == 7 and grid['weeks'][1]['days'][3]['date'] == '2026-10-15'
 merged = [event for day in grid['weeks'][1]['days'] for event in day['events'] if event['id'] == 'blackboard:current'][0]
 assert (merged['homework'], merged['platform'], merged['late'], merged['course_title']) == (True, 'Blackboard', True, '合成课程')
+homework_export = module.build_homework_calendar({'homework': {
+    'start': '2026-10-12', 'end': '2026-11-08', 'items': [
+        {'id': 'blackboard:synthetic', 'title': '作业 1', 'source': 'blackboard', 'course_title': '合成课程',
+         'due_at': '2026-10-20T23:59:00+08:00', 'url': 'https://example.test/assignment/1', 'late': False},
+        {'id': 'gradescope:late', 'title': '迟交作业', 'source': 'gradescope', 'course_title': '合成课程',
+         'due_at': '2026-10-15T23:59:00+08:00', 'late': True}]}},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+assert homework_export.endswith('\r\n') and not homework_export.startswith('\ufeff')
+assert homework_export.count('BEGIN:VCALENDAR') == homework_export.count('END:VCALENDAR') == 1
+assert 'VERSION:2.0' in homework_export and 'CALSCALE:GREGORIAN' in homework_export and 'METHOD:PUBLISH' in homework_export
+assert 'X-WR-TIMEZONE:Asia/Shanghai' in homework_export
+assert '\n' not in homework_export.replace('\r\n', '')
+events = ics_blocks(homework_export, 'VEVENT')
+assert len(events) == 2 and homework_export.count('BEGIN:VEVENT') == homework_export.count('END:VEVENT') == 2
+for event in events:
+    for field in ('UID:', 'DTSTAMP:', 'LAST-MODIFIED:', 'SEQUENCE:0', 'CLASS:PUBLIC', 'SUMMARY:', 'DTSTART', 'DTEND'):
+        assert any(line == field or line.startswith(field) for line in event), field
+uids = [next(line[4:] for line in event if line.startswith('UID:')) for event in events]
+assert len(set(uids)) == len(uids)
+assert 'SUMMARY:作业截止：作业 1' in homework_export and 'SUMMARY:作业截止：迟交作业' in homework_export
+assert 'CATEGORIES:课程' not in homework_export and 'SUMMARY:合成课程' not in homework_export
+assert 'LOCATION:Blackboard' in homework_export and 'LOCATION:Gradescope' in homework_export
+assert 'DTSTART:20261020T152900Z' in homework_export and 'DTEND:20261020T155900Z' in homework_export
+assert 'TRIGGER:-PT30M' in homework_export and '迟交' in homework_export
+assert all(len(line.encode('utf-8')) <= 75 for line in homework_export.split('\r\n'))
+course_lesson = {**item, 'id': 'class:full', 'weeks': [1, 2], 'location': '教室, A'}
+course_data = {'metadata': {'semester': '2026-2027学年秋季', 'periods': [
+    {'period': 5, 'start': '13:00', 'end': '13:45'}, {'period': 6, 'start': '13:50', 'end': '14:35'}]},
+    'timetable': [course_lesson], 'events': []}
+course_export = module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': '2026-09-14'}, 'adjustments': []},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+course_events = ics_blocks(course_export, 'VEVENT')
+assert len(course_events) == 2 and 'CATEGORIES:作业' not in course_export and 'TRIGGER:-PT30M' not in course_export
+assert 'SUMMARY:合成课程' in course_export and 'LOCATION:教室\\, A' in course_export
+assert 'DTSTART:20260915T050000Z' in course_export and 'DTSTART:20260922T050000Z' in course_export
+assert 'DTEND:20260922T063500Z' in course_export
+assert all(len(line.encode('utf-8')) <= 75 for line in course_export.split('\r\n'))
+cancelled_course_export = module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': '2026-09-14'},
+    'adjustments': [{'id': 'adjustment:cancel', 'lesson_id': 'class:full', 'on_date': '2026-09-15',
+                     'action': 'cancel', 'scope': 'once'}]},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+assert len(ics_blocks(cancelled_course_export, 'VEVENT')) == 1 and '20260915' not in cancelled_course_export
+assert 'BEGIN:VEVENT' not in module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': None}, 'adjustments': []})
 # A room change across weeks must not duplicate the card inside one week.
 split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
     {**item, 'id': 'first-room', 'weekday': 2, 'weeks': [1, 2], 'location': 'A'},
@@ -149,7 +213,7 @@ async def check_schedule():
                 "eams": [{"id": "eams:exam", "source": "eams", "title": "Exam", "kind": "exam", "due_at": "2026-10-20T10:00:00+09:00"}],
                 "ecourse": [],
             }
-            return httpx.Response(200, json={"status": "ready", "updated_at": "2026-10-16T00:00:00Z", "data": validate_bundle({"assignments": items[name]})})
+            return httpx.Response(200, json={"status": "ready", "updated_at": datetime.now(timezone.utc).isoformat(), "data": validate_bundle({"assignments": items[name]})})
 
         context.api = api
         app = FastAPI()
@@ -167,11 +231,26 @@ async def check_schedule():
         with Image.open(rendered[0]) as image:
             assert image.width > 500 and image.height > 700, 'The PDF page must be readable at zoom size'
         calendar_key = module.term_key(result['metadata'])
-        context.store.write("snapshot", {"owner": source.owner(), "data": validate_bundle(result), "updated_at": "2026-10-16T00:00:00Z"})
+        context.store.write("snapshot", {"owner": source.owner(), "data": validate_bundle(result), "updated_at": datetime.now(timezone.utc).isoformat()})
         context.store.write("sync", {"owner": source.owner(), "status": "ready"})
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://fixture") as client:
                 schedule = (await client.get("/schedule")).json()
+                homework_export = await client.get('/calendar/export/homework.ics')
+                assert homework_export.status_code == 200 and homework_export.headers['content-type'].startswith('text/calendar')
+                assert homework_export.headers['content-disposition'] == 'attachment; filename="shanghaitech-homework-4-weeks.ics"'
+                assert homework_export.headers['cache-control'] == 'no-store'
+                homework_body = homework_export.content.decode('utf-8')
+                assert homework_body.startswith('BEGIN:VCALENDAR\r\n') and homework_body.endswith('END:VCALENDAR\r\n')
+                assert 'VERSION:2.0' in homework_body and 'METHOD:PUBLISH' in homework_body
+                assert 'CATEGORIES:课程' not in homework_body
+                course_export = await client.get('/calendar/export/courses.ics')
+                assert course_export.status_code == 200 and course_export.headers['content-type'].startswith('text/calendar')
+                assert course_export.headers['content-disposition'] == 'attachment; filename="shanghaitech-courses-semester.ics"'
+                assert course_export.headers['cache-control'] == 'no-store'
+                course_body = course_export.content.decode('utf-8')
+                assert course_body.startswith('BEGIN:VCALENDAR\r\n') and course_body.endswith('END:VCALENDAR\r\n')
+                assert 'CATEGORIES:作业' not in course_body
                 assert len(schedule["data"]["timetable"]) == 2
                 assert schedule["homework"]["items"] == [] and schedule["homework"]["pending"] == schedule["homework"]["late"] == 0
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
@@ -207,6 +286,10 @@ async def check_schedule():
                 selected = (await client.get('/schedule?week_start=2026-10-20')).json()['calendar']
                 assert selected['week_start'] == '2026-10-19' and selected['teaching_week'] == 1
                 assert len([item for item in selected['days'][1]['events'] if item['event_type'] == 'class']) == 2
+                exported_courses = await client.get('/calendar/export/courses.ics')
+                course_body = exported_courses.content.decode('utf-8')
+                assert 'SUMMARY:合成课程' in course_body and 'LOCATION:测试教室' in course_body
+                assert len(ics_blocks(course_body, 'VEVENT')) >= 2
                 event = {'title': '合成讲座', 'event_type': 'lecture', 'starts_at': '2026-10-20T16:00:00+08:00', 'ends_at': '2026-10-20T17:00:00+08:00'}
                 response = await client.post('/events', json=event)
                 assert response.status_code == 201
@@ -233,4 +316,4 @@ async def check_schedule():
 
 
 asyncio.run(check_schedule())
-print("timetable: week parsing, combined deadlines/exams, timezone order, school-calendar images, optional sources and account isolation passed")
+print("timetable: week parsing, homework/course ICS exports, timezone order, school-calendar images, optional sources and account isolation passed")
