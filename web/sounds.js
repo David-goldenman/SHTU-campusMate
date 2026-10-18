@@ -11,7 +11,7 @@ function ensure() {
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) return null;
     ctx = new Audio();
-    master = ctx.createGain(); master.gain.value = 0.15; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = 0.30; master.connect(ctx.destination);
     return ctx;
   } catch {
     try { master?.disconnect(); const closing = ctx?.close(); closing?.catch?.(() => {}); } catch {}
