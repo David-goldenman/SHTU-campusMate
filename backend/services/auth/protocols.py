@@ -20,7 +20,7 @@ SERVICES = {
 }
 PROVIDERS = {
     "coremail": {"name": "学校邮箱", "url": "https://mail.shanghaitech.edu.cn/coremail/", "domains": ("mail.shanghaitech.edu.cn",)},
-    "ids": {"name": "学校 IDS", "domains": ("shanghaitech.edu.cn",)},
+    "ids": {"name": "学校统一登录", "domains": ("shanghaitech.edu.cn",)},
     "gradescope": {"name": "Gradescope", "url": "https://www.gradescope.com/login", "domains": ("gradescope.com",)},
     "piazza": {"name": "Piazza", "url": "https://piazza.com/class", "domains": ("piazza.com",)},
 }

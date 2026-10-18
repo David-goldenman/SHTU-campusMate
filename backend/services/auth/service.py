@@ -11,6 +11,7 @@ from . import protocols
 from .browser import VerificationBrowser
 from .protocols import LoginRequired, VerificationRequired
 from .device import DeviceCredential, PERSON_CENTER
+from .school import SchoolConnections, TARGET_NAMES
 
 
 def now():
@@ -27,6 +28,7 @@ class AuthService:
         self.setup_cancelled = threading.Event()
         self.setup_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ids-device")
         self.setup_future = None
+        self.school = SchoolConnections(self)
         if self.store.read("auth:device_setup", {}).get("status") == "waiting":
             self.store.write("auth:device_setup", {"status": "interrupted", "message": "上次设备连接已中断，请重新连接或检查待确认凭据。"})
 
@@ -36,6 +38,13 @@ class AuthService:
             return False
         subject = str(subject).strip().casefold()
         saved = self.vault.get("auth:identity:" + provider)
+        if provider == "ids" and saved.get("subject") != subject:
+            if saved.get("subject"):
+                self.school.cancel()
+                self.store.delete("auth:school_connection")
+            for target in protocols.SERVICES:
+                self.store.delete("auth:target:ids:" + target)
+            self.store.delete("auth:recovery:ids")
         accounts = dict(saved.get("accounts", {}))
         revision = accounts.get(subject)
         if revision is None:
@@ -89,6 +98,14 @@ class AuthService:
                 result[key] = saved[key]
         if provider == "ids":
             result["targets"] = list(protocols.SERVICES)
+            result["services"] = [{"id": target, "name": TARGET_NAMES[target],
+                **{key: value for key, value in self._saved_state("ids", target).items() if key in {"status", "message", "checked_at"}}}
+                for target in protocols.SERVICES]
+            for item in result["services"]:
+                item.setdefault("status", "not_connected")
+            result["connection"] = {key: value for key, value in self.school.snapshot().items()
+                                    if key in {"status", "active_target", "completed", "total", "started_at", "finished_at"}}
+            result["browser_target"] = self.store.read("auth:browser_target:ids")
             result["device"] = {**self.device.status(), "enabled": self.store.read("auth:device_enabled", True)}
             result["device"]["setup"] = self.store.read("auth:device_setup", {"status": "idle"})
         result["automatic_recovery"] = bool(provider != "coremail" and credentials.get("password")) or bool(provider == "ids" and result["device"]["configured"] and result["device"]["enabled"])
@@ -96,6 +113,20 @@ class AuthService:
 
     def providers(self):
         return [self.get_status(provider) for provider in protocols.PROVIDERS]
+
+    def _saved_state(self, provider, target=None):
+        saved = self.store.read("auth:state:" + provider, {})
+        if provider != "ids" or target is None:
+            return saved
+        # Legacy installations recorded only the last checked service. Do not share its pause with other services.
+        return self.store.read("auth:target:ids:" + target, saved if saved.get("target") == target else {})
+
+    def _check_school_identity(self, provider, subject):
+        if provider != "ids":
+            return
+        expected = self.vault.get("auth:identity:ids").get("subject")
+        if expected and str(subject).strip().casefold() != expected:
+            raise VerificationRequired("该服务返回的账号与已连接的学校账号不一致，请在官方窗口确认后重新连接。")
 
     def _record(self, provider, status, target=None, message=None, blocked=False, checked_at=None):
         state = {"status": status, "blocked": blocked}
@@ -105,11 +136,16 @@ class AuthService:
             state["message"] = message
         if checked_at:
             state["checked_at"] = checked_at
+        if provider == "ids" and target is not None:
+            self.store.write("auth:target:ids:" + target, state)
+            ready = [self._saved_state("ids", item) for item in protocols.SERVICES if self._saved_state("ids", item).get("status") == "ready"]
+            if status != "ready" and ready:
+                state = {**ready[-1], "message": "学校账号已连接，部分服务需要检查。"}
         self.store.write("auth:state:" + provider, state)
 
     def _failure(self, provider, target, error):
         status = "verification_required" if isinstance(error, VerificationRequired) else "login_required"
-        self._record(provider, status, target, str(error), blocked=True)
+        self._record(provider, status, target, str(error), blocked=True, checked_at=now())
 
     def _save_session(self, provider, client, previous):
         state = protocols.filtered_state(provider, protocols.session_state(client, previous))
@@ -127,6 +163,13 @@ class AuthService:
             previous = self.vault.get('auth:credentials:' + provider)
             changed = previous.get('username', '').casefold() != username.casefold()
             if changed:
+                if provider == "ids":
+                    self.school.cancel()
+                    for target in protocols.SERVICES:
+                        self.store.delete("auth:target:ids:" + target)
+                    self.store.delete("auth:recovery:ids")
+                    self.store.delete("auth:school_connection")
+                    self.store.delete("auth:school:auto_connect")
                 self.store.write("auth:revision:" + provider, secrets.token_hex(12))
                 identity = self.vault.get("auth:identity:" + provider)
                 identity.pop("subject", None)
@@ -138,13 +181,30 @@ class AuthService:
                 self._record(provider, "login_required", message="账号已保存，请连接或完成浏览器验证。")
             else:
                 self.browser.close(provider)
+                if provider == "ids":
+                    self.store.delete("auth:recovery:ids")
             self.vault.save("auth:credentials:" + provider, {"username": username, "password": password})
         return self.get_status(provider)
 
     def _login(self, provider, target, client, state):
+        if provider == "ids":
+            paused = self.store.read("auth:recovery:ids", {})
+            if paused.get("blocked"):
+                raise VerificationRequired(paused["message"])
         if provider == "ids" and self.device.status()["configured"] and self.store.read("auth:device_enabled", True):
-            client.cookies.clear()
-            subject = self.device.renew(client)
+            # Refresh school identity without discarding other services' still-valid sessions.
+            for cookie in list(client.cookies.jar):
+                if cookie.domain.lstrip(".") == "ids.shanghaitech.edu.cn":
+                    client.cookies.jar.clear(cookie.domain, cookie.path, cookie.name)
+            try:
+                subject = self.device.renew(client)
+            except LoginRequired as error:
+                self.store.write("auth:recovery:ids", {"blocked": True, "message": str(error)})
+                raise
+            self.store.delete("auth:recovery:ids")
+            self._check_school_identity(provider, subject)
+            # Keep renewed SSO cookies even if this particular service later needs extra verification.
+            self._save_session(provider, client, state)
             verified = protocols.validate(client, provider, target, state)
             if str(verified).strip().casefold() != str(subject).strip().casefold():
                 raise VerificationRequired("设备凭据与来源账号不一致，请重新连接学校账号。")
@@ -154,13 +214,22 @@ class AuthService:
         credentials = self.vault.get("auth:credentials:" + provider)
         if not credentials.get("password"):
             raise LoginRequired("请先保存账号密码，或打开验证窗口完成登录。")
-        protocols.login(client, provider, credentials["username"], credentials["password"], target)
+        try:
+            protocols.login(client, provider, credentials["username"], credentials["password"], target)
+        except LoginRequired as error:
+            if provider == "ids":
+                self.store.write("auth:recovery:ids", {"blocked": True, "message": str(error)})
+            raise
+        if provider == "ids":
+            self.store.delete("auth:recovery:ids")
         return protocols.validate(client, provider, target, state)
 
     def login(self, provider: str, target: str | None = None, *, force=False):
         target = protocols.checked_target(provider, target)
         with self.locks[provider]:
             self._baseline_identity(provider)
+            if provider == "ids" and not force:
+                self.store.delete("auth:recovery:ids")
             state = self.vault.get("auth:session:" + provider)
             with protocols.http_client(state) as client:
                 try:
@@ -173,19 +242,35 @@ class AuthService:
                 except LoginRequired as error:
                     self._failure(provider, target, error)
                     raise
+                try:
+                    self._check_school_identity(provider, subject)
+                except LoginRequired as error:
+                    self._failure(provider, target, error)
+                    raise
                 self._save_session(provider, client, state)
                 self._adopt_identity(provider, subject)
             self._record(provider, "ready", target, checked_at=now())
+        if provider == "ids" and not force:
+            self.school.start(completed_target=target)
         return self.get_status(provider)
 
     def open_browser(self, provider: str, target: str | None = None):
         target = protocols.checked_target(provider, target)
+        if provider == "ids":
+            self.school.cancel()
         with self.locks[provider]:
             self.browser.open(provider, protocols.browser_url(provider, target))
-            self._record(provider, "verification_required", target, "请在验证窗口登录，完成后导入会话。", blocked=True)
+            if provider == "ids":
+                self.store.write("auth:browser_target:ids", target)
+                self.store.write("auth:school_connection", {"status": "waiting_for_login"})
+            self._record(provider, "verification_required", None if provider == "ids" else target, "请在验证窗口登录，完成后导入会话。", blocked=True)
+            if provider == "ids":
+                self.school.watch_browser(target)
         return self.get_status(provider)
 
     def import_session(self, provider: str, target: str | None = None):
+        if provider == "ids" and target is None:
+            target = self.store.read("auth:browser_target:ids")
         target = protocols.checked_target(provider, target)
         with self.locks[provider]:
             self._baseline_identity(provider)
@@ -196,6 +281,8 @@ class AuthService:
                 except LoginRequired as error:
                     self._failure(provider, target, error)
                     raise
+                if provider == "ids":
+                    self.school.cancel()
                 self._save_session(provider, client, state)
                 if not self._adopt_identity(provider, subject):
                     self.store.write("auth:revision:" + provider, secrets.token_hex(12))
@@ -205,16 +292,23 @@ class AuthService:
                     if provider == "ids":
                         self.store.write("auth:device_enabled", False)
             self.browser.close(provider)
+            if provider == "ids":
+                self.store.delete("auth:browser_target:ids")
+                self.store.delete("auth:recovery:ids")
             self._record(provider, "ready", target, checked_at=now())
+        if provider == "ids":
+            self.school.start(completed_target=target)
         return self.get_status(provider)
 
     def open_device_browser(self):
+        self.school.cancel()
         with self.locks["ids"]:
             self._baseline_identity("ids")
             self.browser.open("ids", PERSON_CENTER)
         return self.get_status("ids")
 
     def start_device_setup(self):
+        self.school.cancel()
         with self.locks["ids"]:
             if self.device.status()["configured"] or self.device.status()["pending"]:
                 raise ValueError("已有正式或待确认设备凭据，请检查现有凭据。")
@@ -312,7 +406,7 @@ class AuthService:
                     subject = protocols.validate(client, provider, target, state)
                     verified_existing = True
                 except LoginRequired:
-                    saved = self.store.read("auth:state:" + provider, {})
+                    saved = self._saved_state(provider, target)
                     if saved.get("blocked"):
                         error_class = VerificationRequired if saved["status"] == "verification_required" else LoginRequired
                         raise error_class(saved.get("message", "自动登录已暂停，请主动连接或完成浏览器验证。")) from None
@@ -321,6 +415,11 @@ class AuthService:
                     except LoginRequired as error:
                         self._failure(provider, target, error)
                         raise
+                try:
+                    self._check_school_identity(provider, subject)
+                except LoginRequired as error:
+                    self._failure(provider, target, error)
+                    raise
                 self._adopt_identity(provider, subject, migrate=verified_existing)
                 self._record(provider, "ready", target, checked_at=now())
                 try:
@@ -335,14 +434,23 @@ class AuthService:
         """Explicit recovery also clears a previous automatic-login pause."""
         target = protocols.checked_target(provider, target)
         with self.locks[provider]:
-            saved = self.store.read('auth:state:' + provider, {})
-            self.store.write('auth:state:' + provider, {**saved, 'blocked': False})
+            saved = self._saved_state(provider, target)
+            self.store.write('auth:target:ids:' + target if provider == 'ids' else 'auth:state:' + provider, {**saved, 'blocked': False})
+            if provider == 'ids':
+                self.store.delete('auth:recovery:ids')
             with self.authenticated_client(provider, target=target):
                 pass
+        if provider == "ids":
+            self.school.start(completed_target=target)
         return self.get_status(provider)
+
+    def connect_school(self):
+        self.school.start()
+        return self.get_status("ids")
 
     def read_with_recovery(self, provider, operation, *, target=None, cancelled=None):
         """Retry one idempotent reader after a source detects expiry mid-request."""
+        target = protocols.checked_target(provider, target)
         for attempt in range(2):
             try:
                 with self.authenticated_client(provider, target=target, cancelled=cancelled) as client:
@@ -350,7 +458,7 @@ class AuthService:
             except VerificationRequired:
                 raise
             except LoginRequired:
-                if attempt or self.store.read("auth:state:" + provider, {}).get("blocked"):
+                if attempt or self._saved_state(provider, target).get("blocked"):
                     raise
                 self.login(provider, target, force=True)
 
@@ -367,6 +475,7 @@ class AuthService:
         protocols.checked_target(provider)
         if provider == "ids":
             self._cancel_device_setup()
+            self.school.cancel()
         with self.locks[provider]:
             self.browser.forget(provider)
             self.vault.delete("auth:credentials:" + provider)
@@ -375,6 +484,10 @@ class AuthService:
             if provider == "ids":
                 self.device.forget()
                 self.store.delete("auth:device_enabled")
+                for target in protocols.SERVICES:
+                    self.store.delete("auth:target:ids:" + target)
+                for key in ("auth:recovery:ids", "auth:school_connection", "auth:school:auto_connect", "auth:browser_target:ids"):
+                    self.store.delete(key)
             self.store.delete("auth:state:" + provider)
             self.store.write("auth:revision:" + provider, secrets.token_hex(12))
         return self.get_status(provider)
@@ -385,5 +498,6 @@ class AuthService:
 
     def close(self):
         self.setup_cancelled.set()
+        self.school.close()
         self.setup_executor.shutdown(wait=True, cancel_futures=True)
         self.browser.close_all()
