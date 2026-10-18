@@ -175,7 +175,17 @@ async function render(refreshMetadata = false) {
     link.classList.toggle('active',active);
     if (active) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');
   });
-  main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+  const domSwap = () => {
+    if (current !== revision) return false;
+    main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
+    return true;
+  };
+  if (document.startViewTransition) {
+    const transition = document.startViewTransition(domSwap);
+    try { await transition.ready; } catch (_) { /* user skipped or interrupted */ }
+  } else {
+    if (!domSwap()) return;
+  }
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
   const zone = main.querySelector('#module-area');
@@ -278,7 +288,7 @@ async function start() {
   await render();
 }
 
-window.addEventListener('hashchange',() => { if (state) render(true).catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
+window.addEventListener('hashchange',() => { if (state) render().catch(error => { if (error.name !== 'AbortError') toast(error.message); }); });
 window.addEventListener('pagehide',() => { void dispose();void stopBackground(); });
 
 try { await start(); }
