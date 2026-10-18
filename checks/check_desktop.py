@@ -2,7 +2,6 @@
 import json
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
@@ -11,6 +10,9 @@ import urllib.request
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT))
+from checks.check_launcher import free_port
+
 temporary = PROJECT / ".codex" / "tmp"
 temporary.mkdir(parents=True, exist_ok=True)
 with tempfile.TemporaryDirectory(prefix="desktop-", dir=temporary) as name:
@@ -20,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix="desktop-", dir=temporary) as name:
     subprocess.run([node, "-e", """
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const {dataPaths, backendEnvironment} = require('./packaging/electron/portable.cjs');
+const {dataPaths, backendEnvironment, freePort} = require('./packaging/electron/portable.cjs');
 const root = process.argv[1];
 const paths = dataPaths(root);
 for (const value of Object.values(paths)) {
@@ -34,11 +36,17 @@ assert.equal(env.CAMPUS_DATA_DIR, paths.data);
 assert.equal(env.pnpm_config_offline, 'true');
 assert.equal(env.PYTHONPATH, '');
 assert(!path.relative(root, env.PNPM_HOME).startsWith('..'));
+(async () => {
+  const port = await freePort();
+  assert(port >= 16666 && port < 16766);
+  const occupied = require('node:net').createServer();
+  await new Promise(resolve => occupied.listen(port, '127.0.0.1', resolve));
+  try { assert.notEqual(await freePort(), port); }
+  finally { await new Promise(resolve => occupied.close(resolve)); }
+})();
 """, str(root)], cwd=PROJECT, check=True)
 
-    with socket.socket() as port_socket:
-        port_socket.bind(("127.0.0.1", 0))
-        port = port_socket.getsockname()[1]
+    port = free_port()
     env = {**os.environ, "CAMPUS_DATA_DIR": str(data), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"}
     env.update({key: str(root) for key in ("TEMP", "TMP", "TMPDIR")})
     # Preparation commands must not wait on the desktop host's open control pipe.

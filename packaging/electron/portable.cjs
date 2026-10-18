@@ -1,5 +1,24 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const net = require('node:net');
+
+async function freePort() {
+  // This range is above the browser-restricted ports in backend/core/config.py.
+  for (let port = 16666; port < 16766; port++) {
+    const server = net.createServer();
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, '127.0.0.1', resolve);
+      });
+      await new Promise(resolve => server.close(resolve));
+      return port;
+    } catch (error) {
+      if (!['EADDRINUSE', 'EACCES'].includes(error.code)) throw error;
+    }
+  }
+  throw new Error('16666–16765 范围内没有可用的本机端口。');
+}
 
 function dataPaths(installRoot, profile) {
   const data = path.join(installRoot, '.private');
@@ -39,5 +58,5 @@ function backendEnvironment(installRoot, runtime, inherited = process.env) {
     pnpm_config_update_notifier: 'false', pnpm_config_manage_package_manager_versions: 'false',
     PNPM_HOME: path.join(root, 'pnpm')};
 }
-module.exports = {dataPaths, backendEnvironment};
+module.exports = {dataPaths, backendEnvironment, freePort};
 

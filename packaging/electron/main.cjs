@@ -2,9 +2,8 @@ const {app, BrowserWindow, dialog, shell} = require('electron');
 const {spawn} = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
-const net = require('node:net');
 const {randomUUID} = require('node:crypto');
-const {dataPaths, backendEnvironment} = require('./portable.cjs');
+const {dataPaths, backendEnvironment, freePort} = require('./portable.cjs');
 
 const authMode = process.argv.includes('--campus-auth');
 const hidden = process.argv.includes('--campus-smoke');
@@ -78,17 +77,6 @@ if (authMode) {
   app.on('second-instance', () => {
     if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
   });
-
-  async function freePort() {
-    return new Promise((resolve, reject) => {
-      const server = net.createServer();
-      server.once('error', reject);
-      server.listen(0, '127.0.0.1', () => {
-        const port = server.address().port;
-        server.close(() => resolve(port));
-      });
-    });
-  }
 
   async function stopBackend() {
     if (!backend?.pid || backend.exitCode !== null) return;
