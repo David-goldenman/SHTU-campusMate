@@ -51,7 +51,7 @@ export async function mount(container, context) {
       await load();
       if (activeCourse && !activeLesson) await showCourse(activeCourse);
       if (value.message) status(value.message);
-    }
+    } else if (value.message) status(value.message);
   }
 
   async function load() {
