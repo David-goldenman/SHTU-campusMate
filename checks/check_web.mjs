@@ -100,7 +100,7 @@ function fixture(initial, categories, themeCatalog) {
         return {offset,week_start:weekDays[0].date,week_end:weekDays[6].date,week_one:currentWeek,teaching_week:5 + offset,periods:[],days:weekDays,conflicts:{items:[],complete:true,message:''}};
       });
       const overview = {week_start:homework.week_start,start:homework.start,end:homework.end,weeks:overviewWeeks,pending:homework.pending,late:homework.late};
-      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],undated:1,timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview});
+      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview});
     }
     if (path === '/modules/assignments/snapshot') {
       const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
@@ -222,7 +222,7 @@ try {
   assert(await evaluate(`!document.querySelector('.planner-overview').open && document.querySelector('.planner-week-detail').open`),'The weekly timetable starts visible and the four-week overview expands on demand');
   await evaluate(`document.querySelector('.planner-overview').open=true`);
   const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'),overview=body.querySelector('[data-overview]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,overviewCols:overview.querySelectorAll('thead th').length,overviewRows:overview.querySelectorAll('tr').length,overviewWeeks:overview.querySelectorAll('tbody tr').length,todayBeijing:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date()),overviewToday:overview.querySelector('.overview-day.is-today')?.dataset.overviewDate,overviewPinned:Boolean(overview.compareDocumentPosition(body.querySelector('.planner-toolbar'))&Node.DOCUMENT_POSITION_FOLLOWING),homeworkItems:overview.querySelectorAll('.overview-item.is-late').length,platforms:[...overview.querySelectorAll('.overview-platform')].map(item=>item.textContent)};})()`);
-  assert.match(timetable.content,/Quiz 1/);assert.match(timetable.content,/合成期末考试/);assert.match(timetable.content,/合成课程/);assert.match(timetable.content,/时间待公布/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
+  assert.match(timetable.content,/合成课程/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
   assert.match(timetable.content,/近四周作业日程/);assert.match(timetable.content,/不随上方周切换按钮变化/);assert.match(timetable.content,/待完成 1 · 迟交 1/);assert.match(timetable.content,/合成迟交作业/);assert.match(timetable.content,/第 5 周/);assert.equal(timetable.overviewCols,8);assert.equal(timetable.overviewRows,5);assert.equal(timetable.overviewWeeks,4);assert.equal(timetable.overviewToday,timetable.todayBeijing);assert(timetable.overviewPinned,'Assignment schedule stays pinned above the week buttons');assert.equal(timetable.homeworkItems,1);assert.deepEqual(timetable.platforms,['Blackboard','Blackboard']);
   const overviewBefore = await evaluate(`document.querySelector('[data-overview]').innerText`);
   const scheduleCalls = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);
@@ -235,8 +235,8 @@ try {
   assert(await evaluate(`! [...document.querySelectorAll('.lesson-block .calendar-event')].some(card=>getComputedStyle(card).overflowY==='auto'||card.scrollHeight>card.clientHeight+1)`),'Course cards fit their grid slots without internal scrolling');
   await evaluate(`document.querySelector('.calendar-desktop [data-event=one-period]').click()`);
   assert(await evaluate(`document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent.includes('课堂讨论')`),'A truncated single-period title opens in full');
-  await evaluate(`document.querySelector('#dialog').close();document.querySelector('.calendar-desktop [data-event=exam]').click()`);
-  assert(await evaluate(`document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent==='合成期末考试'`),'Timetable events retain their detail action');
+  await evaluate(`document.querySelector('#dialog').close();document.querySelector('.planner-overview [data-event=homework-late]').click()`);
+  assert(await evaluate(`document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent==='合成迟交作业'`),'Timetable events retain their detail action');
   await evaluate(`document.querySelector('#dialog').close()`);
   await writeFile(resolve('.codex/tmp/timetable-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});

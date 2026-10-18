@@ -82,7 +82,10 @@
 .week-planner .four-week-grid tbody td { height:112px; padding:5px; vertical-align:top; }
 .week-planner .four-week-grid tr:last-child>* { border-bottom:0; }
 .week-planner .four-week-grid tr>*:last-child { border-right:0; }
-.week-planner .four-week-grid .overview-day.is-today { background:color-mix(in srgb,var(--nord8) 14%,var(--paper)); box-shadow:inset 0 0 0 1px var(--nord8); }
+.week-planner .four-week-grid thead th.is-today { color:var(--nord10); background:color-mix(in srgb,var(--nord8) 16%,var(--paper)); box-shadow:inset 0 3px var(--nord8); }
+.week-planner .four-week-grid thead th.is-today em { display:block; margin-top:2px; color:var(--nord10); font-size:10px; font-style:normal; font-weight:700; }
+.week-planner .four-week-grid .overview-day.is-today { position:relative; padding-top:24px; background:color-mix(in srgb,var(--nord8) 20%,var(--paper)); box-shadow:inset 0 0 0 2px var(--nord8); }
+.week-planner .four-week-grid .overview-day.is-today::before { content:'今天'; position:absolute; top:5px; right:6px; padding:0 6px; border-radius:999px; background:var(--nord8); color:var(--nord0); font-size:9px; font-weight:700; line-height:1.6; }
 .week-planner .overview-item { display:block; width:100%; margin:0 0 5px; padding:5px 6px; border:1px solid transparent; border-left:3px solid var(--nord9); border-radius:5px; background:color-mix(in srgb,var(--nord9) 12%,var(--paper)); color:var(--text); text-align:left; line-height:1.35; overflow-wrap:anywhere; }
 .week-planner .overview-item:last-child { margin-bottom:0; }
 .week-planner .overview-item:hover { border-color:var(--nord10); }
