@@ -154,8 +154,8 @@ web/shared.js 由核心维护。模块通过 context.ui 使用组件，通过 co
 | --- | --- |
 | escape(value) | 在模板中把文本转换为 HTML 安全字符串 |
 | toast(message) | 显示简短操作结果 |
-| dialog(title, content) | 打开原生 dialog；content 为文本或 DOM 节点；返回对话框元素 |
-| confirmDialog(title, message, label) | 原生确认框，返回 Promise<boolean> |
+| dialog(title, content) | 打开原生 dialog；content 为文本或 DOM 节点；关闭旧弹窗并返回独立的新对话框元素 |
+| confirmDialog(title, message, label) | 原生确认框，返回 Promise<boolean>；旧弹窗的关闭事件与本次选择按节点隔离 |
 | safeAction(control, action) | 绑定操作，管理禁用状态并显示错误 |
 | empty(title, description, action) | 生成空状态模板；action 为调用方维护的可信模板 |
 | useStyle(url, signal) | 挂载模块样式，在卸载时移除 |

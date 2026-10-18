@@ -54,6 +54,8 @@
 .planner-event-form fieldset { border:0; margin:0; padding:0; min-width:0; }
 .planner-event-form [data-move-fields] { display:grid; gap:14px; }
 .planner-event-form [hidden] { display:none!important; }
+.planner-event-detail .planner-detail-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:16px 0; }
+.planner-event-detail .planner-event-notes { white-space:pre-wrap; overflow-wrap:anywhere; }
 .week-planner .kind-activity,.week-planner .kind-lecture { border-left-color:var(--nord14); background:color-mix(in srgb,var(--nord14) 14%,var(--paper)); }
 .week-planner .is-complete { opacity:.65; }
 .week-planner .planner-footer { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; padding-top:16px; }

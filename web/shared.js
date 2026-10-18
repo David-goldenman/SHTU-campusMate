@@ -93,8 +93,13 @@ export function toast(message) {
 }
 
 export function dialog(title, content) {
-  const node = document.querySelector('#dialog');
-  if (node.open) node.close();
+  const previous = document.querySelector('#dialog');
+  if (previous.open) previous.close();
+  // Close events queued by the previous dialog belong to its own node.
+  const node = document.createElement('dialog');
+  node.id = 'dialog';
+  node.setAttribute('aria-labelledby','dialog-title');
+  previous.replaceWith(node);
   node.returnValue = '';
   const heading = document.createElement('div');
   heading.className = 'dialog-heading';

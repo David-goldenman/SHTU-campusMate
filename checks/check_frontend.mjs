@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {useStyle, escape, api, moduleApi, setToken} from '../web/shared.js';
+import {useStyle, escape, api, moduleApi, setToken, confirmDialog} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
@@ -81,6 +81,43 @@ useStyle('/already-aborted.css',first.signal);
 assert.equal(mounted.size,0);
 assert.equal(escape('<img src=x onerror="alert(1)">'),'&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
 console.log('frontend: independent abort cleanup, idempotent style removal, pre-aborted mounts and untrusted navigation text passed');
+
+const priorDocument = globalThis.document, priorNode = globalThis.Node;
+let currentDialog;
+class DialogNode extends EventTarget {
+  open = false;
+  children = [];
+  querySelector() {return new DialogNode();}
+  get lastElementChild() {return this.children.at(-1) || this;}
+  append(...nodes) {this.children.push(...nodes);}
+  replaceChildren(...nodes) {this.children = nodes;}
+  replaceWith(node) {currentDialog = node;}
+  setAttribute() {}
+  showModal() {this.open = true;}
+  close(value = '') {
+    if (!this.open) return;
+    this.open = false;this.returnValue = value;
+    setTimeout(()=>this.dispatchEvent(new Event('close')),0);
+  }
+}
+try {
+  currentDialog = new DialogNode();
+  globalThis.Node = DialogNode;
+  globalThis.document = {querySelector:()=>currentDialog,createElement:()=>new DialogNode()};
+  for (const value of ['cancel','confirm']) {
+    currentDialog.showModal();
+    let settled = false;
+    const confirmation = confirmDialog('删除安排','删除合成日程？').then(value=>{settled=true;return value;});
+    await new Promise(resolve=>setTimeout(resolve,10));
+    assert(currentDialog.open && !settled,'Replacing an open dialog must not settle its new confirmation');
+    currentDialog.close(value);
+    assert.equal(await confirmation,value === 'confirm');
+  }
+} finally {
+  globalThis.document = priorDocument;
+  if (priorNode === undefined) delete globalThis.Node;else globalThis.Node = priorNode;
+}
+console.log('confirmation: queued close events preserve explicit cancel and confirm decisions');
 
 const markdown = renderMarkdown('## 复习计划\n\n**重点**\n\n- 读课件\n\n| 时间 | 内容 |\n| --- | --- |\n| 周一 | 向量 |\n\n```js\nconst n = 1;\n```\n\n<script>bad()</script>\n\n[bad](javascript:alert(1)) ![remote](https://example.edu/tracker.png)');
 for (const tag of ['<h2>','<strong>','<ul>','<table>','<pre>']) assert(markdown.includes(tag));
