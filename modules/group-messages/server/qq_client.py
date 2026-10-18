@@ -36,14 +36,16 @@ class Transport:
                 return raw
             except HTTPError as e:
                 if e.code in (401,403):
-                    raise APIError(self.source,"auth","登录状态失效或令牌无效，请重新连接") from None
+                    raise APIError(self.source,"auth","连接口令未通过验证。请核对 NapCat“网络配置 → HTTP 服务端”的 Token；管理页面登录口令不能用于此连接。") from None
+                if e.code == 404:
+                    raise APIError(self.source,"address","这个地址未提供 QQ 接口。请填写 NapCat HTTP 服务端的地址和端口，并确认服务已启用。") from None
                 temporary=e.code==429 or 500<=e.code<600
                 category="rate_limit" if e.code==429 else "server" if temporary else "request"
                 failure=APIError(self.source,category,"接口限流，稍后重试" if e.code==429 else "接口请求失败（HTTP "+str(e.code)+"）",temporary)
                 try:retry_after=min(30,max(1,float(e.headers.get("Retry-After",""))))
                 except (ValueError,TypeError):pass
             except (URLError,TimeoutError,ConnectionError,OSError):
-                failure=APIError(self.source,"network","网络或本机服务连接失败",True)
+                failure=APIError(self.source,"network","连接不到本机 QQ 服务。请先启动 NapCat，在“网络配置”启用 HTTP 服务端，并核对接口地址和端口。",True)
             if not failure.retryable or attempt+1>=attempts:raise failure
             delay=retry_after if retry_after is not None else min(8,2**attempt)+random.random()*0.3
             if self.stop.wait(delay):raise APIError(self.source,"stopped","采集已停止")
@@ -54,7 +56,7 @@ class Transport:
             if not isinstance(value,dict):raise ValueError()
             return value
         except (ValueError,TypeError):
-            raise APIError(self.source,"schema","接口返回格式已变化或登录失效，未把异常响应当作消息") from None
+            raise APIError(self.source,"schema","未收到 QQ 接口数据。请确认填写的是 HTTP 服务端地址（通常为 3000 端口），并在 NapCat 中检查 QQ 登录状态。管理页面通常使用 6099 端口。") from None
 
 class QQClient:
     READ_ACTIONS={"get_login_info","get_status","get_version_info","get_group_list","get_friend_list",
@@ -68,6 +70,8 @@ class QQClient:
         result=self.transport.json(self.base_url+"/"+action,params or {},
             {"Authorization":"Bearer "+self.token} if self.token else {})
         if result.get("status")!="ok" or result.get("retcode",0)!=0:
+            if action == 'get_login_info':
+                raise APIError('qq','account','QQ 登录尚未就绪。请在 NapCat 管理页面确认本人 QQ 已登录，再回来连接。')
             raise APIError("qq","upstream","QQ 读取失败："+action)
         return result.get("data")
     def login_info(self):return self.call("get_login_info")
