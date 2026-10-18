@@ -1,6 +1,7 @@
 """Navigation tokens are removed while the persistent login profile survives."""
 import sys
 import tempfile
+import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,15 +22,25 @@ def check(directory):
         path = profile / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b'synthetic-token')
-    with patch.object(browser, '_run', return_value={'closed': True}) as command:
+    remove = shutil.rmtree
+    calls = []
+    def release_after_close(path):
+        calls.append(path)
+        if len(calls) == 1:
+            raise PermissionError('synthetic browser shutdown')
+        return remove(path)
+    with patch.object(browser, '_run', return_value={'closed': True}) as command, \
+         patch.object(shutil, 'rmtree', side_effect=release_after_close):
         browser.close('coremail')
         command.assert_called_once_with('close', 'coremail')
+    assert len(calls) > 1, 'Wait for browser shutdown to release its navigation files'
     assert all((profile / name).read_bytes() == b'synthetic-token' for name in preserved)
     assert not any((profile / name).exists() for name in navigation)
     browser.clear_navigation('coremail')
     locked = profile / 'Default/History'
     locked.write_bytes(b'synthetic-token')
-    with patch.object(Path, 'unlink', side_effect=PermissionError('synthetic lock')):
+    with patch.object(Path, 'unlink', side_effect=PermissionError('synthetic lock')), \
+         patch('backend.services.auth.browser.time.sleep'):
         try:
             browser.clear_navigation('coremail')
             raise AssertionError('Cleanup failures must remain visible')

@@ -83,13 +83,17 @@ class VerificationBrowser:
                 continue
             if not path.resolve().is_relative_to(root):
                 raise PublicError('验证浏览器记录目录异常，已停止清理。')
-            try:
-                if path.is_dir():
-                    shutil.rmtree(path)
-                else:
-                    path.unlink()
-            except OSError:
-                raise PublicError('验证浏览记录仍被占用，请关闭验证窗口后重试。') from None
+            for attempt in range(20):
+                try:
+                    if path.is_dir():
+                        shutil.rmtree(path)
+                    else:
+                        path.unlink(missing_ok=True)
+                    break
+                except OSError:
+                    if attempt == 19:
+                        raise PublicError('验证浏览记录仍被占用，请关闭验证窗口后重试。') from None
+                    time.sleep(0.1)
 
     def forget(self, provider):
         self.close(provider)
