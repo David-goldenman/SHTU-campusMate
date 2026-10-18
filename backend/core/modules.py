@@ -7,7 +7,6 @@ import sys
 import threading
 import types
 import hashlib
-import uuid
 import time
 from contextlib import contextmanager
 from urllib.parse import unquote
@@ -168,7 +167,7 @@ class ModuleManager:
             if not info["enabled"]:
                 info["status"] = "disabled"
                 return entry
-            # 前端内容指纹支持跨重启复用缓存。
+            # revision 取模块 web/ 内容指纹：内容不变则 URL 恒定，浏览器与 ESM 缓存可跨 reload 命中
             digest = hashlib.sha1()
             web_root = folder / "web"
             if web_root.is_dir():
@@ -181,7 +180,7 @@ class ModuleManager:
             data_dir.mkdir(parents=True, exist_ok=True)
             entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
             if backend.is_file():
-                name = "framework_module_" + manifest.id.replace("-", "_") + "_" + uuid.uuid4().hex
+                name = "framework_module_" + manifest.id.replace("-", "_") + "_" + revision
                 spec = importlib.util.spec_from_file_location(name, backend, submodule_search_locations=[str(backend.parent)])
                 entry.package = importlib.util.module_from_spec(spec)
                 sys.modules[name] = entry.package
