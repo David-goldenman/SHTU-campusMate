@@ -46,6 +46,8 @@ official_terms = calendar_parser('秋 学 期 （2026．9．14—2027．1．17�
 assert official_terms['2026-fall']['week_one'] == '2026-09-14'
 assert official_terms['2026-fall']['closures'] == [{'date': '2026-10-28', 'title': '校运动会（全校停课）'}]
 assert official_terms['2026-spring']['week_one'] == '2027-02-15'
+noisy_terms = calendar_parser('秋学期（2025，9，巧．2026．L18）秋学期（2026．9．14．2027．L17）春学期（2027．2．15．2027．6．20）暑学期（2027．6．2 巷2027．7．18）')
+assert noisy_terms['2026-fall']['week_one'] == '2026-09-14' and noisy_terms['2026-spring']['week_one'] == '2027-02-15'
 from datetime import date
 legacy = {'metadata': {'units': 13}, 'timetable': [
     {**item, 'id': 'a-evening', 'period_start': 10, 'period_end': 11},
@@ -90,15 +92,18 @@ homework = module.homework_window({
         {'id': 'blackboard:current', 'title': '本周迟交', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-15T23:59:00+08:00'},
         {'id': 'blackboard:pending', 'title': '下周待交', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-22T23:59:00+08:00'},
         {'id': 'blackboard:ended', 'title': '已结束', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'closed', 'due_at': '2026-10-15T23:59:00+08:00'},
+        {'id': 'blackboard:history', 'title': '上学期作业', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-09-01T23:59:00+08:00'},
         {'id': 'blackboard:future', 'title': '窗口外', 'course_id': 'blackboard:course', 'submitted': False, 'availability': 'open', 'due_at': '2026-11-20T23:59:00+08:00'}]}},
     'gradescope': {'data': {'courses': [], 'assignments': [
         {'id': 'gradescope:pending', 'title': '下下周待交', 'course_id': 'gradescope:other', 'submitted': False, 'availability': 'open', 'due_at': '2026-10-30T23:59:00Z'}]}},
-}, datetime(2026, 10, 16, tzinfo=module.ZONE))
+}, datetime(2026, 10, 16, tzinfo=module.ZONE), '2026-09-14')
 assert (homework['week_start'], homework['start'], homework['end']) == ('2026-10-12', '2026-10-05', '2026-11-01')
 assert [item['id'] for item in homework['items']] == ['blackboard:late', 'blackboard:current', 'blackboard:pending', 'gradescope:pending']
 assert [item['offset'] for item in homework['items']] == [-1, 0, 1, 2]
 assert [item['late'] for item in homework['items']] == [True, True, False, False]
 assert homework['items'][0]['course_title'] == '合成课程' and (homework['pending'], homework['late']) == (2, 2)
+assert module.filter_issues(['Final paper 的提交情况本次未能核实。'], [{'title': 'Final paper', 'course_id': 'blackboard:old'}],
+                            [{'id': 'blackboard:old', 'term': '2025-fall'}], '2026-fall', '2026-09-14') == []
 grid = module.overview_weeks({'metadata': {'periods': []}, 'timetable': [], 'events': [
     {'id': 'blackboard:current', 'title': '本周迟交', 'source': 'blackboard', 'event_type': 'deadline', 'at': '2026-10-15T23:59:00+08:00'}]},
     {'week_start': '2026-10-12', 'start': '2026-10-05', 'end': '2026-11-01', 'pending': 1, 'late': 1, 'items': [

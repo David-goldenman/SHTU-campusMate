@@ -34,9 +34,14 @@ def parse(text):
     matches = list(re.finditer(r'([秋春暑夏])学期[（(](20\d{2})[.年/](\d{1,2})[.月/](\d{1,2})', text))
     terms = {}
     for match in matches:
-        start = date(int(match[2]), int(match[3]), int(match[4]))
+        try:
+            start = date(int(match[2]), int(match[3]), int(match[4]))
+        except ValueError:
+            continue
         if start.weekday() != 0:
-            raise ValueError('识别出的开学日期不是周一，请手动核对。')
+            # OCR noise can turn 21 into 2 and make the weekday invalid.  Other
+            # terms in the same calendar remain usable; do not discard them all.
+            continue
         year = start.year if match[1] == '秋' else start.year - 1
         key = str(year) + '-' + SEASONS[match[1]]
         terms[key] = {'week_one': start.isoformat(), 'closures': []}
@@ -45,7 +50,12 @@ def parse(text):
         if heading is not None:
             year = int(heading[2])
             key = str(year if heading[1] == '秋' else year - 1) + '-' + SEASONS[heading[1]]
-            day = date(year, int(match[1]), int(match[2]))
+            if key not in terms:
+                continue
+            try:
+                day = date(year, int(match[1]), int(match[2]))
+            except ValueError:
+                continue
             terms[key]['closures'].append({'date': day.isoformat(), 'title': '校运动会（全校停课）'})
     if not terms:
         raise ValueError('校历没有可确认的学期起始日期，请手动填写。')
@@ -63,7 +73,7 @@ class SchoolCalendar:
     def due(self, metadata):
         saved = self.saved(metadata)
         checked = saved.get('checked_at')
-        return not checked or datetime.now(timezone.utc) - datetime.fromisoformat(checked) > timedelta(days=7)
+        return bool(saved.get('error')) or not checked or datetime.now(timezone.utc) - datetime.fromisoformat(checked) > timedelta(days=7)
 
     def refresh(self, metadata):
         key = term_key(metadata)
@@ -91,7 +101,14 @@ class SchoolCalendar:
                         return b''.join(chunks)
                     listing = BeautifulSoup(read(INDEX, 512_000), 'html.parser')
                     year = key[:4] + '-' + str(int(key[:4]) + 1)
-                    anchor = next((item for item in listing.select('a[href]') if year in item.get_text() and '校历' in item.get_text()), None)
+                    candidates = [item for item in listing.select('a[href]')
+                                  if '校历' in item.get_text() and year in item.get_text()]
+                    if not candidates:
+                        # The list is newest first.  Use its first dated calendar
+                        # entry even when the title format omits the academic year.
+                        candidates = [item for item in listing.select('a[href]')
+                                      if '校历' in item.get_text() and re.search(r'20\d{2}', item.get_text())]
+                    anchor = candidates[0] if candidates else None
                     if anchor is None:
                         raise ValueError('学校校历栏目尚未公布本学年校历。')
                     url = urljoin(INDEX, anchor['href'])

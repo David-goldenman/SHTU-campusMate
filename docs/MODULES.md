@@ -172,3 +172,10 @@ ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们�
 这些边界沿用单进程框架和官方 Harness 子进程，不强行终止任意 Python 线程。不遵守取消约定的任务保持隔离，可能需要重启本地服务；不能把停止等待当成任务已经结束。故障回归见 `checks/check_resilience.py`、`checks/check_frontend.mjs` 和 `checks/check_harness_cancel.py`。
 
 模块之间只能经 `context.api(module_id, path, method="GET", body=None)` 调用公开接口。课程资料选择接口属于课程中心，见 [课程中心](../modules/courses/README.md)。框架可在 modules 目录为空时启动设置页；独立启用允许依赖功能暂时不可用，模块自身生命周期必须正常。
+
+
+## 可选页面提示音
+
+前端可从 `/assets/sounds.js` 导入 `playSound(kind)`；当前支持 `mail`、`deadline`、`announce`、`assistant`。模块只在已确认的新通知或已完成的结果上调用，不以提示音代替可见状态。可选动态导入等待前须登记卸载清理，返回后复核 `context.signal.aborted`，失败不影响正常界面。
+
+应用在用户键盘／指针交互后调用 `unlock()`；未解锁、暂停、浏览器不支持或用户关闭声音时直接跳过，不排队补播。旋律由本地 WebAudio 低音量合成，不请求外部音频，不提供页面关闭后的系统提醒。`setEnabled(bool)`／`isEnabled()` 保留浏览器偏好接口，当前尚无设置页静音或试听按钮。存储被拒绝仍可加载网页；音符结束及关闭声音时释放节点。`checks/check_sounds.mjs` 使用合成音频节点验证，不播放真实音效。

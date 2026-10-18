@@ -1,29 +1,36 @@
 """Outstanding homework for the timetable's four-week reminder window."""
 from datetime import date, datetime, timedelta
 
-from backend.services.campus import assignment_section, timestamp
+from backend.services.campus import assignment_section, semester, timestamp
+from backend.services.campus.assignments import historical, semester_start as metadata_semester_start
 
 from .calendar import ZONE, calendar, event_order
 
 PLATFORMS = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂"}
 
 
-def homework_window(values, now=None):
+def homework_window(values, now=None, start=None):
     """Return pending and late work from last week through the next two weeks."""
     at = (now or datetime.now(ZONE)).astimezone(ZONE)
+    metadata = values.get("timetable", {}).get("data", {}).get("metadata", {})
+    current = semester(metadata.get("semester"))
+    start = start or metadata_semester_start(metadata)
     monday = at.date() - timedelta(days=at.weekday())
-    start = monday - timedelta(days=7)
+    start_date = monday - timedelta(days=7)
     end = monday + timedelta(days=21)
-    start_at = datetime.combine(start, datetime.min.time(), ZONE)
+    start_at = datetime.combine(start_date, datetime.min.time(), ZONE)
     end_at = datetime.combine(end, datetime.min.time(), ZONE)
     items, seen = [], set()
     for name in PLATFORMS:
         data = values.get(name, {}).get("data", {})
-        courses = {item["id"]: item.get("title", "") for item in data.get("courses", [])}
+        courses = {item["id"]: item for item in data.get("courses", [])}
         for item in data.get("assignments", []):
             if item.get("id") in seen:
                 continue
-            category = assignment_section(item, at)
+            course = courses.get(item.get("course_id"), {})
+            if historical(item, course, current, start):
+                continue
+            category = assignment_section(item, at, course=course, current=current, start=start)
             if category not in {"pending", "late"}:
                 continue
             due = timestamp(item.get("due_at"))
@@ -35,10 +42,10 @@ def homework_window(values, now=None):
             seen.add(item["id"])
             week = when.date() - timedelta(days=when.weekday())
             items.append({"id": item["id"], "title": item.get("title", ""), "url": item.get("url"), "source": name,
-                          "course_title": courses.get(item.get("course_id"), ""), "due_at": due, "category": category,
+                          "course_title": course.get("title", ""), "due_at": due, "category": category,
                           "late": category == "late", "week_start": week.isoformat(), "offset": (week - monday).days // 7})
     items.sort(key=lambda item: (datetime.fromisoformat(item["due_at"]).timestamp(), item["id"]))
-    return {"week_start": monday.isoformat(), "start": start.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
+    return {"week_start": monday.isoformat(), "start": start_date.isoformat(), "end": (end - timedelta(days=1)).isoformat(),
             "items": items, "pending": sum(not item["late"] for item in items), "late": sum(item["late"] for item in items)}
 
 

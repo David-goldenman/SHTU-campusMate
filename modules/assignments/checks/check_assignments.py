@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]))
 from checks.module_support import load
+from backend.services.campus.assignments import filter_issues
 
 package = load('assignments')
 data = {'courses':[{'id':'group:1','title':'合成课程','current':True,'course_ids':['gradescope:c']},{'id':'group:2','title':'历史课程','current':False,'course_ids':['blackboard:old']}], 'assignments':[
@@ -27,16 +28,28 @@ assert items['gradescope:closed']['category'] == 'ended'
 assert items['gradescope:unknown-state']['category'] == 'ended'
 assert items['gradescope:graded']['category'] == 'graded' and items['gradescope:graded']['score'] == 0
 assert items['gradescope:completed']['category'] == 'completed'
-assert items['blackboard:old']['category'] == 'pending' and items['blackboard:old']['pending'] is False
+assert items['blackboard:old']['category'] == 'ended' and items['blackboard:old']['pending'] is False
 assert {item['id'] for item in values if item['pending']} == {'gradescope:late','gradescope:future','gradescope:unknown','gradescope:legacy-open'}
-assert package.counts(values) == {'pending':4,'late':1,'graded':1,'completed':1,'ended':2}
+assert package.counts(values) == {'pending':3,'late':1,'graded':1,'completed':1,'ended':3}
 counts = package.summary(values)
 assert (counts['total'], counts['unsubmitted'], counts['pending'], counts['needs_review']) == (9, 6, 4, 1)
 assert {key: counts['by_source']['blackboard'][key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 1, 'unsubmitted': 1, 'pending': 0}
 assert {key: counts['by_source']['gradescope'][key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 8, 'unsubmitted': 5, 'pending': 4}
+before = {'metadata': {'current_semester': '2026-fall', 'source_metadata': {'elrc': {'semester': {'startTime': '2026-09-13T16:00:00.000+00:00'}}}},
+          'courses': [{'id': 'group:current', 'title': '本学期课程', 'current': True, 'term': '2026-fall', 'course_ids': ['blackboard:c']}],
+          'assignments': [
+              {'id': 'blackboard:old-due', 'source': 'blackboard', 'course_id': 'blackboard:c', 'title': '旧作业',
+               'availability': 'open', 'actionable': True, 'submitted': False, 'due_at': '2026-09-13T23:59:00+08:00'},
+              {'id': 'blackboard:new-due', 'source': 'blackboard', 'course_id': 'blackboard:c', 'title': '新作业',
+               'availability': 'open', 'actionable': True, 'submitted': False, 'due_at': '2026-10-20T23:59:00+08:00'}]}
+before_values = {item['id']: item for item in package.arrange(before, datetime(2026, 10, 17, tzinfo=timezone.utc))}
+assert before_values['blackboard:old-due']['category'] == 'ended' and not before_values['blackboard:old-due']['pending']
+assert before_values['blackboard:new-due']['category'] == 'pending' and before_values['blackboard:new-due']['pending']
+assert filter_issues(['旧作业 的提交情况本次未能核实，请查看记录说明。', '新作业 的提交情况本次未能核实，请查看记录说明。'],
+                     before['assignments'], before['courses'], '2026-fall', '2026-09-14') == ['新作业 的提交情况本次未能核实，请查看记录说明。']
 ordered = package.arrange(data,datetime(2026,10,16,tzinfo=timezone.utc),{'pending':['gradescope:unknown','gradescope:future'],'late':['gradescope:late']})
 pending = [item['id'] for item in ordered if item['category'] == 'pending']
-assert pending[:2] == ['gradescope:unknown','gradescope:future'] and pending[-2:] == ['gradescope:legacy-open','blackboard:old']
+assert pending[:2] == ['gradescope:unknown','gradescope:future'] and pending[-1:] == ['gradescope:legacy-open']
 assert [item['id'] for item in ordered if item['category'] == 'late'] == ['gradescope:late']
 assert package.apply_order(values,{'pending':['missing']}) == values, 'Unknown saved IDs must not hide newly synced work'
 late = {'courses': [{'id': 'group:current', 'title': '本学期课程', 'current': True, 'course_ids': ['blackboard:c']}],
