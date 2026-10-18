@@ -20,7 +20,7 @@ async def check():
         app.include_router(module.create_router(context))
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:
             places = (await client.get('/places')).json()
-            assert len(places['buildings']) == 65 and len(places['elevators']) == 3
+            assert len(places['buildings']) == 66 and len(places['elevators']) == 3
             walking = (await client.get('/walking-network')).json()
             assert walking['license'] == 'ODbL-1.0' and len(walking['ways']) > 200
             assert walking['boundary'][0] == walking['boundary'][-1]
