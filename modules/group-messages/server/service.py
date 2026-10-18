@@ -125,7 +125,7 @@ class Service:
             return {'sources': public, 'running': copy.deepcopy(self.running) if self.running and self.running['owner'] == owner else None,
                     'queued': bool(self.queued and self.queued['owner'] == owner), 'account_revision': owner,
                     'ai': {key: ai.get(key) for key in ('enabled', 'provider', 'model', 'key_saved')},
-                    'notice': '只处理所选群。近期聊天保留 7/30 天；提取事项及引用保留至清除模块数据。图片、语音和附件正文暂未读取。'}
+                    'notice': '只处理所选群。每次同步更新近 7/30 天的聊天窗口；提取事项及引用保留至清除模块数据。图片、语音和附件正文暂未读取。'}
 
     def queue(self, kind, source, body=None):
         if source not in SOURCES:
