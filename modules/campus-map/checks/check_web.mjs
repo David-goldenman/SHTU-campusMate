@@ -98,6 +98,13 @@ try {
     await evaluate(`(async()=>{const appearance=await import('/assets/themes/appearance.js');await appearance.themeContext().select(${JSON.stringify(theme)});})()`);
     await ready();
     assert.equal(await evaluate('document.documentElement.dataset.theme'),theme);
+    await evaluate("document.querySelector('.map-label[data-building]').dispatchEvent(new MouseEvent('click',{bubbles:true}))");
+    await wait("document.querySelector('.map-label.is-selected text')");
+    const contrast=await evaluate(`(()=>{const label=document.querySelector('.map-label.is-selected'),ctx=document.createElement('canvas').getContext('2d');
+      const light=color=>{ctx.fillStyle=color;ctx.fillRect(0,0,1,1);const c=[...ctx.getImageData(0,0,1,1).data].slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});return c[0]*.2126+c[1]*.7152+c[2]*.0722;};
+      const a=light(getComputedStyle(label.querySelector('text')).fill),b=light(getComputedStyle(label.querySelector('.map-label-bg')).fill);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);})()`);
+    assert(contrast>=4.5,theme+' selected-building label contrast '+contrast);
+    if(theme==='arknights')assert.equal(await evaluate("getComputedStyle(document.querySelector('.map-panel')).borderTopLeftRadius"),'0px');
     for (const [width,height,label] of [[1440,1100,'desktop'],[390,844,'mobile']]) {
       await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<800});
       await evaluate("scrollTo(0,0);new Promise(r=>setTimeout(r,400))");

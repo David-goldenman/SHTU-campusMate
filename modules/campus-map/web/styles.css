@@ -41,7 +41,7 @@
 .campus-map .map-label text { fill:var(--text); text-anchor:middle; font-size:14px; font-weight:600; pointer-events:none; }
 .campus-map .map-label-stem { stroke:var(--nord3); stroke-opacity:.48; stroke-width:1; }
 .campus-map .map-label-dot { fill:var(--nord3); }
-.campus-map .map-label:hover .map-label-bg,.campus-map .map-label:focus .map-label-bg,.campus-map .map-label.is-selected .map-label-bg { stroke:var(--nord10); stroke-width:1.8; fill:var(--nord6); }
+.campus-map .map-label:hover .map-label-bg,.campus-map .map-label:focus .map-label-bg,.campus-map .map-label.is-selected .map-label-bg { stroke:var(--nord10); stroke-width:1.8; fill:var(--surface-raised); }
 .campus-map .map-label-gate .map-label-bg { fill:color-mix(in srgb,var(--nord14) 18%,var(--paper)); stroke:var(--nord7); }
 .campus-map .map-label-gate text { fill:var(--text); }
 .campus-map .map-label-gate .map-label-dot { fill:var(--nord7); stroke:var(--paper); stroke-width:1.5; }
@@ -51,7 +51,7 @@
 .campus-map .map-label-road text { font-size:12px; fill:var(--muted); font-weight:500; }
 .campus-map .map-pin { cursor:pointer; }
 .campus-map .map-pin rect { fill:var(--nord0); stroke:var(--paper); stroke-width:2; }
-.campus-map .map-pin-elevator rect { fill:var(--nord10); }
+.campus-map .map-pin-elevator rect { fill:color-mix(in srgb,var(--nord10) 60%,var(--nord0)); }
 .campus-map .map-pin text { fill:var(--nord6); text-anchor:middle; font-size:13px; font-weight:700; pointer-events:none; }
 .campus-map .map-north { position:absolute; left:20px; top:16px; display:grid; text-align:center; color:var(--muted); font-size:25px; line-height:1.2; pointer-events:none; }
 .campus-map .map-north small { font-size:10px; }
@@ -119,7 +119,7 @@
 .campus-map .map-route-fields select { width:100%; min-width:0; font-size:13px; padding:9px; color:var(--text); background:var(--paper); border:1px solid var(--border); border-radius:6px; }
 .campus-map .map-route-fields button { height:37px; background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--text); }
 .campus-map .map-route-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:12px; }
-.campus-map .map-route-actions .button { background:var(--nord10); border-color:var(--nord10); color:var(--nord6); font-size:12px; padding:8px 12px; }
+.campus-map .map-route-actions .button { font-size:12px; padding:8px 12px; }
 .campus-map .map-route-actions .button:disabled { opacity:.5; }
 .campus-map .map-route-actions>span { color:var(--muted); font-size:11px; }
 .campus-map [data-route-clear],.campus-map [data-route-fit] { border:0; background:transparent; color:var(--link); font-size:12px; padding:5px 0; }
@@ -196,7 +196,7 @@
 .campus-map .map-discovery { padding:16px 0; border-bottom:1px solid var(--border); }
 .campus-map .map-discovery-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
 .campus-map .map-discovery-heading h3 { margin:0; font-size:16px; }
-.campus-map .map-discovery-heading h3 span { color:var(--nord10); }
+.campus-map .map-discovery-heading h3 span { color:var(--link); }
 .campus-map [data-discovery-settings] { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:12px 0; }
 .campus-map [data-discovery-settings] label,.campus-map .map-discovery .map-condition-toolbar label { display:flex; align-items:center; gap:6px; font-size:12px; }
 .campus-map .map-discovery input[type=checkbox],.campus-map [data-condition-form] .map-review-confirm input { width:auto; }
