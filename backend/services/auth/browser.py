@@ -64,6 +64,32 @@ class VerificationBrowser:
             process.wait(timeout=8)
             if process.stdout:
                 process.stdout.close()
+        self.clear_navigation(provider)
+
+    def clear_navigation(self, provider):
+        directory = self._directory(provider)
+        root = directory.resolve()
+        if not root.is_relative_to(self.directory.resolve()):
+            raise PublicError('验证浏览器记录目录异常，已停止清理。')
+        # Mail URLs contain session tokens; retain cookies, never restored tabs/history.
+        records = [f'Default/{database}{suffix}' for database in ('History', 'Favicons', 'Top Sites')
+                   for suffix in ('', '-journal', '-wal', '-shm')]
+        records += ['Default/Visited Links', 'Default/Sessions', 'Default/Session Storage',
+                    'Default/Sync Data', 'Default/Cache', 'Default/Code Cache',
+                    'Default/Service Worker/CacheStorage', 'cache', 'temp']
+        for record in records:
+            path = directory / record
+            if not path.exists():
+                continue
+            if not path.resolve().is_relative_to(root):
+                raise PublicError('验证浏览器记录目录异常，已停止清理。')
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            except OSError:
+                raise PublicError('验证浏览记录仍被占用，请关闭验证窗口后重试。') from None
 
     def forget(self, provider):
         self.close(provider)

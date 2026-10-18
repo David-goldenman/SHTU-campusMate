@@ -2,6 +2,14 @@
 
 框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`ecourse`、`timetable`，默认 `blackboard`。学校邮箱同时支持推荐的 IMAP 专用密码登录与官方网页会话；配置 IMAP 后优先使用 IMAP，网页会话及其缓存会被删除。E 云课堂使用原站登录页中的已登录账号标识验证身份，其课程数据由独立模块只读同步。
 
+## 本地凭据与资料
+
+账号密码、IMAP 专用密码、Cookie／SID、设备私钥与模型 API Key 统一保存在 `.private/vault.dpapi`，使用当前 Windows 用户的 DPAPI 加密。普通设置、学习档案和缓存记录位于 `.private/settings.sqlite3`、`.private/modules/`，属于本地普通数据；模块备份位于 `.private/backups/`，不包含 Vault 或认证窗口资料。这些目录均由 Git 忽略，应用从本机 Vault 读取凭据，源码不提供默认 Key。
+
+认证窗口使用 `.private/runtime/auth/<提供方>/` 的独立浏览器资料。关闭窗口时清理历史、图标缓存、标签恢复、同步索引与页面缓存，避免带 SID 的登录 URL 长期残留；保留加密 Cookie、Local State 与站点存储以复用登录。清理失败明确提示，不删除持久凭据。认证窗口启动使用 `--disable-sync`；断开账号时删除整个对应浏览器资料目录。
+
+检查凭据存储时不得把解密值、Cookie、SID 或 Key 写入报告、截图、日志、提交与 PR。检查和自动回归使用合成凭据；私有工作目录不进入版本控制。
+
 ## 用户连接流程
 
 1. 设置 → 账号与登录 → 打开官方登录窗口。在原站完成密码、短信、验证码等验证，应用不读取输入的密码。
