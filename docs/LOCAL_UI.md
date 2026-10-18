@@ -106,3 +106,12 @@ git merge --no-commit origin/main
 
 实际浏览器验证了 1280px 桌面与 375px 窄屏：首页对话、校园概览、设置页均只有一条可见开场白；刷新与切页保持同一句，无页面横向溢出，输入框正常可见，未发送聊天或调用付费模型。截图保存在 .codex/screenshots/opening-line-final-desktop-20261017.jpg 与 opening-line-final-mobile-20261017.jpg。
 
+
+## 浏览器环境（本机事实，不必再问）
+
+- 本机**没有安装 Google Chrome**（`C:/Program Files/Google/Chrome`、`Program Files (x86)`、`%LOCALAPPDATA%` 三处均无 `chrome.exe`；Hermes 的 `browser_exec` 因此报 `Chrome not found`，其自动查找只认 Chrome / Playwright / Puppeteer 缓存）。
+- 本机默认浏览器为 **Microsoft Edge**，路径 `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`，版本 155.0.4283.62，已在该目录写入系统 `PATH`。
+- 因此：需要浏览器预览/调试时**一律用 Edge（`msedge`）**，不要再探测或询问 Chrome。
+  - 命令行打开：`msedge.exe "http://127.0.0.1:16666/"`（或在 Edge 地址栏直接输入）。
+  - 自动化抓取：优先 `curl` / `web_extract` 取页面文本；确需渲染再驱动 Edge，而不是 `browser_exec` 默认的无头 Chrome。
+- `run.cmd` 启动后就绪自动用系统默认浏览器打开工作台，即 Edge。
