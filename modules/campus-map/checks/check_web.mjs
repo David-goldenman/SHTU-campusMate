@@ -31,7 +31,7 @@ function fixture() {
     if (path === '/api/v1/modules/campus-map/day') {
       const day = target.searchParams.get('date'); state.days.push(day);
       if (day === '2026-10-22') await new Promise(resolve => setTimeout(resolve, 250));
-      return json({date:day, available:!state.unavailable, status:state.unavailable?'unavailable':'partial',
+      return json({date:day, account_revision:'synthetic', available:!state.unavailable, status:state.unavailable?'unavailable':'partial',
         issues:state.unavailable?['时间表模块未启用，地图仍可查看。']:['合成来源尚未就绪'],
         events:state.unavailable?[]:[
           {id:'synthetic-class', title:'合成课程 '+day, event_type:'class', location:'信息学院1D-102', period_start:3, period_end:4},
@@ -88,7 +88,7 @@ try {
   await wait("document.querySelector('.map-route-line') && document.querySelector('.map-route-course')");
   await evaluate("for(const day of ['2026-10-22','2026-10-23']){const input=document.querySelector('[data-date]');input.value=day;input.dispatchEvent(new Event('change',{bubbles:true}));}new Promise(r=>setTimeout(r,400))");
   assert(await evaluate("document.querySelector('[data-agenda]').textContent.includes('2026-10-23') && !document.querySelector('[data-agenda]').textContent.includes('2026-10-22') && document.querySelector('[data-route-end]').value===''"));
-  await evaluate("document.querySelector('[data-walk-event]').click();document.querySelector('.map-maintenance').open=true;document.querySelector('[data-condition-new]').click();var form=document.querySelector('[data-condition-form]');var values={title:'合成北门封闭',state:'confirmed',place_id:document.querySelector('[data-route-start]').value,starts_on:'2026-10-18',review_on:'2026-10-25',source_kind:'onsite',source_title:'合成现场核实',source_date:'2026-10-18',note:'合成检查：北门行人通道暂时关闭'};for(const [key,value] of Object.entries(values)){form.elements[key].value=value;form.elements[key].dispatchEvent(new Event('input',{bubbles:true}));}form.requestSubmit()");
+  await evaluate("var start=document.querySelector('[data-route-start]');start.value=[...start.options].find(o=>o.text==='北门').value;start.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-walk-event]').click();document.querySelector('.map-maintenance').open=true;document.querySelector('[data-condition-new]').click();var form=document.querySelector('[data-condition-form]');var values={title:'合成北门封闭',state:'confirmed',place_id:document.querySelector('[data-route-start]').value,starts_on:'2026-10-18',review_on:'2026-10-25',source_kind:'onsite',source_title:'合成现场核实',source_date:'2026-10-18',note:'合成检查：北门行人通道暂时关闭'};for(const [key,value] of Object.entries(values)){form.elements[key].value=value;form.elements[key].dispatchEvent(new Event('input',{bubbles:true}));}form.requestSubmit()");
   await wait("mapCheck.writes.length===1 && document.querySelector('[data-route-result]').textContent.includes('已确认通行限制') && !document.querySelector('.map-route-line')");
   assert.equal(await evaluate('mapCheck.writes[0].account_revision'),'synthetic');
   await evaluate("mapCheck.conditions.items=[];document.querySelector('[data-condition-reload]').click();document.querySelector('.map-maintenance').open=false");
