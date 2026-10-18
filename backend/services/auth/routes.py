@@ -103,6 +103,10 @@ def create_router(service):
     def refresh(provider: str, body: LoginOptions | None = None):
         return service.refresh(checked(provider), body.target if body else None)
 
+    @router.post("/ids/connect", status_code=202)
+    def connect_school():
+        return service.connect_school()
+
     @router.post("/ids/device/browser")
     def device_browser():
         return service.open_device_browser()

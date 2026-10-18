@@ -52,7 +52,7 @@ export function apply(ctx) {
     area:{type:'string',required:true,enum:['courses','assignments','timetable','course_history','degree_plan','notifications','mail','profile','workspace']},q:string,course_id:string,pending:{type:'boolean'},week_start:{type:'string',description:'查询时间表时可用 YYYY-MM-DD 指定一周，默认本周。'},...pagination,
   });
   register('study_search','search','在课程资料、讨论和录播原文中检索。先 query courses 获取课程中心的 record_id 并作为 course_id；q 只搜索材料标题和正文，列出课程文件时留空，不用课程名搜索文件。检索转写使用 collection=lessons 和 q。材料结果的 record_id 可交给 study_document 读取真实页码。',{
-    collection:{type:'string',enum:['materials','lessons','posts']},q:string,course_id:string,...pagination,
+    collection:{type:'string',enum:['materials','lessons','posts','announcements']},q:string,course_id:string,...pagination,
   });
   register('study_document','document','按 record_id 读取 PDF/PPTX、文本或图片。PDF/图片按用户设置直接识图或本地 OCR；PPTX 读取文字。record_id 必须来自本次查询或检索；可用作业 ID。page 从 1 开始，每次最多 4 页，按 next_page 继续。q 优先检索已有文字层，未读扫描页不能算作无结果。遵守 warnings；model_interpretation 是模型解释，不是原文。',{
     record_id:{type:'string',required:true},q:string,page:{type:'integer'},limit:pagination.limit,

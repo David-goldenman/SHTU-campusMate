@@ -7,7 +7,7 @@ $browserJob = $null
 try {
     $options = Read-LaunchOptions $args
     if ($options.Help) {
-        Write-Host 'Campus Framework launcher'
+        Write-Host 'campusMate launcher'
         Write-Host 'run.cmd [--distro NAME] [--port PORT] [--no-browser] [--check]'
         Write-Host 'Start the native Windows service and open Microsoft Edge. --distro selects WSL.'
         Write-Host 'Keep this window open. Press Ctrl+C to stop the server.'

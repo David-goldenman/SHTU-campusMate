@@ -130,6 +130,7 @@ function apply() {
   document.querySelectorAll('[data-theme-name]').forEach(node => {node.textContent = selected.name;});
   const logo = document.querySelector('.brand img');
   if (logo) logo.src = entry.icon || '/assets/icon.svg';
+  document.querySelector('link[rel="icon"]')?.setAttribute('href',entry.favicon || '/assets/icon.svg');
 }
 export function setAppearance(patch) {
   const supplied=Object.fromEntries(Object.entries(object(patch)).filter(([name,value])=>['theme','companions','reduceMotion','options'].includes(name) && value!==undefined));

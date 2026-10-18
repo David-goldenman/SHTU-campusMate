@@ -39,7 +39,7 @@ class Query(BaseModel):
 
 
 class Search(BaseModel):
-    collection: Literal["materials", "lessons", "posts"] = "materials"
+    collection: Literal["materials", "lessons", "posts", "announcements"] = "materials"
     q: str = Field(default="", max_length=300)
     course_id: str = Field(default="", max_length=300)
     offset: int = Field(default=0, ge=0)
