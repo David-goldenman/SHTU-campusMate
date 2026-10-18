@@ -6,6 +6,14 @@ import {cleanupAll} from '../web/lifecycle.js';
 import {renderNetwork} from '../web/network.js';
 import {submissionLabel} from '../web/campus.js';
 import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
+import {schoolServices} from '../web/school-login.js';
+
+const schoolMarkup = schoolServices({connection:{status:'complete'},services:[
+  {id:'blackboard',status:'ready'}, {id:'elrc',status:'verification_required',message:'<script>synthetic</script>'}
+]});
+assert(schoolMarkup.includes('已连接 1 / 4') && schoolMarkup.includes('data-school-verify="elrc"'));
+assert(!schoolMarkup.includes('<script>') && schoolMarkup.includes('&lt;script&gt;'));
+assert(schoolServices({connection:{status:'waiting_for_login'}}).includes('完成后自动连接'));
 
 assert.equal(submissionLabel({submitted:null}), '提交状态待核实');
 assert.equal(submissionLabel({submitted:false,exempt:true}), '已豁免');

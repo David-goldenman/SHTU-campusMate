@@ -1,4 +1,6 @@
-# Campus Framework
+# campusMate
+
+<img src="web/themes/default/campusmate.svg" width="72" height="72" alt="campusMate">
 
 > 本机定制：双击 `run.cmd` 复用已有 Python 启动网页，`stop.cmd` 停止。主题修改与更新步骤见 [本地 UI 维护说明](docs/LOCAL_UI.md)。团队的 `run.ps1` 保留原版入口。
 
