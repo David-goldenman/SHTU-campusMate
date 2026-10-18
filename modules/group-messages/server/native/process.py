@@ -5,9 +5,8 @@ Copyright (c) 2025 CloudDreamAI / TANGandXUE; see WCDB_LICENSE.txt.
 No debugger, token privilege change, process write, remote thread or network API.
 """
 
-import csv
 import ctypes
-import io
+import json
 import os
 import re
 import struct
@@ -177,29 +176,38 @@ def open_weixin(pid: int, *, memory: bool) -> tuple[Any, Any]:
 def discover_processes() -> list[dict[str, Any]]:
     if not available():
         return []
+    # Weixin.exe also hosts OCR, utility and player processes. Query metadata
+    # only; a --type argument identifies a helper, regardless of its memory use.
+    command = (
+        "$ErrorActionPreference='Stop';"
+        "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false);"
+        "ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process "
+        "-Filter \"Name = 'Weixin.exe'\" | "
+        "Select-Object ProcessId,CommandLine,WorkingSetSize)"
+    )
     result = subprocess.run(
-        ["tasklist.exe", "/FI", "IMAGENAME eq Weixin.exe", "/FO", "CSV", "/NH"],
+        ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
         capture_output=True,
         text=True,
-        encoding="mbcs",
-        errors="replace",
-        check=False,
+        encoding="utf-8-sig",
+        check=True,
         timeout=10,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     found = []
-    for row in csv.reader(io.StringIO(result.stdout)):
-        if len(row) < 2 or row[0].lower() != "weixin.exe" or not row[1].isdigit():
+    for row in json.loads(result.stdout):
+        command_line = row.get("CommandLine")
+        if not command_line or re.search(r'(?:^|\s)"?--type(?=[=\s"]|$)', command_line, re.I):
             continue
-        pid = int(row[1])
+        pid = int(row["ProcessId"])
         try:
             kernel, handle = open_weixin(pid, memory=False)
             kernel.CloseHandle(handle)
             found.append(
                 {
                     "pid": pid,
-                    "name": "微信 · 本机当前用户",
-                    "memory_kb": int(re.sub(r"\D", "", row[-1]) or "0"),
+                    "name": "微信主实例 · 本机当前用户",
+                    "memory_kb": int(row.get("WorkingSetSize") or 0) // 1024,
                 }
             )
         except NativeError:
