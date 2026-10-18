@@ -67,10 +67,10 @@
 [data-art-theme] .academic-chat .study-home-intro .study-welcome { max-width:none; margin:0; }
 [data-art-theme] .study-chat-card.module-focused .study-home-intro { display:none; }
 [data-art-theme] .study-chat-card:not(.module-focused):has(.study-home-intro) .study-home { display:none; }
-[data-art-theme] .academic-chat .study-welcome-plate { height:252px; }
-[data-art-theme] .academic-chat .study-welcome-copy { width:54%; padding:24px 28px; }
+[data-art-theme] .academic-chat .study-welcome-plate { height:auto; min-height:252px; }
+[data-art-theme] .academic-chat .study-welcome-copy { width:58%; height:auto; min-height:252px; padding:24px 28px; background:linear-gradient(90deg,var(--art-paper) 94%,transparent); }
 [data-art-theme] .academic-chat .study-welcome .study-welcome-title {
-  font-family:inherit; font-size:30px; font-weight:500; line-height:1.2; letter-spacing:-.6px; text-wrap:balance;
+  font-family:inherit; font-size:30px; font-weight:500; line-height:1.2; letter-spacing:-.6px; text-wrap:balance; overflow-wrap:anywhere;
 }
 [data-art-theme] .academic-chat .study-welcome-title>span,
 [data-art-theme] .academic-chat .study-welcome-title>strong { display:block; }
@@ -87,7 +87,7 @@
 @media(max-width:600px) {
   [data-art-theme] .academic-chat .study-home-intro { padding:14px 14px 18px; }
   [data-art-theme] .academic-chat .study-welcome-plate { height:auto; min-height:216px; }
-  [data-art-theme] .academic-chat .study-welcome-copy { width:61%; height:auto; min-height:216px; padding:18px 14px; }
+  [data-art-theme] .academic-chat .study-welcome-copy { width:78%; height:auto; min-height:216px; padding:18px 14px; }
   [data-art-theme] .academic-chat .study-welcome .study-welcome-title { font-size:clamp(19px,5.3vw,24px); line-height:1.2; letter-spacing:-.3px; }
   [data-art-theme] .academic-chat .study-welcome .study-welcome-translation { font-size:13px; line-height:1.6; margin-top:10px; }
   [data-art-theme] .academic-chat .study-welcome-caption>span { display:none; }
@@ -102,8 +102,8 @@
 }
 
 @media(max-height:700px) and (min-width:851px) {
-  [data-art-theme] .study-chat-card.module-focused .study-welcome-plate { height:192px; }
-  [data-art-theme] .study-chat-card.module-focused .study-welcome-copy { padding-block:14px; }
+  [data-art-theme] .study-chat-card.module-focused .study-welcome-plate { height:auto; min-height:192px; }
+  [data-art-theme] .study-chat-card.module-focused .study-welcome-copy { min-height:192px; padding-block:14px; }
   [data-art-theme] .study-chat-card.module-focused .study-welcome .study-welcome-title { font-size:24px; }
   [data-art-theme] .study-chat-card.module-focused .study-welcome .study-welcome-translation { font-size:13px; margin-top:8px; }
 }

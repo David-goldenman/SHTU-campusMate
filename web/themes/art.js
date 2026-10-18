@@ -1,4 +1,5 @@
 import {renderStudyQuote} from './campus-copy.js';
+import {renderHomeSlogan} from './home-slogans.js';
 
 // The blue-white editions opt into copy; new themes keep their own voice.
 export const artTheme = true;
@@ -12,7 +13,7 @@ function welcome(home) {
   const plate='<div class="study-welcome">' +
     '<div class="study-welcome-plate"><div class="study-welcome-copy">' +
     '<span class="study-art-label" aria-hidden="true">A SPACE FOR YOUR CURIOSITY</span>' +
-    '<h3 class="study-welcome-title" lang="en"><span>Everything’s on the portal.</span><strong>Somewhere.</strong></h3><p class="study-welcome-translation" lang="zh-CN">所有信息都在学校系统里。<br>至于在哪嘛……</p>' +
+    renderHomeSlogan() +
     '</div><div class="study-welcome-illustration" role="img" aria-label="蓝白雕版风格的天球、古典雕塑与星图插画"></div>' +
     '<svg class="study-orbit" viewBox="0 0 240 240" fill="none" aria-hidden="true"><circle cx="120" cy="120" r="94"/><ellipse cx="120" cy="120" rx="108" ry="42" transform="rotate(-28 120 120)"/><circle cx="29" cy="157" r="4" fill="currentColor" stroke="none"/></svg>' +
     '</div><div class="study-welcome-caption'+(home?' study-home-caption':'')+'">'+caption+'</div></div>';
