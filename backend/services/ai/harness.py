@@ -151,7 +151,11 @@ class Harness:
                 folders = [entry.harness['folder'] for entry in entries]
                 if on_event:
                     folders.append(Path(__file__).with_name('stream'))
-                prepare([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
+                specs = ["file:" + folder.as_posix() for folder in folders]
+                # The official CLI forwards these arguments through cmd.exe on Windows.
+                if os.name == 'nt':
+                    specs = ['"' + spec + '"' for spec in specs]
+                prepare([*command, "plugin", "--profile", "sdk-minimal", "add", *specs],
                         cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
                 check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),

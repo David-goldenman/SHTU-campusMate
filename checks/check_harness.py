@@ -250,6 +250,6 @@ async def check(directory):
 if __name__ == "__main__":
     temporary = PROJECT / ".codex" / "tmp"
     temporary.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="check-harness-", dir=temporary) as directory:
+    with tempfile.TemporaryDirectory(prefix="check-harness-中文 ", dir=temporary) as directory:
         asyncio.run(check(Path(directory)))
     print("PASS: official runtime streaming/cancellation, native tools/bundles, lifecycle locks, credentials and workspace cleanup")
