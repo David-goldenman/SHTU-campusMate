@@ -176,7 +176,7 @@ async def check_cached_submissions():
                                    'course_id': 'blackboard:_9_1', 'actionable': True, **reader.submission_history(HISTORY)})
         data['assignments'].append({'id': 'blackboard:exempt', 'source': 'blackboard', 'title': '已豁免的作业',
                                    'course_id': 'blackboard:_9_1', 'submitted': False, 'actionable': True, 'exempt': True})
-        bb.store.write('snapshot', {'owner': package._source.owner(), 'data': data, 'updated_at': '2026-10-17T00:00:00Z'})
+        bb.store.write('snapshot', {'owner': package._source.owner(), 'data': data, 'updated_at': datetime.now(timezone.utc).isoformat()})
         bb.store.write('sync', {'owner': package._source.owner(), 'status': 'ready'})
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://test') as client:

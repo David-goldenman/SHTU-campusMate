@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -149,7 +149,7 @@ async def check_schedule():
                 "eams": [{"id": "eams:exam", "source": "eams", "title": "Exam", "kind": "exam", "due_at": "2026-10-20T10:00:00+09:00"}],
                 "ecourse": [],
             }
-            return httpx.Response(200, json={"status": "ready", "updated_at": "2026-10-16T00:00:00Z", "data": validate_bundle({"assignments": items[name]})})
+            return httpx.Response(200, json={"status": "ready", "updated_at": datetime.now(timezone.utc).isoformat(), "data": validate_bundle({"assignments": items[name]})})
 
         context.api = api
         app = FastAPI()
@@ -167,7 +167,7 @@ async def check_schedule():
         with Image.open(rendered[0]) as image:
             assert image.width > 500 and image.height > 700, 'The PDF page must be readable at zoom size'
         calendar_key = module.term_key(result['metadata'])
-        context.store.write("snapshot", {"owner": source.owner(), "data": validate_bundle(result), "updated_at": "2026-10-16T00:00:00Z"})
+        context.store.write("snapshot", {"owner": source.owner(), "data": validate_bundle(result), "updated_at": datetime.now(timezone.utc).isoformat()})
         context.store.write("sync", {"owner": source.owner(), "status": "ready"})
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://fixture") as client:

@@ -12,13 +12,14 @@ from .remote import Remote
 
 
 class Source:
-    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, direct=None):
+    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, direct=None, stale_after=21600):
         self.context, self.provider, self.hosts, self.fetch, self.target = context, provider, hosts, fetch, target
         self.network_target = network_target
         # A direct source authenticates its own transport (for example IMAP) and
         # receives ``None`` instead of an HTTP client from the shared auth layer.
         self.direct = direct
         self.sync_key, self.snapshot_key = state_prefix + "sync", state_prefix + "snapshot"
+        self.stale_after = stale_after
         self.cancelled, self.lock = threading.Event(), threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=context.id)
         self.future = None
@@ -38,7 +39,23 @@ class Source:
                 state = {"status": "not_connected", "message": "请在设置连接账号，然后同步。"}
             if saved.get("owner") != owner:
                 saved = {"data": validate_bundle({}), "updated_at": None}
-            return {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
+            result = {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
+            # 过期快照保留当前内容，并复用模块自己的同步队列。
+            if self._is_stale(saved) and result["status"] == "ready":
+                result["status"] = "cached"
+                result["message"] = "本地缓存，待核实"
+                if not self.cancelled.is_set():
+                    self.sync()
+            return result
+
+    def _is_stale(self, saved):
+        if not saved.get("updated_at"):
+            return False
+        try:
+            updated = datetime.fromisoformat(saved["updated_at"].replace("Z", "+00:00"))
+            return (datetime.now(timezone.utc) - updated).total_seconds() > self.stale_after
+        except (ValueError, AttributeError):
+            return False
 
     def sync(self):
         with self.lock:
@@ -108,7 +125,8 @@ class Source:
         return router
 
     def close(self):
-        self.cancelled.set()
+        with self.lock:
+            self.cancelled.set()
         self.executor.shutdown(wait=True, cancel_futures=True)
 
 

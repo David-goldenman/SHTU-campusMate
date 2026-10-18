@@ -41,11 +41,11 @@ async def check():
             if name == 'assignments':
                 return httpx.Response(200, json={'data':{'assignments':[assignment]},'pending':[assignment]})
             events = [{'id':'eams:exam','title':'外部考试','source':'eams','due_at':'2026-10-19T10:15:00+08:00','ends_at':'2026-10-19T11:15:00+08:00','start_time':'10:15'}] if name == 'eams' else []
-            return httpx.Response(200, json={'status':'ready','data':validate_bundle({'assignments':events}),'updated_at':'2026-10-17T00:00:00Z'})
+            return httpx.Response(200, json={'status':'ready','data':validate_bundle({'assignments':events}),'updated_at':datetime.now(timezone.utc).isoformat()})
         calendar_context.api = sources
         app = FastAPI(); app.include_router(timetable.create_router(calendar_context))
         source = timetable._source
-        calendar_context.store.write('snapshot', {'owner':source.owner(),'data':fixture,'updated_at':'2026-10-17T00:00:00Z'})
+        calendar_context.store.write('snapshot', {'owner':source.owner(),'data':fixture,'updated_at':datetime.now(timezone.utc).isoformat()})
         calendar_context.store.write('sync', {'owner':source.owner(),'status':'ready'})
         raw = copy.deepcopy(calendar_context.store.read('snapshot'))
         try:
