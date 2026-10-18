@@ -316,4 +316,4 @@ async def check_schedule():
 
 
 asyncio.run(check_schedule())
-print("timetable: week parsing, combined deadlines/exams, timezone order, school-calendar images, optional sources and account isolation passed")
+print("timetable: week parsing, homework/course ICS exports, timezone order, school-calendar images, optional sources and account isolation passed")
