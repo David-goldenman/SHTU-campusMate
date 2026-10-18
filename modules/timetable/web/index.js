@@ -15,7 +15,7 @@ export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('week-planner');
-  let current = dayOf(Date.now()), snapshot, timer, midnight, request = 0, filter = 'all', showCancelled = false;
+  let current = dayOf(Date.now()), snapshot, timer, midnight, request = 0, filter = 'all', showCancelled = false, calendarAutoTried = false;
   let removeMoment = () => {};
   const cleanup = () => {removeMoment();clearTimeout(timer);clearTimeout(midnight);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
@@ -80,6 +80,7 @@ export async function mount(container, context) {
     const next = new Date(dayOf(now) + 'T00:00:00+08:00').valueOf() + 86400000;
     midnight = setTimeout(async () => {
       if (context.signal.aborted) return;
+      calendarAutoTried = false;
       try {await refresh();} catch (error) {if (!context.signal.aborted) context.ui.toast(error.message);}
       if (!context.signal.aborted) armMidnight();
     }, Math.max(1000,next - now + 1000));
@@ -92,6 +93,10 @@ export async function mount(container, context) {
     snapshot = value;
     current = value.calendar.week_start;
     draw();
+    if (value.school_calendar?.due && !calendarAutoTried) {
+      calendarAutoTried = true;
+      void context.api('/calendar/refresh',{method:'POST'}).then(()=>refresh()).catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);});
+    }
     if (value.status === 'syncing') timer = setTimeout(() => refresh().catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);}),1500);
   }
   function draw() {
@@ -102,7 +107,7 @@ export async function mount(container, context) {
     const title = `${cal.week_start.slice(5).replace('-','月')}日 — ${cal.week_end.slice(5).replace('-','月')}日`;
     const week = cal.teaching_week > 0 && cal.teaching_week <= (snapshot.data.metadata.week_count || 18) ? '第 ' + cal.teaching_week + ' 教学周' : cal.week_one ? '教学周以外' : '尚未设置教学周';
     const header = cal.days.map((day,i) => `<th scope="col" class="${dayClass(day)}"><span>周${'一二三四五六日'[i]}</span><strong>${day.date.slice(5).replace('-',' / ')}</strong>${day.date === today ? '<em>今天</em>' : day.date === tomorrow ? '<em>明天</em>' : ''}</th>`).join('');
-    container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div>${overviewView(snapshot.overview)}<div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div><details class="planner-week-detail" ${weekOpen ? 'open' : ''}><summary>本周详情 · 节次与冲突</summary>${conflictNotice(cal.conflicts)}${weekView(cal,selected,dayClass,title,header)}</details><div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
+    container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div>${overviewView(snapshot.overview)}<div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div><details class="planner-week-detail" ${weekOpen ? 'open' : ''}><summary>本周详情 · 节次与冲突</summary>${conflictNotice(cal.conflicts)}${weekView(cal,selected,dayClass,title,header)}${schoolCalendarView(snapshot.school_calendar)}</details><div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
     applyLessonPositions(container);
     const classEvents = new Map(cal.days.flatMap(day=>day.events).map(item=>[item.id,item]));
     container.querySelectorAll('.calendar-event[data-event]').forEach(element=>{
@@ -120,6 +125,16 @@ export async function mount(container, context) {
     const overview=container.querySelector('.planner-overview');
     if(overview)overview.ontoggle=()=>{overviewOpen=overview.open;};
     const weekDetail=container.querySelector('.planner-week-detail');weekDetail.ontoggle=()=>{weekOpen=weekDetail.open;};
+    const calendarRefresh=container.querySelector('[data-calendar-refresh]');
+    if(calendarRefresh)calendarRefresh.onclick=act(calendarRefresh,async()=>{await context.api('/calendar/refresh',{method:'POST'});await refresh();});
+    container.querySelectorAll('[data-calendar-image]').forEach(button=>button.onclick=()=>{
+      const value=snapshot.school_calendar,page=Number(button.dataset.calendarImage),body=document.createElement('div');
+      body.className='school-calendar-zoom';
+      body.innerHTML=`<img src="${calendarImageUrl(value?.version || '',page)}" alt="上海科技大学校历第 ${page} 页">`;
+      const dialog=context.ui.dialog('校历 · 第 ' + page + ' 页',body);
+      dialog.classList.add('school-calendar-dialog');
+      dialog.addEventListener('close',()=>dialog.classList.remove('school-calendar-dialog'),{once:true,signal:context.signal});
+    });
     removeMoment();
     if (['observatory','star-notes'].includes(context.theme?.id)) removeMoment = mountCampusMoment(container,'timetable',context.signal);
     container.prepend(networkHost);
@@ -159,6 +174,20 @@ export async function mount(container, context) {
     if (!value) return '';
     const items = value.items || [];
     return (items.length ? `<details class="planner-conflicts"><summary>发现 ${items.length} 处时间重叠</summary><ul>${items.slice(0,12).map(item => '<li>' + e(item.date + ' · ' + item.first_title + ' / ' + item.second_title) + '</li>').join('')}</ul></details>` : '') + (value.message ? '<p class="field-hint">' + e(value.message) + '</p>' : '');
+  }
+  function calendarImageUrl(version,page) {
+    const query = new URLSearchParams({page:String(page)});
+    if (version) query.set('v',version);
+    return '/api/v1/modules/' + encodeURIComponent(context.module.id) + '/calendar/image?' + query;
+  }
+  function schoolCalendarView(value) {
+    const actions = `<div class="school-calendar-actions"><button class="button button-secondary" data-calendar-refresh type="button">更新校历</button>${value?.pdf_url ? link(value.pdf_url,'打开原 PDF',e) : ''}${value?.url ? link(value.url,'学校校历通知',e) : ''}<span class="field-hint">开学与学期结束自动更新 · 手动更新不会改动课程安排</span></div>`;
+    if (!value?.available) {
+      return `<details class="planner-school-calendar"><summary><span>校历</span><small>${value?.error ? '读取失败，可重试' : '尚未缓存学校校历'}</small></summary><div class="school-calendar-body"><p class="field-hint">${e(value?.error || '尚未读取学校校历。点击“更新校历”读取教务处发布的 PDF 并生成图片。')}</p>${actions}</div></details>`;
+    }
+    const version = value.version || '';
+    const pages = Array.from({length:value.pages},(_,index) => `<button type="button" class="school-calendar-page" data-calendar-image="${index + 1}" aria-label="放大校历第 ${index + 1} 页"><img src="${calendarImageUrl(version,index + 1)}" alt="上海科技大学校历第 ${index + 1} 页" loading="lazy"></button>`).join('');
+    return `<details class="planner-school-calendar"><summary><span>校历</span><small>${value.pages} 页 · 点击图片放大${value.checked_at ? ' · 更新于 ' + e(time(value.checked_at)) : ''}</small></summary><div class="school-calendar-body">${value.error ? '<p class="field-hint">' + e(value.error) + '</p>' : ''}${actions}<div class="school-calendar-pages">${pages}</div></div></details>`;
   }
   function timingFields(item = {}) {
     const localTime = value => value ? dayOf(value) + 'T' + clock(value) : '';

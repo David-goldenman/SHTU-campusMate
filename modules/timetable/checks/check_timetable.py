@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import io
 import os
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
+from pypdf import PdfWriter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from checks.module_support import load, sandbox
@@ -153,6 +155,18 @@ async def check_schedule():
         app = FastAPI()
         app.include_router(module.create_router(context))
         source = module._source
+        calendar_key = None
+        writer = PdfWriter()
+        writer.add_blank_page(width=300, height=420)
+        pdf = io.BytesIO()
+        writer.write(pdf)
+        calendar = module._calendar
+        rendered = calendar.render(pdf.getvalue(), 'render-check')
+        assert len(rendered) == 1 and rendered[0].read_bytes().startswith(b'\x89PNG')
+        from PIL import Image
+        with Image.open(rendered[0]) as image:
+            assert image.width > 500 and image.height > 700, 'The PDF page must be readable at zoom size'
+        calendar_key = module.term_key(result['metadata'])
         context.store.write("snapshot", {"owner": source.owner(), "data": validate_bundle(result), "updated_at": "2026-10-16T00:00:00Z"})
         context.store.write("sync", {"owner": source.owner(), "status": "ready"})
         try:
@@ -178,6 +192,10 @@ async def check_schedule():
                 assert (await client.put('/calendar-settings', json={'week_one': '2026-10-20'})).status_code == 422
                 assert (await client.put('/calendar-settings', json={'week_one': '2026-10-19'})).status_code == 200
                 context.store.write('school-calendar:2026', {'terms': official_terms})
+                calendar.render(pdf.getvalue(), calendar_key)
+                image = await client.get('/calendar/image')
+                assert image.status_code == 200 and image.headers['content-type'] == 'image/png'
+                assert image.content.startswith(b'\x89PNG') and (await client.get('/calendar/image?page=2')).status_code == 404
                 anchor = (await client.get('/calendar-settings')).json()
                 assert anchor['source'] == 'manual' and anchor['week_one'] == '2026-10-19'
                 saved = context.store.read('snapshot')
@@ -208,8 +226,11 @@ async def check_schedule():
                 response = await client.get("/schedule")
                 assert response.status_code == 409 and "data" not in response.json()
         finally:
+            shutil.rmtree(calendar.directory('render-check'), ignore_errors=True)
+            if calendar_key:
+                shutil.rmtree(calendar.directory(calendar_key), ignore_errors=True)
             module.stop(context)
 
 
 asyncio.run(check_schedule())
-print("timetable: week parsing, combined deadlines/exams, timezone order, optional sources and account isolation passed")
+print("timetable: week parsing, combined deadlines/exams, timezone order, school-calendar images, optional sources and account isolation passed")
