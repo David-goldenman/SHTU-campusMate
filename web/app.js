@@ -3,10 +3,14 @@ import * as settings from './settings.js';
 import {icon as navIcon} from './icons.js';
 import {cleanupAll, withTimeout} from './lifecycle.js';
 import {initializeThemes, themeContext, viewURL} from './themes/appearance.js';
+import {unlock as unlockSounds} from './sounds.js';
 
 const main = document.querySelector('#main');
 const menuButton = document.querySelector('#mobile-menu');
 const scrim = document.querySelector('#menu-scrim');
+const soundGestures = ['pointerdown','keydown','touchstart'];
+function unlockAudio() { void unlockSounds(); }
+for (const type of soundGestures) document.addEventListener(type,unlockAudio,{passive:true});
 document.querySelector('.skip-link').addEventListener('click',event => { event.preventDefault(); main.focus(); });
 let state;
 let pageScope;
