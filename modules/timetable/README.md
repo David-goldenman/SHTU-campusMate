@@ -36,6 +36,8 @@
 
 个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
 
+有地点的有效课程、考试和已保存个人安排，在详情／编辑窗口提供“在校园地图查看已保存地点”。链接使用实际安排日期和稳定事项 ID，通过公开 `#campus-map?date=...&event=...` 路由让地图重新读取最新安排，不携带旧教室位置。取消、请假、调课原位置、截止事项与全天校历不提供通勤入口。地图返回时间表时可带 `#timetable?date=...`，打开该日期所在周；双方均不写入对方数据。
+
 `POST /commands` 请求为 `{action,account_revision,request_id,record_id?,expected_revision?,event?,adjustment?}`。`action` 为 `create/update/delete/adjust_class`，`request_id` 为 UUID，账号版本来自 `/schedule`。修改或删除使用读取记录的 `revision`；缺失、过时或切换账号返回 409。相同请求 ID 的相同请求返回原回执，不重复执行，复用 ID 改参数返回 409。`event` 是新增的完整字段或修改的部分字段；换用钟点或节次时清除另一模式。旧 `/events` 接口保留兼容，页面和主页 AI 使用版本检查的命令接口。
 
 ## 近四周网格与导出

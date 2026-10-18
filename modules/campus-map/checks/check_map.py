@@ -44,6 +44,7 @@ async def check():
             context.api = api
             result = (await client.get('/day?date=2026-10-21')).json()
             assert result['available'] and result['status'] == 'partial'
+            assert result['account_revision'] == unavailable['account_revision']
             assert [item['id'] for item in result['events']] == ['lesson', 'deadline', 'moved-new']
             assert result['events'][1]['at'] == '2026-10-20T16:30:00Z'
             assert 'private_payload' not in result['events'][0]
