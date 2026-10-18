@@ -4,6 +4,7 @@ from pydantic import Field, model_validator
 
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 
 from backend.services.campus import Source, semester, timestamp
 from backend.services.campus.assignments import filter_issues, historical
@@ -83,6 +84,13 @@ def create_router(context):
         await run_in_threadpool(school.refresh, source.snapshot()['data']['metadata'])
         return settings()
 
+    @router.get('/calendar/image')
+    def calendar_image(page: int = 1):
+        if not 1 <= page <= 4:
+            raise HTTPException(422, '校历图片页码应为 1 至 4。')
+        path = school.image(source.snapshot()['data']['metadata'], page)
+        return FileResponse(path, media_type='image/png')
+
     @router.get('/events')
     def events():
         return {'items': local_events()}
@@ -160,8 +168,9 @@ def create_router(context):
         appearance = appearance_response.json() if appearance_response.status_code == 200 else {}
         course_styles = {member: item for item in appearance.get("courses", []) for member in item["course_ids"]}
         values = {"timetable": source.snapshot(), **values}
+        metadata = values["timetable"]["data"]["metadata"]
         dates = settings()
-        current = semester(values["timetable"]["data"]["metadata"].get("semester"))
+        current = semester(metadata.get("semester"))
         events, issues = local_events(), []
         if not dates['week_one'] and values['timetable']['data']['timetable']:
             issues.append(MISSING_WEEK_ONE)
@@ -205,7 +214,8 @@ def create_router(context):
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
-                'calendar': {**plan, 'week_one_source': dates['source']}, 'homework': reminders, 'palette': appearance.get('palette', []),
+                'calendar': {**plan, 'week_one_source': dates['source']}, 'school_calendar': school.view(metadata),
+                'homework': reminders, 'palette': appearance.get('palette', []),
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 

@@ -26,6 +26,7 @@ from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
 from .core.vault import Vault
 from .core.backups import Backups
+from .core.appearance import AppearanceUpdate, read_appearance, patch_appearance, reset_core
 from .core.themes import catalog as theme_catalog
 from .core.errors import PublicError, catch_errors, error_response, file_error, http_error, storage_error
 from .services.ai import AIService, create_router as ai_router
@@ -127,7 +128,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     def settings():
         value = {"port": 16666, **store.read("settings", {})}
-        return {**value, "active_port": active_port, "restart_required": value["port"] != active_port, "storage": {"directory": ".private", "encryption": "Windows DPAPI / CurrentUser"}}
+        return {**value, "active_port": active_port, "restart_required": value["port"] != active_port, "appearance": read_appearance(store), "storage": {"directory": ".private", "encryption": "Windows DPAPI / CurrentUser"}}
 
     @app.get("/api/v1/bootstrap", tags=["框架"], summary="初始化网页与模块清单")
     def bootstrap():
@@ -149,6 +150,10 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     def save_settings(body: Settings):
         store.write("settings", body.model_dump())
         return settings()
+
+    @app.patch("/api/v1/settings/appearance", tags=["设置"], summary="按版本合并保存本目录外观偏好")
+    def save_appearance(body: AppearanceUpdate):
+        return patch_appearance(store, body)
 
     @app.get("/api/v1/modules", tags=["模块"], summary="列出已发现的模块与状态")
     def list_modules():
@@ -179,7 +184,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                     current_ai = ai.settings()
                     store.write('ai:settings', {'enabled': False, 'provider': current_ai['provider'], 'model': current_ai['model']})
                 if body.scope == "all":
-                    store.clear()
+                    reset_core(store)
             finally:
                 modules.reload()
         return {"cleared": body.scope, 'backup': backup}

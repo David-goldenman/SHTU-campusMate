@@ -21,7 +21,7 @@ function fixture(initial, categories, themeCatalog) {
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
   const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
   ai.providers.push({provider:'openai',display_name:'OpenAI',model:'gpt-4',custom:false,key_saved:false});
-  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,ai,calls:[],unexpected:[],failLogin:true,localEvents:[],assignmentOrder:{}};
+  const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,ai,calls:[],unexpected:[],failLogin:true,localEvents:[],assignmentOrder:{},assignmentDue:{}};
   const json = (body,status=200) => new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}});
   window.fetch = async (url,options={}) => {
     const path = new URL(url,location.origin).pathname.replace('/api/v1','');
@@ -100,22 +100,33 @@ function fixture(initial, categories, themeCatalog) {
         return {offset,week_start:weekDays[0].date,week_end:weekDays[6].date,week_one:currentWeek,teaching_week:5 + offset,periods:[],days:weekDays,conflicts:{items:[],complete:true,message:''}};
       });
       const overview = {week_start:homework.week_start,start:homework.start,end:homework.end,weeks:overviewWeeks,pending:homework.pending,late:homework.late};
-      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview});
+      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview,school_calendar:{available:true,pages:1,url:'https://www.shanghaitech.edu.cn/1024/list.htm',pdf_url:null,checked_at:at,error:null,due:false,version:'synthetic'}});
     }
+    if (path === '/modules/timetable/calendar/refresh' && method === 'POST') return json({week_one:'2026-09-14',source:'school'});
     if (path === '/modules/assignments/snapshot') {
       const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
+      const monday = new Date(today+'T12:00:00+08:00');
+      monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+      const week18 = new Date(monday.valueOf() + (17 * 7 + 6) * 86400000).toISOString().slice(0,10);
+      const savedDue = state.assignmentDue['assignment-a'];
       const values = [
-        {id:'assignment-a',title:'合成作业 A',course_title:'合成课程',source:'blackboard',availability:'open',submitted:false,due_at:today+'T20:00:00+08:00',category:'pending',current:true,url:'https://example.test/a',overdue:false,score:null,max_score:null},
-        {id:'assignment-b',title:'合成作业 B',course_title:'合成课程',source:'gradescope',availability:'open',submitted:false,due_at:today+'T21:00:00+08:00',category:'pending',current:true,url:'https://example.test/b',overdue:false,score:null,max_score:null},
+        {id:'assignment-a',title:'合成作业 A',course_title:'合成课程',source:'blackboard',availability:'open',submitted:false,due_at:savedDue || week18+'T23:59:00+08:00',due_default:!savedDue,due_source:savedDue ? 'manual' : 'default',category:'pending',current:true,url:'https://example.test/a',overdue:false,score:null,max_score:null},
+        {id:'assignment-b',title:'合成作业 B',course_title:'合成课程',source:'gradescope',availability:'open',submitted:false,due_at:today+'T21:00:00+08:00',due_default:false,due_source:'source',category:'pending',current:true,url:'https://example.test/b',overdue:false,score:null,max_score:null},
       ];
       const order = state.assignmentOrder.pending;
       if (order) values.sort((left,right) => order.indexOf(left.id) - order.indexOf(right.id));
-      return json({status:'ready',updated_at:today+'T09:00:00+08:00',data:{assignments:values,issues:[]},account_revision:'synthetic-revision',order:state.assignmentOrder});
+      return json({status:'ready',updated_at:today+'T09:00:00+08:00',data:{assignments:values,issues:[]},account_revision:'synthetic-revision',order:state.assignmentOrder,due_overrides:state.assignmentDue});
     }
     if (path === '/modules/assignments/order' && method === 'PUT') {
       if (body.account_revision !== 'synthetic-revision') return json({detail:'账号已切换，请重新读取作业后再排序。'},409);
       state.assignmentOrder = {...state.assignmentOrder,[body.section]:body.ids};
       return json({order:state.assignmentOrder,account_revision:'synthetic-revision'});
+    }
+    if (path === '/modules/assignments/deadline' && method === 'PUT') {
+      if (body.account_revision !== 'synthetic-revision') return json({detail:'账号已切换，请重新读取作业后再设置截止时间。'},409);
+      if (body.due_at) state.assignmentDue = {...state.assignmentDue,[body.assignment_id]:body.due_at};
+      else { delete state.assignmentDue[body.assignment_id]; }
+      return json({assignment_id:body.assignment_id,due_at:body.due_at || null,due_overrides:state.assignmentDue,account_revision:'synthetic-revision'});
     }
     if (path === '/modules/timetable/calendar-settings') return json({week_one:'2026-09-14',source:'school'});
     if (path === '/modules/timetable/commands' && method === 'POST') {
@@ -220,6 +231,17 @@ try {
   await evaluate(`location.hash='timetable'; waitFor(()=>document.querySelector('[data-calendar]'))`);
   assert.equal(await evaluate(`!!document.querySelector('[data-ai-editor][open]')`),false,'Leaving settings closes the editor');
   assert(await evaluate(`!document.querySelector('.planner-overview').open && document.querySelector('.planner-week-detail').open`),'The weekly timetable starts visible and the four-week overview expands on demand');
+  assert(await evaluate(`Boolean(document.querySelector('.planner-week-detail .planner-school-calendar'))`),'The school calendar panel is nested under the weekly details');
+  const calendarRefreshes = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/calendar/refresh').length`);
+  const calendarSchedules = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);
+  await evaluate(`document.querySelector('[data-calendar-refresh]').click();waitFor(()=>webCheck.calls.filter(c=>c.path==='/modules/timetable/calendar/refresh').length>${calendarRefreshes}&&webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length>${calendarSchedules})`);
+  assert(await evaluate(`webCheck.calls.some(c=>c.path==='/modules/timetable/calendar/refresh'&&c.method==='POST')`),'The school calendar can be refreshed manually');
+  assert(await evaluate(`Boolean(document.querySelector('[data-calendar-image="1"] img'))`),'Cached calendar pages render as clickable images');
+  await evaluate(`document.querySelector('[data-calendar-image="1"]').click();waitFor(()=>document.querySelector('#dialog').open)`);
+  assert.equal(await evaluate(`document.querySelector('#dialog-title').textContent`),'校历 · 第 1 页');
+  await evaluate(`document.querySelector('#dialog').click()`);
+  await evaluate(`waitFor(()=>!document.querySelector('#dialog').open)`);
+  assert(await evaluate(`!document.querySelector('#dialog').open`),'Clicking the calendar dialog backdrop closes the zoom view');
   await evaluate(`document.querySelector('.planner-overview').open=true`);
   const timetable = await evaluate(`(()=>{const body=document.querySelector('[data-module-id=timetable]'),overview=body.querySelector('[data-overview]');return {content:body.innerText,days:body.querySelectorAll('[data-calendar] thead th').length,today:body.querySelector('th.is-today')?.textContent,overviewCols:overview.querySelectorAll('thead th').length,overviewRows:overview.querySelectorAll('tr').length,overviewWeeks:overview.querySelectorAll('tbody tr').length,todayBeijing:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date()),overviewToday:overview.querySelector('.overview-day.is-today')?.dataset.overviewDate,overviewPinned:Boolean(overview.compareDocumentPosition(body.querySelector('.planner-toolbar'))&Node.DOCUMENT_POSITION_FOLLOWING),homeworkItems:overview.querySelectorAll('.overview-item.is-late').length,platforms:[...overview.querySelectorAll('.overview-platform')].map(item=>item.textContent)};})()`);
   assert.match(timetable.content,/合成课程/);assert.equal(timetable.days,8);assert.match(timetable.today,/今天/);
@@ -244,6 +266,15 @@ try {
   await writeFile(resolve('.codex/tmp/timetable-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await evaluate(`location.hash='assignments';waitFor(()=>document.querySelectorAll('[data-assignment]').length===2)`);
   assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-a','assignment-b']);
+  assert.match(await evaluate(`document.querySelector('[data-assignment="assignment-a"]').innerText`),/待完成 · 时间待定/);
+  assert(await evaluate(`Boolean(document.querySelector('[data-assignment="assignment-a"] [data-due-editor]'))`),'Undated assignments expose an inline deadline editor');
+  await evaluate(`document.querySelector('[data-assignment="assignment-a"] [data-due-toggle]').click()`);
+  assert.equal(await evaluate(`document.querySelector('[data-assignment="assignment-a"] [data-due-editor]').hidden`),false);
+  await evaluate(`(()=>{const card=document.querySelector('[data-assignment="assignment-a"]');card.querySelector('[data-due-input]').value='2027-01-20T18:00';card.querySelector('[data-due-save]').click();})()`);
+  await evaluate(`waitFor(()=>webCheck.assignmentDue['assignment-a']==='2027-01-20T18:00:00+08:00')`);
+  await evaluate(`waitFor(()=>document.querySelector('[data-assignment="assignment-a"]')?.innerText.includes('调整时间'))`);
+  assert.equal(await evaluate(`document.querySelector('[data-assignment="assignment-a"]').innerText.includes('时间待定')`),false,'A saved deadline replaces the tentative label');
+
   await evaluate(`document.querySelector('[data-assignment="assignment-a"] [data-move="down"]').click();waitFor(()=>document.querySelector('[data-order-status]').textContent==='顺序已保存')`);
   assert.deepEqual(await evaluate(`webCheck.assignmentOrder.pending`),['assignment-b','assignment-a']);
   assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-b','assignment-a']);
@@ -259,7 +290,7 @@ try {
   await evaluate(`toggleModule('assistant')`); await evaluate(`toggleModule('assignments')`); assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-nav]')].map(a=>a.dataset.nav)`),['settings']);
   await evaluate(`location.hash='timetable';waitFor(()=>location.hash.split('?')[0]==='#settings' && document.querySelector('[data-module-toggle=timetable]'))`);
   assert.deepEqual(await evaluate(`webCheck.unexpected`),[]);
-  console.log('PASS: pinned assignment schedule, saved drag order, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
+  console.log('PASS: pinned assignment schedule, school-calendar zoom, inline default deadlines, saved drag order, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
 } finally {
   socket?.close();
   browser('close');

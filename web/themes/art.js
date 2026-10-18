@@ -16,7 +16,7 @@ function welcome(home) {
     '</div><div class="study-welcome-illustration" role="img" aria-label="蓝白雕版风格的天球、古典雕塑与星图插画"></div>' +
     '<svg class="study-orbit" viewBox="0 0 240 240" fill="none" aria-hidden="true"><circle cx="120" cy="120" r="94"/><ellipse cx="120" cy="120" rx="108" ry="42" transform="rotate(-28 120 120)"/><circle cx="29" cy="157" r="4" fill="currentColor" stroke="none"/></svg>' +
     '</div><div class="study-welcome-caption'+(home?' study-home-caption':'')+'">'+caption+'</div></div>';
-  return home?'<div class="study-home-intro">'+plate+'</div>':plate;
+  return home?'<div class="study-home-intro">'+plate+renderStudyQuote()+'</div>':plate;
 }
 export function renderSlot(name,props={}) {
   if (name === 'assistant.home') return welcome(true);

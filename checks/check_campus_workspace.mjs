@@ -88,9 +88,9 @@ try{
  assert.equal(await evaluate(`document.querySelectorAll('.module-tabs').length`),0,'Courses have one integrated page');
  assert.equal(await evaluate(`document.querySelectorAll('.course-platforms a').length`),2,'Course links combine platforms');
  await evaluate(`document.querySelector('[data-kind=materials]').click()`);
- assert(await evaluate(`document.querySelector('[data-content]').textContent.includes('合成讲义.pdf')`));
+ assert(await evaluate(`document.querySelector('[data-course-content]').textContent.includes('合成讲义.pdf')`));
  await evaluate(`document.querySelector('[data-kind=grades]').click()`);
- assert(await evaluate(`document.querySelector('[data-content]').textContent.includes('88 / 100')`),'Available platform marks remain visible');
+ assert(await evaluate(`document.querySelector('[data-course-content]').textContent.includes('88 / 100')`),'Available platform marks remain visible');
  assert.equal(await evaluate(`!!document.querySelector('link[href*="/mail/"]')`),false,'Mail styles release after leaving');
  await writeFile(resolve('.codex/tmp/workspace-courses-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
  await evaluate(`workspaceCheck.notices.push({id:'notice:1',title:'合成科研讲座',summary:'**有新的活动建议**，请确认是否参加。',why:'依据通知中的时间。',importance:'important',citations:[],source_revision:'r1',proposal_id:'p1',read:false});waitFor(()=>!document.querySelector('.campus-agent-peek').hidden)`);

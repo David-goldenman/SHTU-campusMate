@@ -267,7 +267,12 @@ async function refresh() {
 async function start() {
   state = await api('/bootstrap');
   setToken(state.csrf_token);
-  const themeMessage=await initializeThemes(await api('/themes'));
+  const appearanceBridge=state.settings?.appearance ? {
+    record:state.settings.appearance,
+    save:body=>api('/settings/appearance',{method:'PATCH',body}),
+    read:async()=> (await api('/settings')).appearance,
+  } : undefined;
+  const themeMessage=await initializeThemes(await api('/themes'),appearanceBridge);
   if(themeMessage)toast(themeMessage);
   document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date());
   await render();

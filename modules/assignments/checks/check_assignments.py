@@ -47,6 +47,18 @@ assert before_values['blackboard:old-due']['category'] == 'ended' and not before
 assert before_values['blackboard:new-due']['category'] == 'pending' and before_values['blackboard:new-due']['pending']
 assert filter_issues(['旧作业 的提交情况本次未能核实，请查看记录说明。', '新作业 的提交情况本次未能核实，请查看记录说明。'],
                      before['assignments'], before['courses'], '2026-fall', '2026-09-14') == ['新作业 的提交情况本次未能核实，请查看记录说明。']
+missing = {'metadata': {'current_semester': '2026-fall', 'source_metadata': {'elrc': {'semester': {'startTime': '2026-09-13T16:00:00.000+00:00'}}}},
+           'courses': [{'id': 'group:current', 'title': '本学期课程', 'current': True, 'term': '2026-fall', 'course_ids': ['blackboard:c']}],
+           'assignments': [{'id': 'blackboard:no-date', 'source': 'blackboard', 'course_id': 'blackboard:c', 'title': '无截止时间',
+                            'availability': 'open', 'actionable': True, 'submitted': False}]}
+assert package.default_due(missing['metadata']) == '2027-01-17T23:59:00+08:00'
+fallback = package.arrange(missing, datetime(2026, 10, 17, tzinfo=timezone.utc))[0]
+assert (fallback['category'], fallback['due_default'], fallback['due_source']) == ('pending', True, 'default')
+assert fallback['due_at'] == '2027-01-17T23:59:00+08:00' and fallback['pending']
+manual = package.arrange(missing, datetime(2026, 10, 17, tzinfo=timezone.utc),
+                         dues={'blackboard:no-date': '2026-10-01T23:59:00+08:00'})[0]
+assert (manual['category'], manual['due_default'], manual['due_source']) == ('late', False, 'manual')
+assert package.default_due({}) is None, 'Without a semester start there is no invented deadline'
 ordered = package.arrange(data,datetime(2026,10,16,tzinfo=timezone.utc),{'pending':['gradescope:unknown','gradescope:future'],'late':['gradescope:late']})
 pending = [item['id'] for item in ordered if item['category'] == 'pending']
 assert pending[:2] == ['gradescope:unknown','gradescope:future'] and pending[-1:] == ['gradescope:legacy-open']
@@ -83,4 +95,4 @@ assert all(item['needs_review'] and item['source_stale'] for item in cached_valu
 assert package.summary(cached_values)['pending'] == 3, 'Last known counts remain visible but explicitly need review'
 catalog = sys.modules[load('courses').__name__ + '.catalog']
 assert {item['id'] for item in catalog.query(states, 'assignments', current=True, pending=True)} == {'blackboard:not_submitted', 'blackboard:draft'}, 'Catalog pending keeps the documented stricter filter that excludes unknown submission states'
-print('assignments: five states, zero scores, unconfirmed open work, current-course scope, saved drag order and submission evidence passed')
+print('assignments: five states, zero scores, week-18 fallback deadlines, manual due overrides, current-course scope, saved drag order and submission evidence passed')
