@@ -4,7 +4,7 @@
 
 ## 使用
 
-1. 微信：正常登录 Windows 微信 4，检测本人实例并选择本人的 `db_storage`，勾选只读授权。复用 QJQ 的本机密钥捕获、SQLCipher 页面校验和已提交 WAL 合并；首次授权只返回群列表。也可选择已完成导出的可读微信 4 快照。
+1. 微信：正常登录 Windows 微信 4，检测本人主实例并选择本人的 `db_storage`，勾选只读授权。检测仅查询进程元数据，过滤带 `--type` 的文字识别、播放器等辅助进程；保留当前 Windows 用户的多个真实主实例，只有一个时自动选中。命令行不可读取的进程不列出，检测不读取聊天或捕获密钥。复用 QJQ 的本机密钥捕获、SQLCipher 页面校验和已提交 WAL 合并；首次授权只返回群列表。也可选择已完成导出的可读微信 4 快照。
 2. QQ：按照卡片中的三步引导准备 NapCat／OneBot HTTP 服务，填写回环地址与连接口令（Access Token）。口令在 NapCat“网络配置 → HTTP 服务端 → Token”中设置或复制，与 QQ 密码和管理页面登录口令分开。连接成功后仅展示群列表，选择并保存群后才开始同步。仅调用读取接口，不发送消息、不安装或启动 QQ 适配器。
 3. 勾选群、关联课程并保存。微信可每 5／15／30 分钟同步；QQ 可每 20 秒／1／5／15 分钟轮询。每次同步更新近 7／30 天的正文窗口，首次提取覆盖整个已同步范围。
 4. 先同步一次即可查看发言者，再指定可信老师／助教（按稳定账号标识，不凭昵称）。单独选择自动提取与自动应用；开启自动提取前确认发送相关正文及前文给当前 AI 服务。手动“整理一次”也说明发送范围。
@@ -36,4 +36,4 @@ QQ 首次配置：按 [NapCat Windows 启动说明](https://napneko.github.io/gu
 
 `server/native/`、微信文字解析及合成加密夹具改编自团队 QJQ 的 `wechat_crypto.py`、`wechat_native.py`、`wechat_version.py`、`wechat_snapshot.py`、`wechat.py` 和 `test_wechat_native.py`，保留 `native/WCDB_LICENSE`。QQ 本机只读客户端复用团队 WYT 的 `message-hub/source_api.py`，补充账号、群、稳定发送者与缺口状态校验。旧应用的独立 AI 客户端、全局工作线程和私有数据库未接入。
 
-`checks/check_qq_connection.py` 验证本机服务、口令、接口地址及 QQ 登录失败的分项提示与秘密不泄漏；`checks/check_native.py` 验证加密页、已提交 WAL、选群、7 天范围、版本变化、取消及失败清理；`checks/check_flow.py` 验证增量、引用、信任、换号、暂停及真实公开待办／日程接口的更新与撤销。这些检查纳入项目 `check.ps1`／`check.sh`；官方 Harness 合成模型检查同时加载本插件。`node modules/group-messages/checks/check_web.mjs <本机地址>` 使用浏览器内合成数据，不读取个人聊天、不保存真实设置，截图进入 `.codex/tmp/group-messages-ui/`。
+`checks/check_discovery.py` 验证多个微信主实例、辅助进程过滤、当前用户边界、进程退出和元数据不可读取；`checks/check_qq_connection.py` 验证本机服务、口令、接口地址及 QQ 登录失败的分项提示与秘密不泄漏；`checks/check_native.py` 验证加密页、已提交 WAL、选群、7 天范围、版本变化、取消及失败清理；`checks/check_flow.py` 验证增量、引用、信任、换号、暂停及真实公开待办／日程接口的更新与撤销。这些检查纳入项目 `check.ps1`／`check.sh`；官方 Harness 合成模型检查同时加载本插件。`node modules/group-messages/checks/check_web.mjs <本机地址>` 使用浏览器内合成数据，不读取个人聊天、不保存真实设置，截图进入 `.codex/tmp/group-messages-ui/`。
