@@ -101,7 +101,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
                 await run_in_threadpool(auth.close)
                 store.close()
 
-    app = FastAPI(title="Campus Framework · 共享接口", version=VERSION, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json", lifespan=lifespan, exception_handlers=errors,
+    app = FastAPI(title="campusMate · 共享接口", version=VERSION, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json", lifespan=lifespan, exception_handlers=errors,
                   dependencies=[Security(APIKeyHeader(name="X-Framework-Token", auto_error=False, description="写操作填写 GET /api/v1/bootstrap 返回的 csrf_token。"))])
     app.state.modules, app.state.auth, app.state.ai = modules, auth, ai
     app.state.store, app.state.vault, app.state.port = store, vault, active_port
@@ -119,7 +119,8 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
         if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf) and not modules.authorize_write(request):
             return error_response(request, 403, '请刷新工作台后重试。')
         response = await catch_errors(request, call_next)
-        response.headers["Cache-Control"] = "no-store"
+        response.headers["Cache-Control"] = (
+            "private, max-age=31536000, immutable" if response.status_code == 200 and request.url.path.startswith("/module-assets/") else "no-store")
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
@@ -226,7 +227,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.get("/api/docs", include_in_schema=False)
     def docs():
-        return get_swagger_ui_html(openapi_url="/api/openapi.json", title="Campus Framework · API")
+        return get_swagger_ui_html(openapi_url="/api/openapi.json", title="campusMate · API")
 
     @app.get("/", include_in_schema=False)
     def index():
@@ -240,7 +241,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Campus Framework 本地网页服务")
+    parser = argparse.ArgumentParser(description="campusMate 本地网页服务")
     parser.add_argument("--port", type=int)
     parser.add_argument("--launch-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -251,7 +252,7 @@ def main():
     ready.parent.mkdir(parents=True, exist_ok=True)
     state = {"launch_id": app.state.launch_id, "port": app.state.port, "pid": os.getpid()}
     ready.write_text(json.dumps(state), encoding="utf-8")
-    print(f"Campus Framework: http://127.0.0.1:{app.state.port}", flush=True)
+    print(f"campusMate: http://127.0.0.1:{app.state.port}", flush=True)
     try:
         uvicorn.run(app, host="127.0.0.1", port=app.state.port, access_log=False)
     finally:

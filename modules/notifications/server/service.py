@@ -21,9 +21,9 @@ async def build_context(context, course_id=None, context_ids=None):
     if response.status_code != 200:
         raise HTTPException(response.status_code, response.json().get("detail", "课程资料暂时不可用。"))
     selected = response.json()
-    if any(item.get('kind') == 'messages' or item.get('source') == 'mail' for item in selected['items']):
+    if any(item.get('kind') == 'messages' or item.get('source') in {'mail', 'group-messages'} for item in selected['items']):
         # Mail owns classification and reminders; a second raw-mail pass bypasses user preferences.
-        return await build_context(context, course_id, [item['id'] for item in selected['items'] if item.get('kind') != 'messages' and item.get('source') != 'mail'])
+        return await build_context(context, course_id, [item['id'] for item in selected['items'] if item.get('kind') != 'messages' and item.get('source') not in {'mail', 'group-messages'}])
     return selected
 
 
@@ -58,6 +58,7 @@ class ImportedNotice(BaseModel):
     citations: list[SourceCitation] = Field(default_factory=list, max_length=10)
     proposal_id: str | None = Field(default=None, max_length=100)
     event_at: AwareDatetime | None = None
+    active: bool = True
 
 
 class Notifications:
@@ -84,7 +85,7 @@ class Notifications:
                 saved = {}
             ai = self.context.ai.settings()
             imported = self.context.store.read('imports:' + owner, [])
-            items = sorted([item for item in [*imported, *saved.get('items', [])] if not item.get('hidden_reason')], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
+            items = sorted([item for item in [*imported, *saved.get('items', [])] if item.get('active', True) and not item.get('hidden_reason')], key=lambda item: ({'urgent':0,'important':1,'normal':2}[item['importance']], item['read']))
             return {"items": items, "generated_at": saved.get("generated_at"), "context": saved.get("context"), "error": error.get("message") if error.get("owner") == owner else None, "auto_generate": self.settings()["auto_generate"], "configured": bool(ai["enabled"])}
 
     async def reconcile_assignments(self):
