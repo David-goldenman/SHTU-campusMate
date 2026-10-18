@@ -32,6 +32,10 @@ def create_router(context):
     async def snapshot():
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SOURCES)
+        # Optional local facts have no school login provider and never call back into courses.
+        group_response = await context.api('group-messages', '/snapshot')
+        if group_response.status_code == 200:
+            values['group-messages'] = group_response.json()
         response = await context.api("eams")
         plan = {}
         if response.status_code == 200:
