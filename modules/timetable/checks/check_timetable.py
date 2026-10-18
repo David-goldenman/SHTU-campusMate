@@ -134,35 +134,52 @@ assert [week['teaching_week'] for week in grid['weeks']] == [4, 5, 6, 7]
 assert len(grid['weeks'][1]['days']) == 7 and grid['weeks'][1]['days'][3]['date'] == '2026-10-15'
 merged = [event for day in grid['weeks'][1]['days'] for event in day['events'] if event['id'] == 'blackboard:current'][0]
 assert (merged['homework'], merged['platform'], merged['late'], merged['course_title']) == (True, 'Blackboard', True, '合成课程')
-exported = module.build_calendar({'overview': {'start': '2026-10-12', 'end': '2026-11-01', 'weeks': [{'days': [
-    {'date': '2026-10-19', 'events': [
-        {'id': 'class:synthetic', 'event_type': 'class', 'title': '合成课程', 'course_title': '合成课程',
-         'date': '2026-10-19', 'at': '2026-10-19T08:15:00+08:00', 'ends_at': '2026-10-19T09:55:00+08:00',
-         'period_start': 1, 'period_end': 2, 'location': '教室, A', 'teacher': '合成教师'},
-        {'id': 'class:cancelled', 'event_type': 'class', 'title': '已取消课程', 'status': 'cancel', 'date': '2026-10-19'},
-        {'id': 'class:all-day', 'event_type': 'class', 'title': '无钟点课程', 'date': '2026-10-21'},
-        {'id': 'blackboard:synthetic', 'event_type': 'deadline', 'title': '作业 1', 'due_at': '2026-10-20T23:59:00+08:00',
-         'at': '2026-10-20T23:59:00+08:00', 'homework': True, 'platform': 'Blackboard',
-         'course_title': '合成课程', 'url': 'https://example.test/assignment/1'}]}]}]}},
+homework_export = module.build_homework_calendar({'homework': {
+    'start': '2026-10-12', 'end': '2026-11-08', 'items': [
+        {'id': 'blackboard:synthetic', 'title': '作业 1', 'source': 'blackboard', 'course_title': '合成课程',
+         'due_at': '2026-10-20T23:59:00+08:00', 'url': 'https://example.test/assignment/1', 'late': False},
+        {'id': 'gradescope:late', 'title': '迟交作业', 'source': 'gradescope', 'course_title': '合成课程',
+         'due_at': '2026-10-15T23:59:00+08:00', 'late': True}]}},
     datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
-assert exported.endswith('\r\n') and not exported.startswith('\ufeff')
-assert exported.count('BEGIN:VCALENDAR') == exported.count('END:VCALENDAR') == 1
-assert 'VERSION:2.0' in exported and 'CALSCALE:GREGORIAN' in exported and 'METHOD:PUBLISH' in exported
-assert 'X-WR-TIMEZONE:Asia/Shanghai' in exported
-assert '\n' not in exported.replace('\r\n', '')
-events = ics_blocks(exported, 'VEVENT')
-assert len(events) == 3 and exported.count('BEGIN:VEVENT') == exported.count('END:VEVENT') == 3
+assert homework_export.endswith('\r\n') and not homework_export.startswith('\ufeff')
+assert homework_export.count('BEGIN:VCALENDAR') == homework_export.count('END:VCALENDAR') == 1
+assert 'VERSION:2.0' in homework_export and 'CALSCALE:GREGORIAN' in homework_export and 'METHOD:PUBLISH' in homework_export
+assert 'X-WR-TIMEZONE:Asia/Shanghai' in homework_export
+assert '\n' not in homework_export.replace('\r\n', '')
+events = ics_blocks(homework_export, 'VEVENT')
+assert len(events) == 2 and homework_export.count('BEGIN:VEVENT') == homework_export.count('END:VEVENT') == 2
 for event in events:
     for field in ('UID:', 'DTSTAMP:', 'LAST-MODIFIED:', 'SEQUENCE:0', 'CLASS:PUBLIC', 'SUMMARY:', 'DTSTART', 'DTEND'):
         assert any(line == field or line.startswith(field) for line in event), field
 uids = [next(line[4:] for line in event if line.startswith('UID:')) for event in events]
 assert len(set(uids)) == len(uids)
-assert 'SUMMARY:合成课程' in exported and 'SUMMARY:作业截止：作业 1' in exported
-assert 'DTSTART:20261019T001500Z' in exported and 'DTEND:20261019T015500Z' in exported
-assert 'DTSTART;VALUE=DATE:20261021' in exported and 'DTEND;VALUE=DATE:20261022' in exported
-assert 'LOCATION:教室\\, A' in exported and 'TRIGGER:-PT30M' in exported
-assert '已取消课程' not in exported
-assert all(len(line.encode('utf-8')) <= 75 for line in exported.split('\r\n'))
+assert 'SUMMARY:作业截止：作业 1' in homework_export and 'SUMMARY:作业截止：迟交作业' in homework_export
+assert 'CATEGORIES:课程' not in homework_export and 'SUMMARY:合成课程' not in homework_export
+assert 'LOCATION:Blackboard' in homework_export and 'LOCATION:Gradescope' in homework_export
+assert 'DTSTART:20261020T152900Z' in homework_export and 'DTEND:20261020T155900Z' in homework_export
+assert 'TRIGGER:-PT30M' in homework_export and '迟交' in homework_export
+assert all(len(line.encode('utf-8')) <= 75 for line in homework_export.split('\r\n'))
+course_lesson = {**item, 'id': 'class:full', 'weeks': [1, 2], 'location': '教室, A'}
+course_data = {'metadata': {'semester': '2026-2027学年秋季', 'periods': [
+    {'period': 5, 'start': '13:00', 'end': '13:45'}, {'period': 6, 'start': '13:50', 'end': '14:35'}]},
+    'timetable': [course_lesson], 'events': []}
+course_export = module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': '2026-09-14'}, 'adjustments': []},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+course_events = ics_blocks(course_export, 'VEVENT')
+assert len(course_events) == 2 and 'CATEGORIES:作业' not in course_export and 'TRIGGER:-PT30M' not in course_export
+assert 'SUMMARY:合成课程' in course_export and 'LOCATION:教室\\, A' in course_export
+assert 'DTSTART:20260915T050000Z' in course_export and 'DTSTART:20260922T050000Z' in course_export
+assert 'DTEND:20260922T063500Z' in course_export
+assert all(len(line.encode('utf-8')) <= 75 for line in course_export.split('\r\n'))
+cancelled_course_export = module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': '2026-09-14'},
+    'adjustments': [{'id': 'adjustment:cancel', 'lesson_id': 'class:full', 'on_date': '2026-09-15',
+                     'action': 'cancel', 'scope': 'once'}]},
+    datetime(2026, 10, 18, 9, 0, tzinfo=module.ZONE))
+assert len(ics_blocks(cancelled_course_export, 'VEVENT')) == 1 and '20260915' not in cancelled_course_export
+assert 'BEGIN:VEVENT' not in module.build_course_calendar({
+    'data': course_data, 'calendar': {'week_one': None}, 'adjustments': []})
 # A room change across weeks must not duplicate the card inside one week.
 split = {'metadata': {'periods': []}, 'events': [], 'timetable': [
     {**item, 'id': 'first-room', 'weekday': 2, 'weeks': [1, 2], 'location': 'A'},
@@ -219,14 +236,21 @@ async def check_schedule():
         try:
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://fixture") as client:
                 schedule = (await client.get("/schedule")).json()
-                exported = await client.get('/calendar/export.ics')
-                assert exported.status_code == 200 and exported.headers['content-type'].startswith('text/calendar')
-                assert exported.headers['content-disposition'] == 'attachment; filename="shanghaitech-timetable-4-weeks.ics"'
-                assert exported.headers['cache-control'] == 'no-store'
-                body = exported.content.decode('utf-8')
-                assert body.startswith('BEGIN:VCALENDAR\r\n') and body.endswith('END:VCALENDAR\r\n')
-                assert 'VERSION:2.0' in body and 'METHOD:PUBLISH' in body
-                assert 'SUMMARY:作业截止：Quiz 1' in body and 'DTSTART:' in body
+                homework_export = await client.get('/calendar/export/homework.ics')
+                assert homework_export.status_code == 200 and homework_export.headers['content-type'].startswith('text/calendar')
+                assert homework_export.headers['content-disposition'] == 'attachment; filename="shanghaitech-homework-4-weeks.ics"'
+                assert homework_export.headers['cache-control'] == 'no-store'
+                homework_body = homework_export.content.decode('utf-8')
+                assert homework_body.startswith('BEGIN:VCALENDAR\r\n') and homework_body.endswith('END:VCALENDAR\r\n')
+                assert 'VERSION:2.0' in homework_body and 'METHOD:PUBLISH' in homework_body
+                assert 'CATEGORIES:课程' not in homework_body
+                course_export = await client.get('/calendar/export/courses.ics')
+                assert course_export.status_code == 200 and course_export.headers['content-type'].startswith('text/calendar')
+                assert course_export.headers['content-disposition'] == 'attachment; filename="shanghaitech-courses-semester.ics"'
+                assert course_export.headers['cache-control'] == 'no-store'
+                course_body = course_export.content.decode('utf-8')
+                assert course_body.startswith('BEGIN:VCALENDAR\r\n') and course_body.endswith('END:VCALENDAR\r\n')
+                assert 'CATEGORIES:作业' not in course_body
                 assert len(schedule["data"]["timetable"]) == 2
                 assert schedule["homework"]["items"] == [] and schedule["homework"]["pending"] == schedule["homework"]["late"] == 0
                 fallback = (await client.get('/schedule?week_start=2026-09-15')).json()['calendar']
@@ -262,6 +286,10 @@ async def check_schedule():
                 selected = (await client.get('/schedule?week_start=2026-10-20')).json()['calendar']
                 assert selected['week_start'] == '2026-10-19' and selected['teaching_week'] == 1
                 assert len([item for item in selected['days'][1]['events'] if item['event_type'] == 'class']) == 2
+                exported_courses = await client.get('/calendar/export/courses.ics')
+                course_body = exported_courses.content.decode('utf-8')
+                assert 'SUMMARY:合成课程' in course_body and 'LOCATION:测试教室' in course_body
+                assert len(ics_blocks(course_body, 'VEVENT')) >= 2
                 event = {'title': '合成讲座', 'event_type': 'lecture', 'starts_at': '2026-10-20T16:00:00+08:00', 'ends_at': '2026-10-20T17:00:00+08:00'}
                 response = await client.post('/events', json=event)
                 assert response.status_code == 201

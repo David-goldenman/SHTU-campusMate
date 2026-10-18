@@ -1,10 +1,12 @@
-"""Export the timetable's four-week course and homework window as iCalendar."""
+"""Export four weeks of homework or the whole semester's courses as iCalendar."""
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 
-from .calendar import ZONE
+from .calendar import ZONE, class_events, lesson_periods
+from .homework import PLATFORMS
 
-FILENAME = 'shanghaitech-timetable-4-weeks.ics'
+HOMEWORK_FILENAME = 'shanghaitech-homework-4-weeks.ics'
+COURSE_FILENAME = 'shanghaitech-courses-semester.ics'
 
 
 def _escape(value):
@@ -44,8 +46,8 @@ def _utc(value):
     return value.astimezone(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
 
-def _identity(kind, item):
-    digest = hashlib.sha256(('timetable:' + kind + ':' + str(item.get('id', ''))).encode('utf-8')).hexdigest()
+def _identity(kind, value):
+    digest = hashlib.sha256(('timetable:' + kind + ':' + str(value)).encode('utf-8')).hexdigest()
     return digest[:40] + '@shanghaitech.local'
 
 
@@ -59,7 +61,7 @@ def _class_event(item, stamp):
         return []
     start = _moment(item.get('at'))
     end = _moment(item.get('ends_at'))
-    lines = ['BEGIN:VEVENT', 'UID:' + _identity('class', item), 'DTSTAMP:' + stamp,
+    lines = ['BEGIN:VEVENT', 'UID:' + _identity('class', item.get('id', '')), 'DTSTAMP:' + stamp,
              'LAST-MODIFIED:' + stamp, 'SEQUENCE:0', 'CLASS:PUBLIC',
              'SUMMARY:' + _escape(item.get('title', '课程')), 'CATEGORIES:课程']
     if start:
@@ -90,17 +92,19 @@ def _class_event(item, stamp):
     return lines
 
 
-def _deadline_event(item, stamp):
+def _homework_event(item, stamp):
     due = _moment(item.get('due_at') or item.get('at'))
     if not due:
         return []
     begin = due - timedelta(minutes=30)
-    details = [item.get('course_title'), item.get('platform') and '提交平台：' + item['platform'],
-               item.get('url')]
-    lines = ['BEGIN:VEVENT', 'UID:' + _identity('deadline', item), 'DTSTAMP:' + stamp,
-             'LAST-MODIFIED:' + stamp, 'SEQUENCE:0', 'CLASS:PUBLIC',
+    platform = PLATFORMS.get(item.get('source'), item.get('source') or '作业平台')
+    details = [item.get('course_title'), '迟交' if item.get('late') else None, item.get('url')]
+    lines = ['BEGIN:VEVENT',
+             'UID:' + _identity('homework', str(item.get('source', '')) + ':' + str(item.get('id', ''))),
+             'DTSTAMP:' + stamp, 'LAST-MODIFIED:' + stamp, 'SEQUENCE:0', 'CLASS:PUBLIC',
              'SUMMARY:' + _escape('作业截止：' + str(item.get('title', ''))), 'CATEGORIES:作业',
-             'DTSTART:' + _utc(begin), 'DTEND:' + _utc(due)]
+             'DTSTART:' + _utc(begin), 'DTEND:' + _utc(due),
+             'LOCATION:' + _escape(platform)]
     if item.get('url') and str(item['url']).startswith(('http://', 'https://')):
         lines.append('URL:' + str(item['url']).replace('\r', '').replace('\n', ''))
     if details:
@@ -112,30 +116,53 @@ def _deadline_event(item, stamp):
     return lines
 
 
-def build_calendar(schedule, now=None):
-    """Build an importable calendar from a /schedule response."""
-    moment = now or datetime.now(ZONE)
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=ZONE)
-    stamp = _utc(moment)
-    overview = schedule.get('overview') or {}
-    window = '至'.join(value for value in (overview.get('start'), overview.get('end')) if value)
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShanghaiTech//Campus Timetable 1.0//ZH',
+def _render(name, description, stamp, events):
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShanghaiTech//Campus Timetable 1.1//ZH',
              'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-             'X-WR-CALNAME:' + _escape('上海科技大学 · 近四周课程与作业'),
-             'X-WR-CALDESC:' + _escape('课程课表与作业截止' + ('（' + window + '）' if window else '')),
+             'X-WR-CALNAME:' + _escape(name),
+             'X-WR-CALDESC:' + _escape(description),
              'X-WR-TIMEZONE:Asia/Shanghai']
-    seen = set()
-    for week in overview.get('weeks') or []:
-        for day in week.get('days') or []:
-            for item in day.get('events') or []:
-                kind = item.get('event_type')
-                if kind not in {'class', 'deadline'}:
-                    continue
-                identity = (kind, item.get('id'))
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                lines.extend(_class_event(item, stamp) if kind == 'class' else _deadline_event(item, stamp))
+    lines.extend(events)
     lines.append('END:VCALENDAR')
     return '\r\n'.join(_fold(line) for line in lines) + '\r\n'
+
+
+def _at(value):
+    moment = value or datetime.now(ZONE)
+    return moment if moment.tzinfo else moment.replace(tzinfo=ZONE)
+
+
+def build_homework_calendar(schedule, now=None):
+    """Build an importable calendar containing only the four-week homework window."""
+    moment = _at(now)
+    stamp = _utc(moment)
+    homework = schedule.get('homework') or {}
+    window = '至'.join(value for value in (homework.get('start'), homework.get('end')) if value)
+    events, seen = [], set()
+    for item in homework.get('items') or []:
+        identity = (item.get('source'), item.get('id'))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        events.extend(_homework_event(item, stamp))
+    description = '近四周待交与迟交作业截止，地点为提交平台' + ('（' + window + '）' if window else '')
+    return _render('上海科技大学 · 近四周作业', description, stamp, events)
+
+
+def build_course_calendar(schedule, now=None):
+    """Build an importable calendar containing every class in the current semester."""
+    moment = _at(now)
+    stamp = _utc(moment)
+    data = schedule.get('data') or {}
+    week_one = (schedule.get('calendar') or {}).get('week_one')
+    events, seen = [], set()
+    if week_one:
+        periods = {item['period']: item for item in lesson_periods(data)}
+        for item in class_events(data, week_one, periods, schedule.get('adjustments') or []):
+            if item.get('id') in seen:
+                continue
+            seen.add(item.get('id'))
+            events.extend(_class_event(item, stamp))
+    semester = (data.get('metadata') or {}).get('semester') or ''
+    description = '本学期全部课程时间与地点' + ('（' + semester + '）' if semester else '')
+    return _render('上海科技大学 · 本学期课程', description, stamp, events)

@@ -15,7 +15,7 @@ from .reader import fetch
 from .calendar import Event, MISSING_WEEK_ONE, SemesterSettings, ZONE, calendar
 from .commands import Command, adjustments_key, event_record, execute
 from .homework import homework_window, overview_weeks
-from .ical import FILENAME, build_calendar
+from .ical import COURSE_FILENAME, HOMEWORK_FILENAME, build_course_calendar, build_homework_calendar
 from .school_calendar import SchoolCalendar, term_key
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂", "eams": "教务系统"}
@@ -220,12 +220,18 @@ def create_router(context):
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
 
-    @router.get('/calendar/export.ics')
-    async def export_calendar():
-        value = await schedule()
-        return Response(build_calendar(value), media_type='text/calendar; charset=utf-8',
-                        headers={'Content-Disposition': 'attachment; filename="' + FILENAME + '"',
+    def calendar_response(content, filename):
+        return Response(content, media_type='text/calendar; charset=utf-8',
+                        headers={'Content-Disposition': 'attachment; filename="' + filename + '"',
                                  'Cache-Control': 'no-store'})
+
+    @router.get('/calendar/export/homework.ics')
+    async def export_homework_calendar():
+        return calendar_response(build_homework_calendar(await schedule()), HOMEWORK_FILENAME)
+
+    @router.get('/calendar/export/courses.ics')
+    async def export_course_calendar():
+        return calendar_response(build_course_calendar(await schedule()), COURSE_FILENAME)
 
     @router.post("/schedule/sync", status_code=202)
     async def sync_schedule():
