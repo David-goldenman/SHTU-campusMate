@@ -1,5 +1,7 @@
 # 模块开发接口
 
+课程资料可提供 `preview_url` 与 `download_url`，公共 `records` 展示查看、下载和原站入口；来源模块负责文件权限和内容。共享文件下载 helper 支持可选的 `max_bytes`，同时检查声明长度与实际流大小，失败清理临时文件。Piazza 资料使用 30 MB 上限，已有 Blackboard／Gradescope 调用保持兼容。
+
 共享展示 SDK `/assets/campus.js` 的 `submissionLabel(item)` 供作业管理和课程中心显示同一提交状态及缓存提示；它只格式化来源已有字段，不请求来源、不决定待办。状态与依据由来源模块提供，待办规则由业务聚合模块实现。
 
 `applyAccent(element, {accent,tint,ink})` 校验六位十六进制颜色后，通过 CSSOM 设置 `--record-accent/--record-tint/--record-ink`，缺失或非法值移除对应属性。课程中心与时间表共用该展示 helper；共享 SDK 不选择学院、课程或业务配色。
