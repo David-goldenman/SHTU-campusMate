@@ -40,13 +40,14 @@ def check(project):
             assert result.returncode != 0, result.stdout
         return result.stdout + result.stderr
 
-    state_file = project / ".codex" / "launcher" / "server.json"
+    state_file = project / ".private" / "runtime" / "launcher" / "server.json"
     command("--check")
     port = free_port()
     try:
         command("-Port", port, "-NoBrowser")
         first = json.loads(state_file.read_text(encoding="utf-8"))
         assert first["root"] == str(project) and first["port"] == port
+        assert not (project / ".codex").exists(), "Application runtime belongs in .private/runtime"
         http = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with http.open(f"http://127.0.0.1:{port}/api/v1/bootstrap", timeout=3) as response:
             value = json.loads(response.read())
@@ -90,7 +91,9 @@ def check(project):
 
 
 if __name__ == "__main__":
-    assert os.name == "nt", "This check exercises Windows PowerShell."
+    if os.name != "nt":
+        print("SKIP: optional Windows launcher is exercised by native Windows CI")
+        raise SystemExit(0)
     temporary = ROOT / ".codex" / "tmp"
     temporary.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="launcher-check-", dir=temporary) as directory:

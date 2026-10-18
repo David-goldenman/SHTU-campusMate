@@ -29,15 +29,11 @@ try {
         $pythonPath = (Get-Content -LiteralPath $configuration -Raw -Encoding UTF8).Trim()
     }
     if (-not $pythonPath) {
-        $candidates = @(
-            (Join-Path $PSScriptRoot '.codex\venv\Scripts\python.exe'),
-            (Join-Path $env:USERPROFILE 'anaconda3\python.exe'),
-            (Join-Path $env:USERPROFILE 'miniconda3\python.exe'),
-            'D:\anaconda\python.exe',
-            'C:\ProgramData\anaconda3\python.exe'
-        )
-        foreach ($candidate in $candidates) {
-            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $pythonPath = $candidate; break }
+        $runtimePython = Join-Path $PSScriptRoot '.private\runtime\windows\venv\Scripts\python.exe'
+        if (Test-Path -LiteralPath $runtimePython -PathType Leaf) { $pythonPath = $runtimePython }
+        else {
+            $pythonCommand = Get-Command python.exe -ErrorAction SilentlyContinue
+            if ($pythonCommand) { $pythonPath = $pythonCommand.Source }
         }
     }
     if (-not $pythonPath -or -not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {

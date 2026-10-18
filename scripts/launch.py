@@ -22,9 +22,10 @@ import uuid
 import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTROL = ROOT / ".codex" / "launcher"
+RUNTIME = ROOT / ".private" / "runtime"
+CONTROL = RUNTIME / "launcher"
 STATE = CONTROL / "server.json"
-LOGS = ROOT / ".codex" / "logs"
+LOGS = RUNTIME / "logs"
 HTTP = build_opener(ProxyHandler({}))
 
 
@@ -286,17 +287,17 @@ def start(port, no_browser):
                 "可使用 run.cmd --port 17666 选择其他端口。"
             )
         LOGS.mkdir(parents=True, exist_ok=True)
-        temporary = ROOT / ".codex" / "tmp"
+        temporary = RUNTIME / "tmp"
         temporary.mkdir(parents=True, exist_ok=True)
         instance = uuid.uuid4().hex
         log = LOGS / ("server-" + datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + instance[:6] + ".log")
         env = {
             **os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1",
-            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": str(ROOT / ".codex" / "pycache"),
+            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": str(RUNTIME / "cache" / "python"),
             "TEMP": str(temporary), "TMP": str(temporary), "TMPDIR": str(temporary),
         }
         env.update(timezone)
-        print("正在启动校园工作台，使用：" + sys.executable, flush=True)
+        print("正在启动 campusMate，使用：" + sys.executable, flush=True)
         with log.open("wb") as output:
             process = subprocess.Popen(
                 [sys.executable, "-X", "utf8", "-B", str(Path(__file__).resolve()),

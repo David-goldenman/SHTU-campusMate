@@ -16,6 +16,7 @@ from backend.core.paths import PROJECT
 from backend.core.store import Store
 from backend.core.vault import Vault
 from backend.services.auth import AuthService, LoginRequired, VerificationRequired, create_router
+from backend.services.auth import imap as imap_access
 from backend.services.auth import protocols
 
 
@@ -184,17 +185,52 @@ def check_service(directory):
                 except VerificationRequired:
                     pass
             assert attempt.call_count == 1
+        vault.save("auth:credentials:coremail", {"username": "synthetic-mail@example.edu", "password": "synthetic-web-password"})
+        vault.save("auth:session:coremail", {"cookies": [cookie(domain="mail.shanghaitech.edu.cn")], "sid": "synthetic-private-sid"})
+        with patch.object(imap_access, "verify") as verify:
+            imap_status = service.save_imap("synthetic-mail@example.edu", "synthetic-app-password", 993, True)
+            verify.assert_called_once_with("synthetic-mail@example.edu", "synthetic-app-password", 993, True)
+        assert imap_status["status"] == "ready" and imap_status["imap"]["configured"] and imap_status["imap"]["password_saved"]
+        assert imap_status["automatic_recovery"] and service.imap_enabled("coremail")
+        assert not vault.get("auth:credentials:coremail") and not vault.get("auth:session:coremail")
+        class Mailbox:
+            def __init__(self):
+                self.closed = False
+            def logout(self):
+                self.closed = True
+        mailbox = Mailbox()
+        with patch.object(imap_access, "connect", return_value=mailbox):
+            with service.imap_connection("coremail") as opened:
+                assert opened is mailbox
+        assert mailbox.closed
+        try:
+            with service.authenticated_client("coremail"):
+                raise AssertionError("IMAP must take priority over the web mailbox session")
+        except VerificationRequired:
+            pass
+        try:
+            service.open_browser("coremail")
+            raise AssertionError("Official mail login must wait until IMAP is removed")
+        except VerificationRequired:
+            pass
+        assert service.import_session("coremail")["imap"]["configured"]
         app = FastAPI()
         app.include_router(create_router(service), prefix="/api/v1")
         with TestClient(app) as web:
             response = web.get("/api/v1/auth/providers")
             assert response.status_code == 200 and len(response.json()["providers"]) == 4
+            mail = next(item for item in response.json()["providers"] if item["id"] == "coremail")
+            assert mail["imap"]["configured"] and mail["imap"]["password_saved"]
+            assert (mail["imap"]["host"], mail["imap"]["port"], mail["imap"]["ssl"]) == ("imap.shanghaitech.edu.cn", 993, True)
+            assert mail["imap"]["username"] == "synthetic-mail@example.edu"
+            assert web.get("/api/v1/auth/coremail/imap").json()["imap"]["configured"]
             assert web.get("/api/v1/auth/gradescope/status").json()["id"] == "gradescope"
             assert web.get("/api/v1/auth/missing/status").status_code == 404
-            assert not any(value in response.text for value in ("synthetic-password", "synthetic-cookie", "synthetic-private-sid"))
+            assert not any(value in response.text for value in ("synthetic-password", "synthetic-app-password", "synthetic-cookie", "synthetic-private-sid"))
         vault.save("ai:settings", {"key": "synthetic-ai-key"})
         service.clear_all()
         assert all(not row["has_session"] and not row["has_password"] for row in service.providers())
+        assert not any(row.get("imap", {}).get("configured") for row in service.providers())
         assert vault.get("ai:settings")["key"] == "synthetic-ai-key"
         service.close()
     store.close()
