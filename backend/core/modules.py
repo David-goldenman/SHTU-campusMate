@@ -71,6 +71,8 @@ class ModuleManager:
         self.loop = None
         self.stop_timeout = 5.0
         self.api_timeout = 20.0
+        # Framework/dependency imports may use the private runtime cache; hot-loaded
+        # module sources must not create timestamp-based bytecode for later reloads.
         sys.dont_write_bytecode = True
         self.root.mkdir(parents=True, exist_ok=True)
 

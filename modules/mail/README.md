@@ -24,6 +24,8 @@
 
 `GET/PUT /preferences` 管理按邮箱账号保存的学段、年级、专业、在修课程、形策／心理健康完成状态、兴趣及完整自然语言要求；GET 返回 `{preferences,buckets,interests}`，PUT 接收完整 preferences。兴趣模式为 `follow/digest/hide`；完成状态为 `unknown/required/done/na`。初始资料留待用户填写，兴趣类别独立保存。`GET /intelligence` 返回 `{messages:[{...message,classification}],preferences,buckets,interests}`。
 
+本地分类每批只读取一次邮件快照、有效偏好和 AI 配置，避免对每封邮件重复读取加密存储；下次请求重新取得这些输入。单封复核和批量分类使用相同的输入版本计算，手动标签优先，账号在批量处理期间变化时返回 409。
+
 四种显示位置为 `focus/recommend/digest/filter`。规则先给出保守初筛，`POST /review {message_id,force?:boolean}` 通过本模块原生 Harness 插件逐封语义复核，返回分类、摘要、理由、原文依据及可选活动。页面“复核最近邮件”每次最多五封。AI 读取完整偏好和所选正文，不执行邮件中的指令；IC 等缩写按完整词匹配，普通政治讲座与形策认定分别判断。证据须来自实际发送的标题或正文，不确定事项保留核对提示。缓存指纹包含账号、原文、偏好、模型与提示词；资料变化后重新复核。
 
 `GET /review-context?message_id=` 为后台助手提供本次分类输入、schema、指纹及原文；按需读取正文。`POST /review-results {message_id,fingerprint,decision}` 校验 schema、资料版本和原文再保存；`POST /tools/review {decision}` 只供本模块当前 Harness 任务使用，短期令牌绑定邮件、指纹与账号。分类正文至多 14000 字符，联系方式替换后发送到共享模型服务。

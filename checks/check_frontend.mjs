@@ -3,10 +3,28 @@ import {useStyle, escape, api, moduleApi, setToken, confirmDialog} from '../web/
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
+import {navigationChanged} from '../web/navigation.js';
 import {renderNetwork} from '../web/network.js';
 import {submissionLabel} from '../web/campus.js';
 import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
 import {schoolServices} from '../web/school-login.js';
+
+const navigationState={csrf_token:'synthetic',categories:[{id:'courses',label:'Courses'}],modules:[{id:'courses',enabled:true,status:'ready',revision:'one',frontend_url:'/module-assets/courses/one/web/index.js',runtime:{active_requests:0}}]};
+const countersChanged=structuredClone(navigationState);countersChanged.modules[0].runtime={active_requests:3,last_request:{duration_ms:900}};
+assert.equal(navigationChanged(navigationState,countersChanged),false,'Background request activity must not remount a page');
+for(const change of [
+  value=>{value.csrf_token='restarted';},
+  value=>{value.modules[0].enabled=false;},
+  value=>{value.modules[0].status='error';},
+  value=>{value.modules[0].frontend_url='/module-assets/courses/two/web/index.js';},
+  value=>{value.modules[0].background_url='/module-assets/courses/one/web/background.js';},
+  value=>{value.categories[0].label='Updated courses';},
+  value=>{value.modules=[];},
+]) {
+  const updated=structuredClone(navigationState);change(updated);
+  assert(navigationChanged(navigationState,updated),'Changed navigation or service identity must be reconciled');
+}
+console.log('navigation: ignore runtime counters; reconcile module changes, categories and restarted service identity');
 
 const schoolMarkup = schoolServices({connection:{status:'complete'},services:[
   {id:'blackboard',status:'ready'}, {id:'elrc',status:'verification_required',message:'<script>synthetic</script>'}
