@@ -28,7 +28,7 @@
 }
 ```
 
-只有 `id` 和 `name` 必填，`id` 与目录一致；当前接口版本为 1。`styles` 是有顺序的 CSS 列表；`preview` 是设置页预览。`entry` 可导出 `renderSlot(name, props)`，返回展示用 HTML；未实现的区域返回 `undefined`，使用模块原界面。各模块声明可替换区域，当前学习助手区域见下表。主题可导出 `icon` 和 `themeColor(id)` 设置标记与浏览器颜色。
+只有 `id` 和 `name` 必填，`id` 与目录一致；当前接口版本为 1。`styles` 是有顺序的 CSS 列表；`preview` 是设置页预览。`entry` 可导出 `renderSlot(name, props)`，返回展示用 HTML；未实现的区域返回 `undefined`，使用模块原界面。各模块声明可替换区域，当前学习助手区域见下表。主题可导出 `icon`、`favicon` 和 `themeColor(id)`，分别设置侧栏标识、浏览器图标与浏览器颜色；缺省图标沿用框架标识。Default 在自己的入口提供 campusMate 标识，其他主题继续使用各自资源。
 
 开场白默认隐藏。主题入口可主动导出 `export const openingLines = true`，启用顶部及聊天区原有短句；只有布尔值 `true` 生效。HTML 初始使用 `data-opening-lines="hidden"`，加载主题后由框架根据实际入口导出设置为 `enabled` 或 `hidden`，避免主题初始化时闪字。未导出此选项的 Default、PRTS、自定义及未来主题保持隐藏；主题缺失或加载失败回退时使用回退主题的选择。此选项属于入口导出，不增加清单字段。启用后沿用原桌面、聚焦及窄屏位置规则，不会同时强制显示两处短句。
 
