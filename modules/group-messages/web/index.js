@@ -7,7 +7,7 @@ export async function mount(container, context) {
   const e = context.ui.escape, signal = context.signal;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), signal);
   let timer, stopped=false, serial=0, state, courses=[], items=[], itemSignature='', filter='pending';
-  const drafts = new Map(), dirty = new Set(), rendered = new Map();
+  const drafts = new Map(), dirty = new Set(), rendered = new Map(), coverageRendered = new Map();
   const dialog = document.createElement('dialog');
   dialog.className='group-dialog';
   const cleanup=()=>{stopped=true;serial++;clearTimeout(timer);dialog.close();dialog.remove();removeStyle();container.classList.remove('group-messages');};
@@ -48,6 +48,7 @@ export async function mount(container, context) {
         ${coverage?`<p class="gm-coverage ${coverage.possible_gap||coverage.error?'gm-warning':''}">${e(coverage.error|| (source==='qq'?(coverage.possible_gap?'历史可能有缺口；每轮补抓最近最多 100 条。':'已读取最近窗口，每轮最多 100 条；不代表完整历史。'):`范围为近 ${config.history_days} 天已落到本机的消息。`))}</p>`:''}</article>`;
     }).join('')||'<p class="gm-empty">没有匹配的群。</p>';
     root.querySelector('[data-group-count]').textContent=`已选 ${draftsForSource.size} 个群 · 找到 ${groups.length} 个${groups.length>100?'，请搜索缩小范围':''}`;
+    coverageRendered.set(source,JSON.stringify(config.coverage));
   }
   function renderSource(source) {
     const root=card(source), config=state.sources[source];
@@ -70,6 +71,7 @@ export async function mount(container, context) {
     root.querySelector('[data-source-state]').textContent=!config.connected?'未连接':config.enabled?'自动同步中':'已暂停';
     root.querySelector('[data-source-status]').textContent=config.connected?`${config.account_label||names[source]} · 最近同步 ${date(config.last_synced_at)}${config.approved_version?' · 微信 '+config.approved_version:''}`:'选择自己的账号与需要整理的群，默认不读取任何群。';
     root.querySelector('[data-source-error]').textContent=config.error||'';
+    if(config.connected&&!dirty.has(source)&&coverageRendered.get(source)!==JSON.stringify(config.coverage))renderGroups(source);
   }
   function renderItems() {
     const opened=new Set([...container.querySelectorAll('[data-item] details[open]')].map(node=>node.closest('[data-item]').dataset.item));

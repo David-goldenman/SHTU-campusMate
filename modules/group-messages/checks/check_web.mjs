@@ -79,6 +79,8 @@ try{
   await evaluate("var form=document.querySelector('[data-source=qq] [data-connect]');form.elements.access_token.value='synthetic-token';form.elements.consent.checked=true;form.requestSubmit()");
   await wait("document.querySelector('[data-source=qq] [data-selection]')");
   assert.equal(await evaluate("document.querySelector('[data-source=qq] [name=access_token]').value"),'');
+  await evaluate("groupCheck.sources.qq.coverage={q1:{possible_gap:true}};");
+  await wait("document.querySelector('[data-gid=q1] .gm-warning')?.textContent.includes('历史可能有缺口')");
   await evaluate("document.querySelector('[data-source=wechat] [data-pause]').click()");await wait("document.querySelector('[data-source=wechat] [data-source-state]').textContent==='已暂停'");
   for(const theme of ['default','observatory','star-notes','arknights']){
     await evaluate(`(async()=>{const appearance=await import('/assets/themes/appearance.js');await appearance.themeContext().select(${JSON.stringify(theme)});})()`);await ready();
