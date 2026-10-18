@@ -67,7 +67,7 @@ def identity(pid):
 def read_state():
     try:
         state = json.loads(STATE.read_text(encoding="utf-8"))
-        if state.get("root") != str(ROOT) or not re.fullmatch(r"[a-f0-9]{32}", state.get("instance", "")):
+        if state.get("root", str(ROOT)) != str(ROOT) or not re.fullmatch(r"[a-f0-9]{32}", state.get("instance", state.get("launch_id", ""))):
             return None
         if not isinstance(state.get("pid"), int) or not isinstance(state.get("port"), int):
             return None
@@ -77,7 +77,7 @@ def read_state():
 
 
 def owned(state):
-    return bool(state and identity(state["pid"]) == state.get("identity"))
+    return bool(state and state.get("identity") and identity(state["pid"]) == state["identity"])
 
 
 def save_state(state):
@@ -239,8 +239,13 @@ def saved_port():
     return int(json.loads(row[0])["port"]) if row else 16666
 
 
-def ready(port):
+def ready(port, launch_id=None):
     try:
+        if launch_id:
+            with HTTP.open(f"http://127.0.0.1:{port}/api/v1/health", timeout=1) as response:
+                health = json.loads(response.read(4096))
+            if health.get("application") != "campus-framework" or health.get("launch_id") != launch_id:
+                return False
         with HTTP.open(f"http://127.0.0.1:{port}/api/v1/bootstrap", timeout=1) as response:
             value = json.loads(response.read(1024 * 1024))
             return isinstance(value.get("modules"), list) and bool(value.get("csrf_token")) and "categories" in value
@@ -269,7 +274,7 @@ def show_browser(port, no_browser):
 def start(port, no_browser):
     with launcher_lock():
         state = read_state()
-        if owned(state):
+        if owned(state) or (state and state.get("launch_id") and ready(state["port"], state["launch_id"])):
             if port is not None and port != state["port"]:
                 raise RuntimeError(f"本目录已在端口 {state['port']} 运行；请先 stop.cmd 再改端口。")
             if not ready(state["port"]):
@@ -307,7 +312,7 @@ def start(port, no_browser):
             )
         state = {
             "root": str(ROOT), "pid": process.pid, "identity": identity(process.pid),
-            "instance": instance, "port": port, "log": str(log),
+            "instance": instance, "launch_id": instance, "port": port, "log": str(log),
         }
         if not state["identity"]:
             raise RuntimeError("后台启动后立即退出，请查看日志：" + str(log))
@@ -351,7 +356,9 @@ def serve(port, instance):
     sys.path.insert(0, str(ROOT))
     import uvicorn
     from backend.main import create_app
-    server = uvicorn.Server(uvicorn.Config(create_app(active_port=port), host="127.0.0.1", port=port, access_log=False))
+    app = create_app(active_port=port)
+    app.state.launch_id = instance
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, access_log=False))
     stop_file = CONTROL / ("stop-" + instance)
     finished = threading.Event()
 

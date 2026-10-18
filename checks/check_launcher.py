@@ -67,6 +67,16 @@ def check(project):
         command("--no-browser")
         again = json.loads(state_file.read_text(encoding="utf-8"))
         assert first["pid"] == again["pid"] and first["instance"] == again["instance"]
+        with http.open(f"http://127.0.0.1:{port}/api/v1/health", timeout=3) as response:
+            assert json.loads(response.read())["launch_id"] == first["instance"]
+        foreground = {"launch_id": first["instance"], "port": port, "pid": first["pid"]}
+        try:
+            state_file.write_text(json.dumps(foreground), encoding="utf-8")
+            command("--no-browser")
+            assert "无需停止" in command("--stop")
+            assert json.loads(state_file.read_text(encoding="utf-8")) == foreground
+        finally:
+            state_file.write_text(json.dumps(first), encoding="utf-8")
         assert command("--port", free_port(), "--no-browser", good=False)
     finally:
         command("--stop")
