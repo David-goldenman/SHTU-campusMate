@@ -1,7 +1,7 @@
 import {link, time, applyAccent} from '/assets/campus.js';
 import {bindSyncNetwork} from '/assets/sync-network.js';
 import {mountCampusMoment} from '/assets/themes/campus-moments.js';
-import {applyLessonPositions, compareEvents, eventGroup, isCancelledClass, isLesson, lessonLayout, matchesFilter, periodsFor} from './planner.js';
+import {applyLessonPositions, campusMapUrl, compareEvents, eventGroup, isCancelledClass, isLesson, lessonLayout, matchesFilter, periodsFor} from './planner.js';
 
 const kinds = {class:'课程',deadline:'作业截止',quiz:'Quiz',tutorial:'习题课',study:'学习',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
 const personalKinds = ['quiz','exam','tutorial','study','presentation','activity','lecture'];
@@ -18,6 +18,8 @@ export async function mount(container, context) {
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('week-planner');
   let current = dayOf(Date.now()), snapshot, timer, midnight, request = 0, filter = 'all', showCancelled = false, calendarAutoTried = false;
+  const requestedDay=new URLSearchParams(location.hash.split('?')[1]||'').get('date');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(requestedDay||'')&&Number.isFinite(Date.parse(requestedDay))&&new Date(requestedDay).toISOString().startsWith(requestedDay))current=requestedDay;
   let removeMoment = () => {};
   const cleanup = () => {removeMoment();clearTimeout(timer);clearTimeout(midnight);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
@@ -167,14 +169,36 @@ export async function mount(container, context) {
     container.querySelectorAll('[data-event]').forEach(button => button.onclick = () => {
       const item = events.get(button.dataset.event);
       if (!item) return;
-      if (item.source === 'local') edit(item); else if (item.event_type === 'class') adjustClass(item); else detail(item);
+      if (item.event_type === 'class') adjustClass(item); else detail(item);
     });
   }
   const act = (control, action) => context.ui.safeAction(control,action);
-  function detail(item) {
+  function addMapLink(host,item) {
+    const href=campusMapUrl(item);if(!href)return;
+    const row=document.createElement('p');
+    row.innerHTML=`<a class="button button-secondary" href="${e(href)}">在校园地图查看已保存地点 ↗</a>`;
+    host.prepend(row);
+  }
+  function detail(item, owner = snapshot.account_revision, error = '') {
     const body = document.createElement('div');
-    body.innerHTML = `<p>${e(kinds[item.event_type])} · ${e(when(item))}</p><p>${e([item.course_title,item.location,item.teacher].filter(Boolean).join(' · '))}</p>${item.event_type === 'class' ? '<p class="field-hint">第 ' + item.period_start + '–' + item.period_end + ' 节</p>' : ''}${item.notes ? '<p>' + e(item.notes) + '</p>' : ''}${item.url ? link(item.url,'打开原始来源',e) : ''}`;
-    context.ui.dialog(item.title,body);
+    body.className = 'planner-event-detail';
+    body.innerHTML = `<p>${e(kinds[item.event_type])} · ${e(item.date || dayOf(item.at))} · ${e(when(item))}</p><p>${e([item.course_title,item.location,item.teacher].filter(Boolean).join(' · '))}</p>${item.source === 'local' ? '<div class="planner-detail-actions"><button type="button" class="button button-secondary" data-edit>编辑安排</button><button type="button" class="text-button danger-text" data-delete>删除安排</button></div>' : ''}<p class="danger-text" role="alert">${e(error)}</p>${item.notes ? '<p class="planner-event-notes">' + e(item.notes) + '</p>' : ''}${item.url ? link(item.url,'打开原始来源',e) : ''}`;
+    addMapLink(body,item);
+    const dialog = context.ui.dialog(item.title,body);
+    context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
+    body.querySelector('[data-edit]')?.addEventListener('click',()=>edit(item,owner),{signal:context.signal});
+    const remove = body.querySelector('[data-delete]');
+    if (remove) remove.onclick = act(remove,async () => {
+      const confirmed = await context.ui.confirmDialog('删除安排',`从时间表删除“${item.title}”？此操作仅修改本地日程。`,'删除安排');
+      if (context.signal.aborted) return;
+      if (!confirmed) {detail(item,owner).querySelector('[data-delete]').focus();return;}
+      try {
+        await context.api('/commands',{method:'POST',body:{action:'delete',record_id:item.id,expected_revision:item.revision || '',account_revision:owner,request_id:crypto.randomUUID()}});
+      } catch (error) {if (!context.signal.aborted) detail(item,owner,error.message);return;}
+      await refresh();
+      if (!context.signal.aborted) context.ui.toast('已删除安排');
+    });
+    return body;
   }
   function conflictNotice(value) {
     if (!value) return '';
@@ -219,14 +243,15 @@ export async function mount(container, context) {
     if (form.elements.timing.value === 'period') return {date:form.elements.date.value,period_start:Number(form.elements.period_start.value),period_end:Number(form.elements.period_end.value),starts_at:null,ends_at:null};
     return {date:null,period_start:null,period_end:null,starts_at:form.elements.starts_at.value + ':00+08:00',ends_at:form.elements.ends_at.value ? form.elements.ends_at.value + ':00+08:00' : null};
   }
-  function edit(item) {
+  function edit(item, owner = snapshot.account_revision) {
     const form = document.createElement('form');
     form.className = 'campus-form planner-event-form';
-    form.innerHTML = `<label>事项名称<input name="title" maxlength="200" required value="${e(item?.title || '')}" placeholder="例如：概率论 Quiz 2"></label><div class="planner-form-row"><label>类型<select name="event_type">${personalKinds.map(type => '<option value="' + type + '">' + kinds[type] + '</option>').join('')}</select></label><label>关联课程<input name="course_title" maxlength="200" value="${e(item?.course_title || '')}"></label></div>${timingFields(item)}<label>地点<input name="location" maxlength="200" value="${e(item?.location || '')}"></label><label>备注<textarea name="notes" rows="2" maxlength="2000">${e(item?.notes || '')}</textarea></label><p class="danger-text" data-error role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">保存安排</button>${item ? '<button class="text-button danger-text" data-delete type="button">删除安排</button>' : ''}</div>`;
+    form.innerHTML = `<label>事项名称<input name="title" maxlength="200" required value="${e(item?.title || '')}" placeholder="例如：概率论 Quiz 2"></label><div class="planner-form-row"><label>类型<select name="event_type">${personalKinds.map(type => '<option value="' + type + '">' + kinds[type] + '</option>').join('')}</select></label><label>关联课程<input name="course_title" maxlength="200" value="${e(item?.course_title || '')}"></label></div>${timingFields(item)}<label>地点<input name="location" maxlength="200" value="${e(item?.location || '')}"></label><label>备注<textarea name="notes" rows="2" maxlength="2000">${e(item?.notes || '')}</textarea></label><p class="danger-text" data-error role="alert"></p><div class="form-actions"><button class="button button-primary" type="submit">保存安排</button>${item ? '<button class="button button-secondary" data-back type="button">返回详情</button>' : ''}</div>`;
     form.elements.event_type.value = item?.event_type || 'activity';
+    addMapLink(form,item);
     bindTiming(form);
     const dialog = context.ui.dialog(item ? '编辑安排' : '添加安排',form);
-    const requestId = crypto.randomUUID(), owner = snapshot.account_revision;
+    const requestId = crypto.randomUUID();
     context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
     form.onsubmit = act(form.querySelector('[type=submit]'),async () => {
       if (!form.reportValidity()) return;
@@ -234,15 +259,13 @@ export async function mount(container, context) {
       try {await context.api('/commands',{method:'POST',body:{action:item?'update':'create',record_id:item?.id || '',expected_revision:item ? item.revision || '' : undefined,account_revision:owner,request_id:requestId,event:data}});dialog.close();await refresh();}
       catch (error) {if (!context.signal.aborted) form.querySelector('[data-error]').textContent = error.message;}
     });
-    form.querySelector('[data-delete]')?.addEventListener('click',act(form.querySelector('[data-delete]'),async () => {
-      if (!await context.ui.confirmDialog('删除安排','删除这条手动添加的安排？','删除')) return;
-      await context.api('/commands',{method:'POST',body:{action:'delete',record_id:item.id,expected_revision:item.revision || '',account_revision:owner,request_id:crypto.randomUUID()}});dialog.close();await refresh();
-    }),{signal:context.signal});
+    form.querySelector('[data-back]')?.addEventListener('click',()=>detail(item,owner),{signal:context.signal});
   }
   function adjustClass(item) {
     const form = document.createElement('form');
     form.className = 'campus-form planner-event-form';
     form.innerHTML = `<p>${e(item.original_date + ' · ' + when(item))}<br>${e([item.location,item.teacher,item.appearance?.label].filter(Boolean).join(' · '))}</p><p class="field-hint">记录在本地时间表中。请假审批及学校统一调课仍以学校系统为准。</p><label>调整方式<select name="action" required><option value="">选择要执行的调整</option><option value="leave">请假</option><option value="cancel">取消上课</option><option value="move">调课／修改地点</option><option value="restore">恢复教务原安排</option></select></label><label>影响范围<select name="scope"><option value="once">仅这一次</option><option value="following">本次及本学期后续同一排课</option></select></label><label data-until>调整到哪天（可选，默认学期结束）<input name="until_date" type="date"></label><fieldset data-move-fields>${timingFields(item)}<label>调整后地点<input name="location" maxlength="200" value="${e(item.location || '')}"></label></fieldset><label>备注<textarea name="notes" rows="2" maxlength="2000"></textarea></label><p class="danger-text" data-error role="alert"></p><button class="button button-primary" type="submit">保存课程调整</button>`;
+    addMapLink(form,item);
     bindTiming(form);
     const update = () => {
       const moving = form.elements.action.value === 'move';

@@ -5,19 +5,22 @@ import {compileConditions,routeConditionWarnings} from './conditions.js';
 import {createMaintenance} from './maintenance.js';
 import {createDiscovery} from './discovery.js';
 import {bindMapGestures,zoomView} from './interactions.js';
+import {buildDayPlan,smartMarkers} from './journey.js';
+import {journeyMarkup} from './journey-view.js';
 
-const kinds = {class:'课程', deadline:'作业截止', exam:'考试', quiz:'Quiz', tutorial:'习题课', study:'学习', presentation:'展示', activity:'活动', lecture:'讲座', calendar:'校历'};
 const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在图上标记', ambiguous:'包含多个建筑，请选择具体地点'};
 
 export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), context.signal);
-  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', observer, cancelGesture;
-  const cleanup = () => {request?.abort();cancelGesture?.();observer?.disconnect();removeStyle();container.classList.remove('campus-map','map-expanded');};
+  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', observer, cancelGesture, clockTimer;
+  let labelMode='smart',buffer=5,plan=buildDayPlan([],[],()=>({status:'missing'})),lastRead=0,lastAttempt=0,loadingDay=false,routeFromEvent;
+  const cleanup = () => {request?.abort();clearInterval(clockTimer);cancelGesture?.();observer?.disconnect();removeStyle();container.classList.remove('campus-map','map-expanded');};
   context.signal.addEventListener('abort', cleanup, {once:true});
   container.classList.add('campus-map');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
   let day = validDay(params.get('date')) ? params.get('date') : today();
+  let followToday=!validDay(params.get('date'));
   let view, graph, route, startId='', endId='', routeEvent, networkRequest, maintenance, discovery, conditionState;
   context.signal.addEventListener('abort',()=>networkRequest?.abort(),{once:true});
   container.innerHTML = `<header class="map-heading"><div><span class="map-eyebrow">SHANGHAITECH · CAMPUS</span><h2>今天，去哪儿</h2><p>把每天的安排，放回校园里。</p></div><a class="button button-secondary" href="https://map.shanghaitech.edu.cn/" target="_blank" rel="noopener noreferrer">学校官方地图 ↗</a></header>
@@ -27,10 +30,13 @@ export async function mount(container, context) {
     <aside class="map-agenda"><div class="map-agenda-heading"><div><span class="map-eyebrow">YOUR DAY</span><h3>当天安排</h3></div><a href="#timetable">时间表 ↗</a></div><div class="map-date"><button class="button button-secondary" type="button" data-day="prev" aria-label="前一天">‹</button><input data-date type="date" aria-label="查看日期" value="${e(day)}"><button class="button button-secondary" type="button" data-day="next" aria-label="后一天">›</button><button class="button button-secondary" type="button" data-day="today">今天</button></div><div data-agenda aria-live="polite"></div></aside></div>
     <footer class="map-source">建筑底图与 5 处校门来自学校官方地图；道路、水系与绿地来自 OpenStreetMap · 基础资料收录 2026-10-17。博士公寓轮廓按官方设计公示图更新，尚未核验竣工实况；部分名称按使用者反馈更正，依据见地点详情。室外步行路线依据已收录道路计算，开放情况以现场为准；不含室内、地下路线。电梯资料覆盖 2 栋建筑、3 条位置说明。</footer>`;
   const svg = container.querySelector('[data-map]'), agenda = container.querySelector('[data-agenda]'), detail = container.querySelector('[data-detail]');
+  container.querySelector('.map-tools').insertAdjacentHTML('beforeend','<label class="map-label-choice">地点标注<select data-label-mode aria-label="地点标注显示方式"><option value="smart">智能</option><option value="all">全部</option><option value="off">隐藏</option></select></label><p class="map-label-note" data-label-note>智能标注：显示未结束安排、所选地点与当前图层信息</p>');
+  agenda.insertAdjacentHTML('beforebegin','<div class="map-journey-controls"><button type="button" data-refresh-day>刷新安排</button><label>进楼预留<select data-arrival-buffer aria-label="进楼预留分钟"><option value="0">0 分钟</option><option value="5" selected>5 分钟</option><option value="10">10 分钟</option></select></label></div>');
+  const guide=document.createElement('section');guide.className='map-day-guide';guide.dataset.journeySummary='';guide.hidden=true;container.querySelector('.map-layout').prepend(guide);
   const on = (node, name, handler) => node.addEventListener(name, handler, {signal:context.signal});
   const buildingById = id => data.buildings.find(item => item.id === id);
   const routePlaceLabel = building => buildingLabel(building)+(building.walking_approach?' · '+building.walking_approach.label:'');
-  const entries = () => (schedule?.events || []).map((item, index) => ({item, index, match:matchLocation(item.location, data.buildings)}));
+  const entries = () => plan.entries;
   function setView() {if(view){svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);drawAnnotations();}}
   function resetView() {if (!projection) return;cancelGesture?.();view={x:0,y:0,w:projection.width,h:projection.height};setView();}
   function zoom(factor,anchor) {
@@ -39,19 +45,20 @@ export async function mount(container, context) {
   }
   function mapMarks() {
     const marks = new Map();
+    if(labelMode==='off')return marks;
     if(layer === 'elevators') for(const item of data.elevators) marks.set(item.building_id, '↕');
-    else if(layer==='day')for(const {index,match} of entries()) if(match.status === 'matched') {const id=match.buildings[0].id;marks.set(id, [...(marks.get(id)||[]),index+1]);}
+    else if(layer==='day')for(const {index,match} of labelMode==='smart'?smartMarkers(plan,day):plan.stops) if(match.status === 'matched') {const id=match.buildings[0].id;marks.set(id, [...(marks.get(id)||[]),index+1]);}
     return marks;
   }
   const primaryNames = ['图书馆','教学中心','体育馆','生命学院','信息学院1号楼','信息学院2号楼','信息学院3号楼','创意与艺术学院','数学科学研究所','行政中心','创业与管理学院','体育场','游泳馆','会议中心','H1,校园服务中心,309室 IT服务中心','H2楼,学生科创中心','博士公寓11号楼','博士公寓12号楼','博士公寓13号楼'];
   function drawAnnotations() {
     const host=svg.querySelector('[data-annotations]');if(!host||!projection||!view)return;
     const restoreFocus=host.contains(document.activeElement);
-    const size=svg.getBoundingClientRect(),marks=mapMarks(),zoomLevel=projection.width/view.w;
-    const candidates=data.buildings.filter(b=>b.kind==='gate'||b.id===selected||marks.has(b.id)||primaryNames.includes(b.name)||zoomLevel>1.4).map(b=>({id:b.id,label:buildingLabel(b),point:projection.center(b.polygon),kind:b.kind||'building',marker:marks.has(b.id),priority:b.id===selected?100:b.kind==='gate'?90:marks.has(b.id)?85:primaryNames.includes(b.name)?60-primaryNames.indexOf(b.name):20}));
+    const size=svg.getBoundingClientRect(),marks=mapMarks();
+    const candidates=data.buildings.filter(b=>labelMode!=='off'&&(labelMode==='all'||b.id===selected||marks.has(b.id)||(layer==='gates'&&b.kind==='gate'))).map(b=>({id:b.id,label:buildingLabel(b),point:projection.center(b.polygon),kind:b.kind||'building',marker:marks.has(b.id),priority:b.id===selected?100:b.kind==='gate'?90:marks.has(b.id)?85:primaryNames.includes(b.name)?60-primaryNames.indexOf(b.name):20}));
     const roadsByName=new Map();
     for(const road of data.basemap?.roads||[])if(road.name&&(!roadsByName.has(road.name)||road.points.length>roadsByName.get(road.name).points.length))roadsByName.set(road.name,road);
-    for(const [name,road] of roadsByName)candidates.push({id:'road-'+road.id,label:name,point:projection.point(road.points[Math.floor(road.points.length/2)]),kind:'road',priority:1});
+    if(labelMode!=='off')for(const [name,road] of roadsByName)candidates.push({id:'road-'+road.id,label:name,point:projection.point(road.points[Math.floor(road.points.length/2)]),kind:'road',priority:1});
     const units=1/Math.min(size.width/view.w,size.height/view.h);
     const pins=[...marks].map(([id,mark])=>{const b=buildingById(id),[x,y]=projection.center(b.polygon),label=Array.isArray(mark)?mark.join('·'):mark;return `<g data-building="${e(id)}" class="map-pin${layer==='elevators'?' map-pin-elevator':''}" role="button" tabindex="0" aria-label="${e(b.name+(layer==='elevators'?'，有电梯位置资料':'，当天安排 '+label))}" transform="translate(${x},${y}) scale(${units})"><rect x="${-Math.max(14,label.length*5)}" y="-28" width="${Math.max(28,label.length*10)}" height="28" rx="14"/><text y="-9">${e(label)}</text></g>`;}).join('');
     host.innerHTML=pins+layoutLabels(candidates,view,size).map(item=>{
@@ -79,8 +86,16 @@ export async function mount(container, context) {
   }
   function renderAgenda() {
     if (!schedule) return;
-    const items=entries();
-    agenda.innerHTML = `${schedule.issues?.length ? `<p class="map-notice">${e(schedule.issues.join('；'))}</p>`:''}${schedule.status==='partial' ? '<p class="map-notice">部分来源尚未就绪，以下为当前可用安排。</p>':''}<p class="map-day-summary">${e(new Intl.DateTimeFormat('zh-CN',{weekday:'long',timeZone:'Asia/Shanghai'}).format(new Date(day+'T12:00:00+08:00')))} · ${items.length} 项安排 · ${items.filter(v=>v.match.status==='matched').length} 项已定位</p>${items.length ? '<ol class="map-events">'+items.map(({item,index,match})=>`<li><button type="button" data-event="${index}" class="map-event${selectedEvent===item.id?' is-active':''}"><span class="map-event-number${match.status==='matched'?'':' is-unlocated'}">${index+1}</span><span class="map-event-body"><span class="map-event-time">${e(eventTime(item))}</span><strong>${e(item.title||item.course_title||'未命名安排')}</strong><span>${e(item.location||'尚未提供地点')}</span><small>${e(kinds[item.event_type]||'安排')}${item.status==='rescheduled'?' · 调课后':''}${match.status==='matched'?' · 点击定位':' · '+e(notices[match.status])}</small></span></button>${match.status==='matched'?`<button class="map-walk-event" type="button" data-walk-event="${index}" aria-label="步行到${e(item.title||item.course_title||'这项安排')}">↗ 步行到这里</button>`:''}</li>`).join('')+'</ol>':`<div class="map-empty"><span aria-hidden="true">${schedule.available?'☀':'⌖'}</span><h3>${schedule.available?'这一天暂无安排':'日程暂不可用'}</h3><p>${schedule.available?'可以切换日期查看课程，或在校园地图中寻找地点。':'校园建筑与电梯资料仍可查看。可到设置检查时间表模块。'}</p></div>`}`;
+    const actions=['data-event','data-transfer','data-walk-event'],active=document.activeElement;
+    const action=agenda.contains(active)||guide.contains(active)?actions.find(name=>active.hasAttribute(name)):undefined;
+    const identity=action?active.dataset.agendaId:undefined,inSummary=!!active.closest('.map-next-stop');
+    const markup=journeyMarkup(plan,{escape:e,day,schedule,selectedEvent,lastRead});
+    agenda.innerHTML=markup.agenda;guide.innerHTML=markup.summary;guide.hidden=!markup.summary;
+    container.querySelector('.map-layout').classList.toggle('has-day-guide',!!markup.summary);
+    const buttons=[...agenda.querySelectorAll('[data-event],[data-transfer],[data-walk-event]'),...guide.querySelectorAll('[data-event],[data-transfer],[data-walk-event]')];
+    for(const button of buttons){const attr=actions.find(name=>button.hasAttribute(name));button.dataset.agendaId=entries()[Number(button.getAttribute(attr))]?.item.id||'';}
+    if(action){const matches=buttons.filter(button=>button.hasAttribute(action)&&button.dataset.agendaId===identity);(matches.find(button=>!!button.closest('.map-next-stop')===inSummary)||matches[0])?.focus({preventScroll:true});}
+    container.querySelector('.map-agenda-heading a').href='#timetable?date='+day;
   }
   function renderDetail(locationText='') {
     const building=buildingById(selected);
@@ -105,7 +120,7 @@ export async function mount(container, context) {
   const routeStart=container.querySelector('[data-route-start]'),routeEnd=container.querySelector('[data-route-end]'),routeResult=container.querySelector('[data-route-result]');
   function renderRoute() {
     routeStart.value=startId;routeEnd.value=endId;
-    const source=routeEvent?`<p class="map-route-course">课程终点 · ${e(routeEvent.title||routeEvent.course_title||'当天安排')}<br>${e(day)} ${e(eventTime(routeEvent))} · ${e(routeEvent.location)}</p>`:'';
+    const source=routeEvent?`${routeFromEvent?`<p class="map-route-course">按上一安排的地点出发 · ${e(routeFromEvent.title||'上一安排')}<br>${e(eventTime(routeFromEvent))} · ${e(routeFromEvent.location)}（不代表当前位置）</p>`:''}<p class="map-route-course">安排终点 · ${e(routeEvent.title||routeEvent.course_title||'当天安排')}<br>${e(day)} ${e(eventTime(routeEvent))} · ${e(routeEvent.location)}</p>`:'';
     const messages={conditions_unavailable:'通行维护记录尚未就绪，暂不生成路线。',conditions_invalid:'部分已确认限制在当前底图中失去定位，请在维护页面复核后再规划。',restricted:'起点或终点受到当前通行限制，请选择其他地点。',missing:'选择起点和终点，或在当天安排中点“步行到这里”。',same:'起点和终点是同一地点，无需规划室外路线。',unmapped:'该地点附近尚未收录可用的室外步行道路，请选择其他地点。',disconnected:'这两个地点之间的已收录室外路网尚未连通，暂时无法规划路线。'};
     if(!graph){routeResult.innerHTML='<p>室外路网暂不可用，请重新打开校园地图重试。</p>';return;}
     if(route?.status!=='ok'){routeResult.innerHTML=source+`<p>${e(route?.message||messages[route?.status||'missing'])}</p>`;return;}
@@ -123,18 +138,24 @@ export async function mount(container, context) {
     const h=w*projection.height/projection.width;view={x:cx-w/2,y:cy-h/2,w,h};setView();
   }
   function calculateRoute(focus=false) {
-    conditionState=graph&&maintenance?.ready?compileConditions(graph,maintenance.snapshot.items,day,data.buildings,container.querySelector('[data-avoid-pending]').checked):undefined;
-    const blocked=conditionState?.blockedPlaces.get(startId)||conditionState?.blockedPlaces.get(endId);
-    if(!graph)route=undefined;
-    else if(!maintenance?.ready)route={status:'conditions_unavailable'};
-    else if(conditionState.invalid.length)route={status:'conditions_invalid'};
-    else if(blocked)route={status:'restricted',message:(blocked.state==='pending'?'已选择避开待核实范围：':'该地点有已确认通行限制：')+blocked.title+'。请改选地点或在维护页面核实。'};
-    else route=planWalk(conditionState.graph,buildingById(startId),buildingById(endId));
-    container.querySelector('[data-route-submit]').disabled=!maintenance?.ready;
+    if(!data)return;
+    const sameAccount=!schedule?.account_revision||schedule.account_revision===maintenance?.snapshot?.account_revision;
+    conditionState=graph&&maintenance?.ready&&sameAccount?compileConditions(graph,maintenance.snapshot.items,day,data.buildings,container.querySelector('[data-avoid-pending]').checked):undefined;
+    route=routeFor(buildingById(startId),buildingById(endId));
+    plan=buildDayPlan(schedule?.events||[],data.buildings,routeFor,buffer);
+    container.querySelector('[data-route-submit]').disabled=!conditionState;
     maintenance?.status();
-    renderRoute();drawMap();if(focus)fitRoute();
+    renderRoute();drawMap();renderAgenda();if(focus)fitRoute();
+  }
+  function routeFor(start,end) {
+    if(!conditionState)return {status:'conditions_unavailable'};
+    if(conditionState.invalid.length)return {status:'conditions_invalid'};
+    const blocked=conditionState.blockedPlaces.get(start?.id)||conditionState.blockedPlaces.get(end?.id);
+    if(blocked)return {status:'restricted',message:(blocked.state==='pending'?'已选择避开待核实范围：':'该地点有已确认通行限制：')+blocked.title+'。请改选地点或在维护页面核实。'};
+    return planWalk(conditionState.graph,start,end);
   }
   function setEndpoint(kind,id,item) {
+    routeFromEvent=undefined;
     if(kind==='start')startId=id;else {endId=id;routeEvent=item;}
     calculateRoute(true);
   }
@@ -149,39 +170,66 @@ export async function mount(container, context) {
       graph=buildWalkingGraph(network);
       const discoveryHost=document.createElement('div');discoveryHost.className='map-discovery';discoveryHost.dataset.discovery='';container.querySelector('.map-maintenance>summary').after(discoveryHost);
       maintenance=createMaintenance({context,host:container.querySelector('[data-maintenance]'),statusHost:container.querySelector('[data-condition-status]'),data,graph,getDay:()=>day,onUpdate:()=>calculateRoute(),focusMap:()=>container.querySelector('.map-canvas').scrollIntoView({block:'center'}),redraw:drawMap,onSaved:()=>void discovery?.load()});
-      discovery=createDiscovery({context,host:discoveryHost,onReview:(lead,account)=>maintenance.reviewLead(lead,account),onAccountChange:()=>void maintenance.load(true),onUpdate:count=>maintenance.setDiscovered(count)});
+      discovery=createDiscovery({context,host:discoveryHost,onReview:(lead,account)=>maintenance.reviewLead(lead,account),onAccountChange:()=>{clearDayState();void loadDay();void maintenance.load(true);},onUpdate:count=>maintenance.setDiscovered(count)});
       void discovery.load();
       const options='<option value="">请选择地点</option>'+['gate','building'].map(kind=>`<optgroup label="${kind==='gate'?'校门':'校园建筑'}">${data.buildings.filter(b=>(b.kind||'building')===kind).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')).map(b=>`<option value="${e(b.id)}">${e(buildingLabel(b))}</option>`).join('')}</optgroup>`).join('');
       for(const select of [routeStart,routeEnd]){select.innerHTML=options;select.disabled=false;}
       await maintenance.load();if(context.signal.aborted)return;calculateRoute();
     }catch(error){if(!context.signal.aborted){routeStart.innerHTML=routeEnd.innerHTML='<option value="">路网不可用</option>';renderRoute();}}
   }
-  async function loadDay() {
-    request?.abort();request=new AbortController();const ticket=++serial;
+  function clearDayState() {
     schedule=undefined;selectedEvent=undefined;selected=undefined;
-    if(routeEvent){routeEvent=undefined;endId='';route=undefined;renderRoute();}
-    if(graph){calculateRoute();maintenance?.render();}
-    drawMap();renderDetail();agenda.innerHTML='<p class="map-notice" role="status">正在读取当天安排…</p>';
+    guide.innerHTML='';guide.hidden=true;
+    container.querySelector('.map-layout').classList.remove('has-day-guide');
+    plan=buildDayPlan([],data?.buildings||[],routeFor,buffer);
+    if(routeEvent||routeFromEvent){routeEvent=undefined;routeFromEvent=undefined;startId='';endId='';route=undefined;renderRoute();}
+    drawMap();renderDetail();
+  }
+  async function loadDay(preserve=false) {
+    request?.abort();request=new AbortController();const ticket=++serial,previousOwner=schedule?.account_revision;
+    loadingDay=true;lastAttempt=Date.now();container.querySelector('[data-refresh-day]').disabled=true;
+    if(!preserve){clearDayState();calculateRoute();maintenance?.render();agenda.innerHTML='<p class="map-notice" role="status">正在读取当天安排…</p>';}
     try {
       const value=await context.api('/day?date='+encodeURIComponent(day),{signal:request.signal});
       if(context.signal.aborted||ticket!==serial)return;
-      schedule=value;renderAgenda();drawMap();
+      const changed=previousOwner&&previousOwner!==value.account_revision;
+      if(changed){clearDayState();startId='';endId='';route=undefined;void maintenance?.load(true);}
+      schedule=value;lastRead=Date.now();
+      const currentEvent=id=>schedule.events.find(item=>item.id===id);
+      if(routeEvent||routeFromEvent) {
+        const end=routeEvent&&currentEvent(routeEvent.id),start=routeFromEvent&&currentEvent(routeFromEvent.id);
+        const endMatch=end&&matchLocation(end.location,data.buildings),startMatch=start&&matchLocation(start.location,data.buildings);
+        if((routeEvent&&endMatch?.status!=='matched')||(routeFromEvent&&startMatch?.status!=='matched')){routeEvent=undefined;routeFromEvent=undefined;startId='';endId='';route=undefined;}
+        else {if(end){routeEvent=end;endId=endMatch.buildings[0].id;}if(start){routeFromEvent=start;startId=startMatch.buildings[0].id;}}
+      }
+      if(selectedEvent){const item=currentEvent(selectedEvent),match=item&&matchLocation(item.location,data.buildings);selected=match?.status==='matched'?match.buildings[0].id:undefined;if(!item)selectedEvent=undefined;renderDetail(item?.location||'');}
+      calculateRoute();if(!preserve||changed)maintenance?.render();
       const target=params.get('event');if(target){const index=entries().findIndex(v=>v.item.id===target);if(index>=0)selectEvent(index);params.delete('event');}
-    } catch(error) {if(context.signal.aborted||ticket!==serial)return;agenda.innerHTML=`<p class="map-notice">${e(error.message||'当天安排读取失败')}</p><button class="button button-secondary" type="button" data-retry>重新读取</button>`;}
+    } catch(error) {if(context.signal.aborted||ticket!==serial)return;clearDayState();agenda.innerHTML=`<p class="map-notice">${e(error.message||'当天安排读取失败')}</p><button class="button button-secondary" type="button" data-retry>重新读取</button>`;}
+    finally {if(ticket===serial&&!context.signal.aborted){loadingDay=false;container.querySelector('[data-refresh-day]').disabled=false;}}
   }
   on(container,'click',event=>{
     if(!data)return;
     if(maintenance?.mode&&svg.contains(event.target))return;
     const button=event.target.closest('button,a,[data-building]');if(!button)return;
     if(button.hasAttribute('data-condition-done'))maintenance?.finish();
-    if(button.hasAttribute('data-route-swap')){[startId,endId]=[endId,startId];routeEvent=undefined;calculateRoute(true);}
-    if(button.hasAttribute('data-route-clear')){startId='';endId='';routeEvent=undefined;route=undefined;renderRoute();drawMap();}
+    if(button.hasAttribute('data-route-swap')){[startId,endId]=[endId,startId];routeEvent=undefined;routeFromEvent=undefined;calculateRoute(true);}
+    if(button.hasAttribute('data-route-clear')){startId='';endId='';routeEvent=undefined;routeFromEvent=undefined;route=undefined;renderRoute();drawMap();}
+    if(button.hasAttribute('data-refresh-day'))void loadDay(true);
+    if(button.hasAttribute('data-transfer')) {
+      const leg=plan.legs.get(Number(button.dataset.transfer));
+      if(leg&&['ok','same'].includes(leg.route?.status)) {
+        startId=leg.from.match.buildings[0].id;endId=leg.to.match.buildings[0].id;routeFromEvent=leg.from.item;routeEvent=leg.to.item;
+        selectedEvent=routeEvent.id;selectBuilding(endId,routeEvent.location,leg.route.status==='same');calculateRoute(true);
+        container.querySelector('.map-canvas').scrollIntoView({block:'center'});
+      }
+    }
     if(button.hasAttribute('data-route-fit'))fitRoute();
     if(button.dataset.placeStart)setEndpoint('start',button.dataset.placeStart);
     if(button.dataset.placeEnd)setEndpoint('end',button.dataset.placeEnd);
     if(button.hasAttribute('data-walk-event')) {
       const entry=entries()[Number(button.dataset.walkEvent)];
-      if(entry?.match.status==='matched'){selectedEvent=entry.item.id;selected=entry.match.buildings[0].id;setEndpoint('end',selected,entry.item);renderDetail(entry.item.location);renderAgenda();container.querySelector('.map-routing').scrollIntoView({block:'start'});if(!startId)routeStart.focus({preventScroll:true});}
+      if(entry?.attendance&&entry.match.status==='matched'){selectedEvent=entry.item.id;selected=entry.match.buildings[0].id;setEndpoint('end',selected,entry.item);renderDetail(entry.item.location);renderAgenda();container.querySelector('.map-routing').scrollIntoView({block:'start'});if(!startId)routeStart.focus({preventScroll:true});}
     }
     if(button.dataset.layer){layer=button.dataset.layer;container.querySelectorAll('[data-layer]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));drawMap();if(layer==='gates'){selectedEvent=undefined;resetView();selectBuilding(data.buildings.find(b=>b.kind==='gate').id,'',false);}else if(layer==='elevators'&&!selected)selectBuilding(data.elevators[0].building_id,'',false);else renderDetail();}
     if(button.hasAttribute('data-expand')){const expanded=container.classList.toggle('map-expanded');button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'⤡ 收起地图':'⤢ 展开地图';}
@@ -191,10 +239,20 @@ export async function mount(container, context) {
     // Pointer taps are handled once on release; detail=0 retains assistive activation.
     if(button.dataset.building&&event.detail===0){selectedEvent=undefined;selectBuilding(button.dataset.building,'',false);}
     if(button.dataset.candidate){selectedEvent=undefined;selectBuilding(button.dataset.candidate);container.querySelector('[data-results]').hidden=true;}
-    if(button.dataset.day){day=button.dataset.day==='today'?today():shiftDay(day,button.dataset.day==='prev'?-1:1);container.querySelector('[data-date]').value=day;void loadDay();}
+    if(button.dataset.day){followToday=button.dataset.day==='today';day=followToday?today():shiftDay(day,button.dataset.day==='prev'?-1:1);container.querySelector('[data-date]').value=day;void loadDay();}
     if(button.hasAttribute('data-retry'))void loadDay();
   });
-  on(container.querySelector('[data-date]'),'change',event=>{if(data&&validDay(event.target.value)){day=event.target.value;void loadDay();}else event.target.value=day;});
+  on(container.querySelector('[data-date]'),'change',event=>{if(data&&validDay(event.target.value)){followToday=false;day=event.target.value;void loadDay();}else event.target.value=day;});
+  on(container.querySelector('[data-label-mode]'),'change',event=>{labelMode=event.target.value;container.querySelector('[data-label-note]').textContent=labelMode==='smart'?'智能标注：显示未结束安排、所选地点与当前图层信息':labelMode==='all'?'全部标注：放大后可查看被避让的楼名':'地点标注已隐藏，仍可点击楼体查看详情';drawMap();});
+  on(container.querySelector('[data-arrival-buffer]'),'change',event=>{buffer=Number(event.target.value);calculateRoute();});
+  function updateClock() {
+    if(document.hidden||!data||context.signal.aborted)return;
+    if(followToday&&day!==today()){day=today();container.querySelector('[data-date]').value=day;void loadDay();return;}
+    renderAgenda();drawMap();
+    if(!loadingDay&&Date.now()-lastAttempt>=60000)void loadDay(true);
+  }
+  on(document,'visibilitychange',()=>{if(!document.hidden)updateClock();});
+  clockTimer=setInterval(updateClock,30000);
   on(container.querySelector('[data-search]'),'input',event=>{
     if(!data)return;const query=event.target.value.trim().normalize('NFKC').toLowerCase(),host=container.querySelector('[data-results]');host.hidden=!query;if(!query)return;
     const matched=matchLocation(query,data.buildings).buildings;

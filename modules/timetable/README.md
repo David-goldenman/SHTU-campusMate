@@ -8,6 +8,8 @@
 
 前缀为 `/api/v1/modules/timetable`。
 
+点击个人安排或已确认加入的活动，在详情中直接选择“编辑安排”或“删除安排”。删除前显示事项名称并确认，取消后返回详情；操作按打开详情时的账号及记录版本校验。已接受的后台活动建议保留原确认状态，删除日程后不会因再次检查同一通知而自动加入。
+
 课程网格的动态节次、跨节长度和重叠列通过 CSSOM 属性设置，遵循框架 `style-src 'self'` 的内容安全策略；HTML 模板不使用会被该策略阻止的内联 `style` 属性。
 
 已取消课程默认从电脑周课表和手机逐日安排中隐藏，不占课表格子。本周存在取消记录时，工具栏提供“显示已取消课程”开关；打开后可查看状态，并点击课程选择“恢复教务原安排”。该开关与安排类型筛选同时生效，每次进入页面默认关闭。取消记录仍保留在 `/schedule` 日历数据中，重新同步不会清除，恢复、版本检查和冲突检查沿用原有接口。
@@ -33,6 +35,8 @@
 `/schedule` 返回 `{status,updated_at,data,sources,calendar,school_calendar,homework}`。`school_calendar` 为 `{available,pages,url,pdf_url,checked_at,error,version,due}`：`available` 表示已有可显示的页面图片，`version` 用于前端缓存键，`due` 提示页面自动或手动更新校历。`homework` 固定以北京时间当前教学周为基准，覆盖上周、本周、下周与下下周：`{week_start,start,end,items,pending,late}`，每项含 `id/title/url/source/course_title/due_at/category/week_start/offset/late`；只收录这两个来源中未确认已提交、来源开放且截止时间落在窗口内的作业，`offset=-1..2` 对应四周。窗口不随查询的 `week_start` 改变，便于始终看到近四周待办。`data` 保留原始集合，增加按时间排序的 `events` 与来源提示。`events` 包含 `event_type`、带时区的 `at`、可选 `ends_at`、名称、来源、课程名和地点。`event_type` 为 `deadline/exam/quiz/presentation/activity/lecture/calendar`。`calendar` 包含 `week_start/week_end/week_one/week_one_source/teaching_week/periods/days`；`periods` 为完整节次轴 `{period,start,end}`，缺失的钟点为 `null`。每个 day 为 `{date,events}`，先列按起止节次排序的课程（`event_type:class`），再列按实际时刻排序的日程。课程钟点来自教务课表的节次表，缺失时保留节次，不假设钟点。旧缓存兼容在读取日历时完成，不改写快照、账号、教学周或个人安排；下次同步按来源补充钟点。解析部分缺失的节次钟点时不移动后续节号。考试仅公布日期时明确标注时间待公布。
 
 个人安排类型支持 `quiz/exam/tutorial/study/presentation/activity/lecture`。时间可选带时区的 `starts_at/ends_at?`，或 `date/period_start/period_end`；起止节次为 1–30，结束不得早于开始，不混用两种模式。可选 `course_title/location/notes`。安排按 IDS 账号版本隔离。教务课程原始快照由来源维护，本地覆盖记录用于请假、停课、调课与恢复，重新同步不会改写这些记录。
+
+有地点的有效课程、考试和已保存个人安排，在详情／编辑窗口提供“在校园地图查看已保存地点”。链接使用实际安排日期和稳定事项 ID，通过公开 `#campus-map?date=...&event=...` 路由让地图重新读取最新安排，不携带旧教室位置。取消、请假、调课原位置、截止事项与全天校历不提供通勤入口。地图返回时间表时可带 `#timetable?date=...`，打开该日期所在周；双方均不写入对方数据。
 
 `POST /commands` 请求为 `{action,account_revision,request_id,record_id?,expected_revision?,event?,adjustment?}`。`action` 为 `create/update/delete/adjust_class`，`request_id` 为 UUID，账号版本来自 `/schedule`。修改或删除使用读取记录的 `revision`；缺失、过时或切换账号返回 409。相同请求 ID 的相同请求返回原回执，不重复执行，复用 ID 改参数返回 409。`event` 是新增的完整字段或修改的部分字段；换用钟点或节次时清除另一模式。旧 `/events` 接口保留兼容，页面和主页 AI 使用版本检查的命令接口。
 

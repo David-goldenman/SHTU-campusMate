@@ -30,6 +30,14 @@ OSM 衍生数据按 [ODbL 1.0](https://www.openstreetmap.org/copyright) 提供�
 
 ## 接口与日程
 
+### 时间表联动
+
+当天安排按已知开始时间排序，提供“正在进行 / 下一站”提示和相邻安排的步行测算。路线起点明确取自上一项安排，不能解释为用户当前位置；第一项安排或地点不明确时由用户选起点。截止事项、全天校历和已取消／请假／调课前的位置不作为通勤行程。缺少钟点或结束时间时不判断是否来得及；同一建筑只提示楼内换教室。室外步行沿用当前通行限制，另提供可调整的进楼预留时间；路线不可达时不补画直线。
+
+地图的地点标注默认“智能”：在今天只显示未结束的到场安排、当前选中地点和当前图层相关标注；查看其他日期时显示该日安排。可切换“全部”或“隐藏”，仅影响地点名称与图标，不影响楼体点击、路线或施工范围。显示选择仅在当前页面生效。
+
+页面提供“刷新安排”，并在可见时每分钟重新读取时间表的本地聚合结果；不触发学校同步。切换日期、账号或卸载会取消旧请求；原安排变化时重新核对绑定的路线起终点。当前时间提示随页面时钟更新。时间表课程和已保存安排的详情可通过公开 `#campus-map?date=...&event=...` 链接打开对应地图。
+
 前缀 `/api/v1/modules/campus-map`：
 
 - `GET /places` 返回上述公开建筑、电梯说明及来源元数据，以及 `basemap` 内的 OSM 道路与景观数据。
@@ -37,7 +45,7 @@ OSM 衍生数据按 [ODbL 1.0](https://www.openstreetmap.org/copyright) 提供�
 - `GET /conditions` 返回当前共享账号组合版本的通行记录、记录集 `version`、`account_revision` 与最近 200 次修改摘要。未保存时提供一条明确标为待核实的西门线索。
 - `POST /conditions`、`PUT /conditions/{id}` 接收 `{version, account_revision, item}`。`item` 包含标题、`state`（pending/confirmed/resolved/withdrawn）、`effect`（blocked/caution）、`scope`（place/edges/area）及对应的地点 ID、OSM 稳定道路引用或矩形边界；另含 `starts_on/expected_end/review_on`、`source_kind/source_title/source_date/source_url/note`。数据错误返回 422，账号或版本冲突返回 409。日期采用北京时间自然日。
 - `POST /conditions/undo` 接收 `{version, account_revision}`，撤销最后一次本地修改并追加审计记录；新增记录撤销为已撤回，不直接删除历史。
-- `GET /day?date=YYYY-MM-DD` 默认北京时间今天，仅经公开 `context.api('timetable','/schedule?week_start=...')` 读取所选日期的日历。返回日期、精简日程、来源状态、更新时间和问题提示；不触发学校同步、AI 或任何写入。读取前后检查账号版本，切换账号返回 409。
+- `GET /day?date=YYYY-MM-DD` 默认北京时间今天，仅经公开 `context.api('timetable','/schedule?week_start=...')` 读取所选日期的日历。返回日期、精简日程、来源状态、更新时间、问题提示及 `account_revision`；时间表不可用时也返回当前账号版本，供前端清除旧账号的路线绑定。不触发学校同步、AI 或任何写入。读取前后检查账号版本，切换账号返回 409。
 
 课程取消、请假和调课原位置不作为去向；保留调课后的实际安排。事项的截止时间仍标为截止，不转成上课开始时间；没有钟点时保留节次，没有地点或匹配有歧义时明确提示。地名匹配仅使用明确建筑名／别名，含多个建筑的描述不会自动选一个位置。时间表模块关闭或不可用时，地图与电梯资料仍可用，日程区明确提示。
 

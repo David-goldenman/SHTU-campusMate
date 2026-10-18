@@ -159,6 +159,19 @@ with ExitStack() as stack:
         raise AssertionError('Ungrounded date')
     except HTTPException as error:
         assert error.status_code==422
+    async def remove_confirmed_event():
+        events = (await api('timetable', '/events')).json()['items']
+        event = next(item for item in events if item['origin_id'] == 'campus-agent:' + optional['id'])
+        result = await api('timetable', '/commands', method='POST', body={
+            'action': 'delete', 'request_id': '00000000-0000-4000-8000-000000000072',
+            'account_revision': account_revision(contexts['timetable']), 'record_id': event['id'],
+            'expected_revision': event['revision']})
+        assert result.status_code == 200, result.text
+        await agent.check()
+        await agent.decide(optional['id'], 'accept')
+        remaining = (await api('timetable', '/events')).json()['items']
+        assert all(item['id'] != event['id'] for item in remaining), 'A deleted confirmed event stays deleted after background checks and replayed acceptance'
+    asyncio.run(remove_confirmed_event())
     contexts['campus-agent'].auth.revision='other-account'
     assert agent.proposals()==[]
     agent.start();agent.close();assert not agent.thread.is_alive()
