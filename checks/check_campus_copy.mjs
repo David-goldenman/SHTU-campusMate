@@ -19,14 +19,19 @@ const load = async (value, target = storage, source = '../web/themes/campus-copy
 try {
   const first = await load(0);
   assert.deepEqual(Object.keys(first.copyCatalog),['general','grades','deadlines','timetable','documents']);
-  assert.equal(first.copyCatalog.general.length,7);
+  assert.equal(first.copyCatalog.general.length,42);
   const general = first.quoteFor();
   const count = draws;
   assert.equal(first.quoteFor('general'),general,'Switching views must retain the same cached quote');
   assert.equal(draws,count,'Cached topics do not draw again');
   const expected = '<div class="study-bilingual-quote"><p lang="en">' + escape(general.en) + '</p><p lang="zh-CN">' + escape(general.zh) + '</p></div>';
   assert.equal(first.renderStudyQuote(),expected,'Both languages render through shared HTML escaping');
-  assert.ok(expected.includes('don&#39;t'),'The corpus apostrophe is escaped');
+  const has_apos = first.copyCatalog.general.some(item => item.en.includes("'") || item.zh.includes("'"));
+  assert.ok(has_apos, 'Corpus includes apostrophe-containing quotes for escaping checks');
+  const apos_quote = first.copyCatalog.general.find(item => item.en.includes("'") || item.zh.includes("'"));
+  const apos_rendered = '<div class=\"study-bilingual-quote\"><p lang=\"en\">' + escape(apos_quote.en) + '</p><p lang=\"zh-CN\">' + escape(apos_quote.zh) + '</p></div>';
+  assert.ok(apos_rendered.includes('&#39;'), 'Apostrophe is escaped in rendered output');
+  assert.ok(!apos_rendered.includes("'"), 'No raw apostrophe remains in escaped output');
   assert.ok(!expected.includes('aria-live'),'Decoration must not announce page changes');
   const grades = first.quoteFor('grades');
   assert.equal(grades.en,'Your GPA called. We need to talk.');
