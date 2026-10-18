@@ -22,6 +22,8 @@ function fixture() {
     const target = new URL(url, location.origin), path = target.pathname, method = options.method || 'GET';
     if (path === '/api/v1/bootstrap') {
       const value = await (await original(url, options)).json();
+      // Keep synthetic theme checks in browser-only mode; never save real workspace preferences.
+      delete value.settings.appearance;
       // Exercise the real app shell and theme loader without unrelated background modules.
       value.modules = value.modules.filter(module => module.id === 'campus-map');
       return json(value);

@@ -33,7 +33,10 @@ function fixture(){
   window.fetch=async(url,options={})=>{
     const path=new URL(url,location.origin).pathname,method=options.method||'GET';
     if(path==='/api/v1/bootstrap'){
-      const value=await(await original(url,options)).json();value.modules=value.modules.filter(module=>module.id==='courses');return json(value);
+      const value=await(await original(url,options)).json();
+      // Keep synthetic theme checks in browser-only mode; never save real workspace preferences.
+      delete value.settings.appearance;
+      value.modules=value.modules.filter(module=>module.id==='courses');return json(value);
     }
     if(path.startsWith('/api/v1/modules/courses/')){
       state.calls.push({path,method});

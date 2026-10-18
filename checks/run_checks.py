@@ -32,7 +32,7 @@ def main():
     for path in python_checks:
         run([sys.executable, str(path)], path.relative_to(PROJECT))
 
-    javascript_checks = ("check_frontend.mjs", "check_device_guide.mjs", "check_browser_network.mjs", "check_appearance.mjs", "check_campus_moments.mjs", "check_password_generator.mjs", "check_observatory_contrast.mjs", "check_campus_copy.mjs", "check_study_copy.mjs", "check_sounds.mjs", "check_timetable_visibility.mjs")
+    javascript_checks = ("check_frontend.mjs", "check_device_guide.mjs", "check_browser_network.mjs", "check_appearance.mjs", "check_campus_moments.mjs", "check_password_generator.mjs", "check_observatory_contrast.mjs", "check_campus_copy.mjs", "check_study_copy.mjs", "check_sounds.mjs", "check_timetable_visibility.mjs", "check_appearance_persistence.mjs")
     for name in javascript_checks:
         run([node, str(Path("checks") / name)], name)
     run([windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",

@@ -84,7 +84,6 @@
 [data-art-theme] .academic-chat .study-bilingual-quote p { margin:0; }
 [data-art-theme] .academic-chat .study-bilingual-quote [lang="en"] { font-size:16px; line-height:1.55; }
 [data-art-theme] .academic-chat .study-bilingual-quote [lang="zh-CN"] { margin-top:4px; font-size:14px; line-height:1.65; }
-[data-art-theme] .academic-chat .is-empty:not(.is-drafting) [data-study-copy] { display:none; }
 @media(max-width:600px) {
   [data-art-theme] .academic-chat .study-home-intro { padding:14px 14px 18px; }
   [data-art-theme] .academic-chat .study-welcome-plate { height:auto; min-height:216px; }
@@ -100,7 +99,6 @@
   [data-art-theme] .academic-chat .study-home-intro .study-welcome { display:block; }
   [data-art-theme] .academic-chat .study-home-intro .study-welcome-plate { height:auto; min-height:192px; }
   [data-art-theme] .academic-chat .study-home-intro .study-welcome-copy { height:auto; min-height:192px; padding-block:14px; }
-  [data-art-theme] .academic-chat .is-empty:not(.is-drafting) [data-study-copy] { display:block; }
 }
 
 @media(max-height:700px) and (min-width:851px) {
@@ -109,3 +107,7 @@
   [data-art-theme] .study-chat-card.module-focused .study-welcome .study-welcome-title { font-size:24px; }
   [data-art-theme] .study-chat-card.module-focused .study-welcome .study-welcome-translation { font-size:13px; margin-top:8px; }
 }
+
+/* Keep the greeting visible after refresh, clearing a draft, or returning home. */
+[data-art-theme] .academic-chat .study-home-intro>.study-bilingual-quote { border-top:1px solid var(--border); margin-top:20px; padding-top:16px; }
+[data-art-theme] .academic-chat .is-empty { overflow:auto; justify-content:safe center; }

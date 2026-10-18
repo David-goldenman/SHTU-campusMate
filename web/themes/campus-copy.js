@@ -4,7 +4,6 @@ import {escape} from '../shared.js';
 const quote = (id, en, zh) => Object.freeze({id,en,zh});
 export const copyCatalog = Object.freeze({
   general:Object.freeze([
-    quote('portal-somewhere', "Everything's on the portal. Somewhere.", '所有信息都在学校系统里。至于在哪嘛……'),
     quote('say-it-again', "We don't say \"as I said earlier.\" We say it again.", '我们不会说“刚才不是讲过了吗”。我们会再讲一遍。'),
     quote('group-replies', 'Your group project finally has someone who replies.', '你的小组作业终于有了一个会回消息的队友。'),
     quote('portal-patience', 'Too many portals. Not enough patience.', '校园系统太多了。人的耐心是有限的。'),

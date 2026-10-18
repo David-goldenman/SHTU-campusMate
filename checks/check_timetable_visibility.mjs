@@ -33,7 +33,7 @@ assert.ok(life.includes('data-event="activity"')&&life.includes('data-event="lec
 const empty=render(false)({...cal,days:[{...day,events:classes}]},()=>true,()=>'', 'Synthetic week','');
 assert.ok(!empty.includes('planner-other-events'),'No empty disclosure when there are no additional items');
 assert.match(source,/querySelectorAll\('\[data-event\]'\)\.forEach/,'New event buttons use the shared detail/edit binding');
-assert.match(source,/otherAgenda\.ontoggle=\(\)=>\{otherOpen=otherAgenda\.open;/,'Rerenders retain the disclosure choice');
+assert.match(source,/otherAgenda\.ontoggle\s*=\s*\(\)\s*=>\s*\{\s*otherOpen\s*=\s*otherAgenda\.open;/,'Rerenders retain the disclosure choice');
 
 const css=await readFile(new URL('../web/themes/observatory.css',import.meta.url),'utf8');
 const badge=css.match(/:root\[data-art-theme="observatory"\] \.week-planner \.four-week-grid \.overview-day\.is-today::before\s*\{([^}]+)\}/)?.[1];

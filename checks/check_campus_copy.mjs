@@ -18,14 +18,14 @@ const load = async (value, target = storage) => {
 try {
   const first = await load(0);
   assert.deepEqual(Object.keys(first.copyCatalog),['general','grades','deadlines','timetable','documents']);
-  assert.equal(first.copyCatalog.general.length,8);
+  assert.equal(first.copyCatalog.general.length,7);
   const general = first.quoteFor();
   const count = draws;
   assert.equal(first.quoteFor('general'),general,'Switching views must retain the same cached quote');
   assert.equal(draws,count,'Cached topics do not draw again');
   const expected = '<div class="study-bilingual-quote"><p lang="en">' + escape(general.en) + '</p><p lang="zh-CN">' + escape(general.zh) + '</p></div>';
   assert.equal(first.renderStudyQuote(),expected,'Both languages render through shared HTML escaping');
-  assert.ok(expected.includes('Everything&#39;s'),'The corpus apostrophe is escaped');
+  assert.ok(expected.includes('don&#39;t'),'The corpus apostrophe is escaped');
   assert.ok(!expected.includes('aria-live'),'Decoration must not announce page changes');
   const grades = first.quoteFor('grades');
   assert.equal(grades.en,'Your GPA called. We need to talk.');
@@ -64,6 +64,11 @@ try {
   const source = await readFile(new URL('../web/themes/campus-copy.js',import.meta.url),'utf8');
   assert.doesNotMatch(source,/\b(?:localStorage|fetch|setTimeout|setInterval)\b/,'Copy selection has no persistent user storage, network, or timers');
   assert.ok(Object.isFrozen(first.copyCatalog) && Object.values(first.copyCatalog).every(Object.isFrozen));
+  const art = await import('../web/themes/art.js');
+  const home = art.renderSlot('assistant.home');
+  assert.equal((home.match(/class="study-bilingual-quote"/g)||[]).length,1,'The real homepage slot contains a greeting without needing a chat draft');
+  assert.ok(home.includes('lang="en"') && home.includes('lang="zh-CN"'));
+  assert.ok(first.copyCatalog.general.every(item=>item.id!=='portal-somewhere'),'The random greeting must not repeat the fixed hero heading');
   console.log('campus copy: bilingual escaping, stable per-topic session IDs, scoped GPA, invalid-ID recovery and blocked-storage fallback passed');
 } finally {
   Math.random = originalRandom;
