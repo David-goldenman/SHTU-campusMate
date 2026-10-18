@@ -37,31 +37,22 @@ class Source:
             if saved.get("owner") != owner:
                 saved = {"data": validate_bundle({}), "updated_at": None}
             result = {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
-            # stale 降级：快照超期且当前状态不是正在同步/出错时，标记为 cached 并后台静默同步
+            # 过期快照保留当前内容，并复用模块自己的同步队列。
             if self._is_stale(saved) and result["status"] == "ready":
                 result["status"] = "cached"
                 result["message"] = "本地缓存，待核实"
-                self._background_sync()
+                if not self.cancelled.is_set():
+                    self.sync()
             return result
 
     def _is_stale(self, saved):
         if not saved.get("updated_at"):
             return False
-        from datetime import datetime, timezone
         try:
             updated = datetime.fromisoformat(saved["updated_at"].replace("Z", "+00:00"))
             return (datetime.now(timezone.utc) - updated).total_seconds() > self.stale_after
         except (ValueError, AttributeError):
             return False
-
-    def _background_sync(self):
-        with self.lock:
-            if self.future is not None and not self.future.done():
-                return
-            self.context.store.write(self.sync_key, {"status": "syncing", "owner": self.owner()})
-            self.future = self.executor.submit(self.run)
-            if getattr(self.context, 'runtime', None):
-                self.context.runtime.watch(self.sync_key, self.future)
 
     def sync(self):
         with self.lock:
@@ -128,7 +119,8 @@ class Source:
         return router
 
     def close(self):
-        self.cancelled.set()
+        with self.lock:
+            self.cancelled.set()
         self.executor.shutdown(wait=True, cancel_futures=True)
 
 
