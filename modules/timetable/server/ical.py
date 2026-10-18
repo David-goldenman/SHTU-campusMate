@@ -60,6 +60,7 @@ def _class_event(item, stamp):
     start = _moment(item.get('at'))
     end = _moment(item.get('ends_at'))
     lines = ['BEGIN:VEVENT', 'UID:' + _identity('class', item), 'DTSTAMP:' + stamp,
+             'LAST-MODIFIED:' + stamp, 'SEQUENCE:0', 'CLASS:PUBLIC',
              'SUMMARY:' + _escape(item.get('title', '课程')), 'CATEGORIES:课程']
     if start:
         if not end or end <= start:
@@ -97,6 +98,7 @@ def _deadline_event(item, stamp):
     details = [item.get('course_title'), item.get('platform') and '提交平台：' + item['platform'],
                item.get('url')]
     lines = ['BEGIN:VEVENT', 'UID:' + _identity('deadline', item), 'DTSTAMP:' + stamp,
+             'LAST-MODIFIED:' + stamp, 'SEQUENCE:0', 'CLASS:PUBLIC',
              'SUMMARY:' + _escape('作业截止：' + str(item.get('title', ''))), 'CATEGORIES:作业',
              'DTSTART:' + _utc(begin), 'DTEND:' + _utc(due)]
     if item.get('url') and str(item['url']).startswith(('http://', 'https://')):
