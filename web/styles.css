@@ -315,7 +315,10 @@ dialog::backdrop { background:#2e344099; }
 .imap-form .form-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:4px; }
 .imap-state { margin:2px 0 0!important; }
 dialog.imap-guide-dialog { width:min(1120px,calc(100vw - 32px)); max-height:92vh; max-height:92dvh; }
-.imap-guide-pages { min-width:0; }
+dialog.imap-guide-dialog[open] { display:flex; flex-direction:column; overflow:hidden; }
+.imap-guide-dialog .dialog-heading,.imap-guide-footer { flex-shrink:0; }
+.imap-guide-dialog .dialog-body,.imap-guide { display:flex; flex-direction:column; min-height:0; }
+.imap-guide-pages { min-width:0; overflow:auto; }
 .imap-guide-page { display:grid; grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr); align-items:start; gap:26px; }
 .imap-guide-page[hidden] { display:none; }
 .imap-guide-copy h3 { margin:10px 0 14px; font-size:20px; }
@@ -324,7 +327,7 @@ dialog.imap-guide-dialog { width:min(1120px,calc(100vw - 32px)); max-height:92vh
 .imap-guide-copy code { color:var(--text); }
 .imap-guide-step { display:inline-block; color:var(--link); font-size:12px; font-weight:600; letter-spacing:.04em; }
 .imap-guide-figure { display:grid; gap:8px; margin:0; padding:10px; border:1px solid var(--border); border-radius:8px; background:#20272b; }
-.imap-guide-figure img { display:block; width:100%; max-height:48vh; object-fit:contain; border-radius:4px; background:#20272b; }
+.imap-guide-figure img { display:block; width:100%; height:auto; max-height:48vh; object-fit:contain; border-radius:4px; background:#20272b; }
 .imap-guide-figure figcaption { padding:0 2px; color:#d8dee9; font-size:12px; line-height:1.65; }
 .imap-guide-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:22px; padding-top:16px; border-top:1px solid var(--border); }
 .imap-guide-footer>[data-guide-count] { color:var(--muted); font-size:13px; }

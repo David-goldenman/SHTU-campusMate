@@ -1,6 +1,10 @@
 # campusMate
 
-<img src="web/themes/default/campusmate.svg" width="72" height="72" alt="campusMate">
+<img src="web/brand/campusmate-app-icon.png" width="72" height="72" alt="campusMate">
+
+<img src="web/brand/campusmate-promo.png" width="760" alt="CampusMate 学士帽机器人与校园地图：课程、时间表、校园信息、截止提醒和问答。">
+
+主品牌采用 [CampusMate 校园品牌视觉指南](web/brand/campusmate-visual-guide.png)。[图标、宣传图与使用说明](docs/BRAND.md) 可用于产品介绍和演示；其他主题保留各自标识。
 
 已有 Python 环境可通过 [Windows 已有环境启动器](docs/LOCAL_UI.md) 在后台运行，并使用 `stop.cmd` 停止。默认双击入口由 uv 准备项目运行环境。
 
@@ -10,11 +14,13 @@
 
 ## 当前开发状态
 
+来源同步在后端执行，切换页面后继续，返回时恢复进度与结果。程序运行期间每分钟检查已连接来源的缓存，超过 6 小时自动刷新已有资料；账号过期和来源错误由用户检查后重试。Piazza 的逐页帖子采集也使用后端队列，模块停用或程序退出时结束任务。
+
 已集成 19 个模块，Windows 原生运行；共享登录状态和本地学习资料可在重启后恢复。聊天、邮件分类与后台检查使用官方 DeepSeek Harness 原生插件，框架负责通用生命周期，业务判断与副作用留在模块中。多会话会迁移已有聊天记录；手动邮件分类和已编辑的时间安排优先保留。完整行为与边界见 [学习助手](modules/academic-assistant/README.md)、[邮箱](modules/mail/README.md)、[后台助手](modules/campus-agent/README.md) 和 [验收记录](docs/LIVE_ACCEPTANCE.md)。
 
 [校园地图](modules/campus-map/README.md) 提供建筑与校门定位、当天课程地点、室外步行路线及电梯位置说明。施工和通行信息由用户核实后参与选路，公告与邮件发现默认关闭；可在设置中独立启停地图模块。
 
-默认界面采用 Material 3 的分区、列表与操作层级，沿用 Nord 配色。设置 → 外观提供 Default · Nord、观星台和星夜手记，保存选择后重启继续使用。主题可只提供样式，也可替换模块界面，业务 API 和账号隔离保持统一。账号连接按服务展开；通知以摘要和详情组织，作业按状态与时间筛选。模型、插件配置与低频操作集中管理，菜单和弹窗有独立表面色与关闭路径；滚动区域使用细圆角滚动条。设计依据与主题开发接口见 [设计规范](docs/DESIGN.md) 和 [主题契约](docs/UI_THEME.md)。
+默认界面采用 Material 3 的分区、列表与操作层级，沿用 Nord 配色。设置 → 外观提供 Default · Nord、观星台、星夜手记和 PRTS · 学习终端，保存选择后重启继续使用。主题可只提供样式，也可替换模块界面，业务 API 和账号隔离保持统一。账号连接按服务展开；通知以摘要和详情组织，作业按状态与时间筛选。模型、插件配置与低频操作集中管理，菜单和弹窗有独立表面色与关闭路径；滚动区域使用细圆角滚动条。设计依据与主题开发接口见 [设计规范](docs/DESIGN.md) 和 [主题契约](docs/UI_THEME.md)。
 
 [群消息](modules/group-messages/README.md) 接入本人微信本机只读采集和 QQ 本机 OneBot 轮询，支持选群、课程绑定、自动同步、带原文的信息提取、确认与撤销。自动应用由按群可信规则控制，活动仍需确认参加；群消息原文不进入其他后台工作流。
 

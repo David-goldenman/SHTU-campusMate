@@ -25,7 +25,8 @@ function fixture(modules,categories, themeCatalog){
   if(path==='/bootstrap')return json({csrf_token:'synthetic',modules,categories});
   if(path==='/modules')return json({modules,categories});
   if(path==='/modules/campus-agent/status'||path==='/modules/notifications/agent/status')return json(agent());
-  if(path==='/modules/mail/snapshot')return json({status:'ready',data:{messages,issues:[]}});
+  if(path==='/modules/mail/sync'){state.syncing=true;state.syncStarts=(state.syncStarts||0)+1;return json({queued:true,status:'syncing'},202);}
+  if(path==='/modules/mail/snapshot')return json({status:state.syncing?'syncing':'ready',data:{messages,issues:[]}});
   if(path==='/modules/mail/intelligence')return json({messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
   if(path==='/modules/mail/message')return json({body_html:'<p>合成正文第一段<br>补充说明。</p><p>第二段单独说明活动安排。</p><ul><li>准备材料</li><li>阅读讲义</li></ul><table><tr><th>时间</th><th>地点</th></tr><tr><td>14:00</td><td>教学楼</td></tr></table>'});
   if(path==='/modules/mail/digests')return json({start:'2026-10-17',end:'2026-10-17',counts:{focus:0,recommend:1,digest:0,filter:0},coverage:{included_count:1,cached_count:1,inbox_total:1},entries:messages.map(item=>({...item,bucket:item.classification.bucket,category:item.classification.category,summary:item.classification.summary})),report:method==='POST'?{overview:'合成日总结：有一项科研活动。',generated_at:'2026-10-17T12:00:00Z',highlights:[{message_id:'mail:1',summary:'查看科研讲座安排。'}]}:null});
@@ -108,6 +109,13 @@ try{
  await evaluate(`document.querySelector('[data-read]').click();waitFor(()=>!document.querySelector('[data-read]'))`);
  await evaluate(`document.querySelector('[data-notice-filter=read]').click();waitFor(()=>document.querySelector('[data-read]'))`);
  assert.equal(await evaluate(`document.querySelector('[data-read]').textContent`),'标记未读','Read history remains accessible');
+ await evaluate(`location.hash='mail';waitFor(()=>document.querySelector('[data-bucket=focus]'))`);
+ await evaluate(`document.querySelector('[data-sync]').click();waitFor(()=>workspaceCheck.syncing)`);
+ await evaluate(`location.hash='courses';waitFor(()=>document.querySelector('.course-platforms'))`);
+ await evaluate(`location.hash='mail';waitFor(()=>document.querySelector('.source-state[data-state=syncing]'))`);
+ assert(await evaluate(`document.querySelector('[data-sync]').disabled`),'Returning pages show the accepted background task');
+ await evaluate(`workspaceCheck.syncing=false;waitFor(()=>document.querySelector('.source-state[data-state=ready]'))`);
+ assert.equal(await evaluate(`workspaceCheck.syncStarts`),1,'Returning does not start duplicate syncs');
  assert.deepEqual(await evaluate(`workspaceCheck.unexpected`),[]);assert.deepEqual(errors,[]);
  console.log('PASS campus workspace UI: email reading/preferences/manual priority, course-first integration, background alerts, consent actions, Markdown, mobile and style cleanup');
 }finally{socket?.close();browser('close');}

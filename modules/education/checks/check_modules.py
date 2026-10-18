@@ -79,7 +79,7 @@ class Sources:
         return httpx.Response(200, json=value)
 
     @contextmanager
-    def authenticated_client(self, provider, target=None):
+    def authenticated_client(self, provider, target=None, *, cancelled=None):
         assert (provider, target) in {('ids', 'elrc'), ('piazza', None)}
         if self.blocked:
             raise LoginRequired('合成登录已失效。')
@@ -111,17 +111,27 @@ def app_fixture(data):
     return app, fixture
 
 
+async def sync_course(client, module, course, body=None):
+    response = await client.post(f'/api/v1/modules/{module}/courses/{course}/sync', json=body or {})
+    assert response.status_code == 202, response.text
+    for _ in range(300):
+        value = (await client.get(f'/api/v1/modules/{module}/' + ('sync' if module == 'elrc' else 'courses'))).json()
+        report = value if module == 'elrc' else value['status'][course]
+        if report['status'] != 'syncing':
+            return report
+        await asyncio.sleep(.01)
+    raise AssertionError('Synthetic course synchronization did not finish')
+
+
 async def seed(client):
     initial = (await client.get('/api/v1/bootstrap')).json()
     owned = [item for item in initial['modules'] if item['id'] in {'elrc', 'education', 'piazza'}]
     assert len(owned) == 3 and all(item['status'] == 'ready' for item in owned), initial
     client.headers['X-Framework-Token'] = initial['csrf_token']
     assert (await client.post('/api/v1/modules/elrc/discover', json={})).status_code == 200
-    response = await client.post('/api/v1/modules/elrc/courses/demo-course/sync', json={})
-    assert response.status_code == 200, response.text
-    assert response.json()['status'] == 'ready'
+    assert (await sync_course(client, 'elrc', 'demo-course'))['status'] == 'ready'
     await client.put('/api/v1/modules/piazza/courses', json={'courses': [{'id': 'demo-network', 'name': '合成课程 Piazza'}]})
-    assert (await client.post('/api/v1/modules/piazza/courses/demo-network/sync', json={})).status_code == 200
+    assert (await sync_course(client, 'piazza', 'demo-network'))['status'] == 'ready'
 
 
 async def check(data):
@@ -164,8 +174,8 @@ async def check(data):
             assert (await client.get('/api/v1/modules/elrc/search?q=电场&course_id=other')).status_code == 400
             assert (await client.get('/api/v1/modules/elrc/courses/demo-course/lessons/7-lesson?offset=-1')).status_code == 422
             fixture.fail_voice = True
-            refreshed = await client.post('/api/v1/modules/elrc/courses/demo-course/sync', json={'force': True})
-            assert refreshed.json()['status'] == 'partial'
+            refreshed = await sync_course(client, 'elrc', 'demo-course', {'force': True})
+            assert refreshed['status'] == 'partial'
             lesson = (await client.get('/api/v1/modules/elrc/courses/demo-course/lessons/7-lesson')).json()
             assert lesson['voice_state'] == 'stale' and lesson['total'] == 105
             print('PASS ELRC: discovery, term isolation, sync, 100ns timestamps, paging, failed-refresh preservation')
@@ -186,15 +196,15 @@ async def check(data):
             post = listing['items'][0]
             assert len(post['attachments']) == 1 and 'hidden script' not in post['body'] and '补充回复' in post['body']
             await client.put('/api/v1/modules/piazza/courses/demo-network/posts/post1/read', json={'read': True})
-            await client.post('/api/v1/modules/piazza/courses/demo-network/sync', json={})
+            await sync_course(client, 'piazza', 'demo-network')
             listing = (await client.get('/api/v1/modules/piazza/posts?course_id=demo-network')).json()
             assert listing['total'] == 2 and next(post for post in listing['items'] if post['id'] == 'post1')['read']
             fixture.fail_post = True
-            partial = (await client.post('/api/v1/modules/piazza/courses/demo-network/sync', json={})).json()
+            partial = await sync_course(client, 'piazza', 'demo-network')
             assert partial['status'] == 'partial' and partial['failed_ids'] == ['post2'] and partial['next_offset'] == 0
             fixture.blocked = True
-            blocked = await client.post('/api/v1/modules/piazza/courses/demo-network/sync', json={})
-            assert blocked.status_code == 401
+            blocked = await sync_course(client, 'piazza', 'demo-network')
+            assert blocked['status'] == 'error'
             assert (await client.get('/api/v1/modules/piazza/posts?course_id=demo-network')).json()['total'] == 2
             print('PASS Piazza: replies, safe links, rule triage, deduplication, read state, failed-page retry, offline cache')
 

@@ -1,3 +1,4 @@
+import asyncio
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -73,15 +74,13 @@ def create_router(context):
 
     @router.post("/sync", status_code=202)
     async def sync():
-        result = {}
-        for source, provider in SOURCES.items():
+        async def dispatch(source, provider):
             account = context.auth.get_status(provider)
             if not account.get("has_session") and not account.get("has_password"):
-                result[source] = {"status": "not_connected"}
-                continue
+                return source, {"status": "not_connected"}
             response = await context.api(source, "/sync", method="POST")
-            result[source] = response.json() if response.status_code == 202 else {"status": "unavailable"}
-        return {"sources": result}
+            return source, response.json() if response.status_code == 202 else {"status": "unavailable"}
+        return {"sources": dict(await asyncio.gather(*(dispatch(source, provider) for source, provider in SOURCES.items())))}
 
     @router.get("/catalog/{collection}")
     async def catalog(collection: Literal["courses", "assignments", "materials", "announcements", "posts", "lessons", "timetable", "messages"], course_id: str | None = None, current: bool = False, pending: bool = False, source: str | None = None, q: str = Query(default="", max_length=1000), offset: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=500)):

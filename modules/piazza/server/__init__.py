@@ -60,6 +60,7 @@ def create_router(context):
     router = APIRouter()
     lock = threading.Lock()
     accounts = AccountCache(context, "piazza")
+    collection = None
 
     def selected(course_id, current):
         identifier(course_id)
@@ -70,6 +71,9 @@ def create_router(context):
     def courses():
         current = accounts.capture()
         result = {"courses": current.store.read("courses", []), "status": current.store.read("status", {})}
+        for report in result['status'].values():
+            if report.get('status') == 'syncing' and (collection is None or collection.done()):
+                report.update(status='error', next_offset=report['offset'], message='上次采集已停止，已保存的帖子保留，可重试本页。')
         accounts.check(current)
         return result
 
@@ -104,20 +108,43 @@ def create_router(context):
             accounts.capture().store.write("courses", [course.model_dump() for course in body.courses])
         return courses()
 
-    @router.post("/courses/{course_id}/sync")
+    @router.post("/courses/{course_id}/sync", status_code=202)
     def sync(course_id: str, body: Collect):
+        nonlocal collection
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "Piazza 正在采集，请稍后再试。")
         try:
             current = accounts.capture()
             selected(course_id, current)
+            if _source.cancelled.is_set():
+                raise HTTPException(409, '模块正在停止。')
+            reports = current.store.read('status', {})
+            reports[course_id] = {'course_id': course_id, 'status': 'syncing', 'offset': body.offset,
+                                  'next_offset': body.offset, 'message': '正在后台采集，可离开此页。'}
+            current.store.write('status', reports)
+            collection = _source.executor.submit(collect, course_id, body, current)
+            if getattr(context, 'runtime', None):
+                context.runtime.watch('帖子采集', collection)
+            return reports[course_id]
+        except Exception:
+            lock.release()
+            raise
+
+    def collect(course_id, body, current):
+        try:
+            accounts.check(current)
+            if _source.cancelled.is_set():
+                return
             posts = current.store.read("posts:" + course_id, {})
             failures, saved = [], 0
-            with context.auth.authenticated_client("piazza") as client:
+            with context.auth.authenticated_client("piazza", cancelled=_source.cancelled) as client:
                 accounts.check(current)
                 source = Piazza(client)
                 rows = source.feed(course_id, body.offset)
                 for row in rows:
+                    accounts.check(current)
+                    if _source.cancelled.is_set():
+                        return
                     cid = identifier(row["id"])
                     try:
                         raw = source.post(course_id, cid)
@@ -129,6 +156,9 @@ def create_router(context):
                         post["read"] = bool(old.get("read")) if same else False
                         posts[post["id"]] = post
                         # Commit each successful post; a later login/network error cannot erase it.
+                        accounts.check(current)
+                        if _source.cancelled.is_set():
+                            return
                         current.store.write("posts:" + course_id, posts)
                         saved += 1
                     except LoginRequired:
@@ -141,11 +171,14 @@ def create_router(context):
                       "checked_at": datetime.now(UTC).isoformat(),
                       "message": "部分帖子失败；继续采集会重试本页。" if failures else "本页已更新；按更新时间分页，可能重复，缓存会去重。"}
             accounts.check(current)
+            if _source.cancelled.is_set():
+                return
             status = current.store.read("status", {})
             status[course_id] = report
             current.store.write("status", status)
             return report
         except Exception:
+            accounts.check(current)
             status = current.store.read("status", {})
             status[course_id] = {"status": "error", "offset": body.offset, "next_offset": body.offset,
                                  "message": "采集未完成，已保存的帖子保留；请检查连接后重试。"}

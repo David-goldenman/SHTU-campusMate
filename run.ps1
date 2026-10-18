@@ -89,7 +89,7 @@ try {
     if ($edge) {
         $browserJob = Start-Job -FilePath (Join-Path $PSScriptRoot 'scripts/open-workspace.ps1') -ArgumentList $PSScriptRoot, $edge, $launchId
     }
-    Write-Host 'Starting Campus Workspace.'
+    Write-Host 'Starting campusMate.'
     Write-Host 'Keep this window open; Ctrl+C stops the service.'
     if ($edge) { Write-Host 'Edge opens when the service is ready.' }
     if ($options.Distro) {

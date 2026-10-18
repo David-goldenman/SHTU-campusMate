@@ -58,6 +58,8 @@ AI 接入方式按功能选择：
 
 ## 环境、数据与桌面集成
 
+资料同步由模块后端队列执行；页面只提交任务与读取进度，卸载时取消请求和轮询，不能停止已接受的后台任务。返回页面从公开快照接口恢复状态。新增来源沿用 `Source` 的过期缓存刷新和完整 `close()` 清理；多来源同步并行派发，每个来源独立去重与处理错误。通过合成阻塞任务验证切页、重复请求、换号与停用，避免用真实账号或 AI 调用代替回归。
+
 Python 开发使用 uv；Windows 环境为 `.codex/windows-venv`，WSL 环境为 `.codex/venv`。应用默认 Windows 原生启动，也可通过 --distro / CAMPUS_WSL_DISTRO 选择 WSL。开发检查、截图和合成夹具保存在 `.codex/`；应用 Windows 环境为 `.private/runtime/windows/venv`，WSL 环境为 `.private/runtime/venv`。运行缓存、固定登录资料与 Harness 工作区在 `.private/runtime/` 管理。模块文件下载暂存在 `context.data_dir/tmp/downloads/`，传输结束删除。用户持久资料放在 `.private/`，账号、会话和 API Key 使用 Vault 加密，浏览器站点数据由 Edge 管理。私有目录和开发目录遵循 `.gitignore`。
 
 依赖安装与检查使用 `uv sync --locked`。

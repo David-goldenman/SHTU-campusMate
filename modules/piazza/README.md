@@ -25,11 +25,11 @@
 | `GET /catalog` | 上次发现的已加入课程、学期匹配结果、参考学校学期及检测时间 |
 | `POST /discover`，`{"current_semester":{"id":"2026-2027-1","name":"2026-2027学年秋季"}}` | 从 `user.status` 自动发现课程；可省略学校学期，此时标为学期待确认 |
 | `PUT /courses`，`{"courses":[{"id":"...","name":"..."}]}` | 设置最多 30 门课程 |
-| `POST /courses/{id}/sync`，`{"offset":0}` | 采集该课程 20 条帖子；失败帖子不覆盖旧缓存，不推进失败页 |
+| `POST /courses/{id}/sync`，`{"offset":0}` | 返回 202 并在后台采集该课程 20 条帖子；失败帖子不覆盖旧缓存，不推进失败页 |
 | `GET /posts?course_id=...&offset=0&limit=20&level=all&q=` | 分页离线缓存；`level` 为 all/high/medium/normal |
 | `PUT /courses/{id}/posts/{post_id}/read`，`{"read":true}` | 设置已读状态 |
 
-采集返回 `status`、`saved`、`failed_ids`、`next_offset`、`checked_at`。`next_offset=null` 表示本轮没有下一页；存在失败时指向本页以便重试。帖子保留标题、正文和回复、原始创建/更新时间、附件链接、重要程度及理由。无法识别的时间保留空值，不补成当前时间。
+采集请求立即返回 `status:syncing`、`course_id`、`offset`、`next_offset` 和进度说明；通过 `GET /courses` 的 `status[course_id]` 读取进度与最终结果 `saved`、`failed_ids`、`checked_at`。页面每 1.2 秒检查正在进行的采集，离开页面后后端继续，返回时恢复进度；模块停用或程序退出时停止。`next_offset=null` 表示本轮没有下一页；存在失败时指向本页以便重试。帖子保留标题、正文和回复、原始创建/更新时间、附件链接、重要程度及理由。无法识别的时间保留空值，不补成当前时间。
 
 ## 自动发现与学期判断
 
@@ -44,7 +44,7 @@
 - 使用 `context.auth.authenticated_client("piazza")`；不迁入自带登录、Cookie 存储、QQ/OneBot、Webhook、QQ 文件归档或本机 AI 客户端。
 - 使用 Piazza 只读 `user.status`、`network.get_my_feed`、`content.get` 调用；重要程度是可解释的候选规则，不调用 AI。
 - 用模块 `context.store` 保存关注范围和帖子。相同帖子重复采集会覆盖更新并去重；正文不变时保留已读状态。切换账号前通过框架设置清除模块数据。
-- 本阶段采用用户触发的分页采集，没有轮询后台进程；停止/刷新由宿主等待当前请求结束，不遗留线程、浏览器或客户端。
+- 用户触发的分页采集进入本模块后台队列，通过状态接口恢复进度。停止和刷新取消本模块任务并等待资源释放。
 - 附件提供经过 HTTPS 协议检查的原始链接，不自动下载、不转发 Cookie 给附件站。帖子按纯文本展示。
 - 远端列表按更新时间变化，分页期间更新的帖子可能重复或移动，因此不承诺完整历史；每次可从最新页重新核对。
 - 移除关注课程只隐藏该课程，缓存保留至框架清除模块数据。

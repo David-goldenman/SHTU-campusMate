@@ -9,7 +9,7 @@ def connect(body, cancel):
     client = QQClient(body.base_url, body.access_token, stop=cancel)
     account = str((client.login_info() or {}).get('user_id') or '')
     if not account:
-        raise APIError('qq', 'schema', 'QQ 登录信息没有账号标识。')
+        raise APIError('qq', 'account', '未获取到 QQ 登录账号。请先在 NapCat 管理页面完成本人 QQ 登录，再回来连接。')
     rows = client.groups()
     if not isinstance(rows, list) or len(rows) > 3000:
         raise APIError('qq', 'schema', 'QQ 群列表格式不匹配。')

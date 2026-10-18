@@ -95,7 +95,16 @@ async def check(root):
                 return manager.entries['alpha'].context
             current().store.write('record', {'text': 'version one'})
             (current().data_dir / 'note.txt').write_text('file one', encoding='utf-8')
-            response = await client.post('/api/v1/data/backups')
+            rename = Path.rename
+            renamed = []
+            def release_directory(source, destination):
+                renamed.append(source)
+                if len(renamed) == 1:
+                    raise PermissionError('synthetic transient directory lock')
+                return rename(source, destination)
+            with patch.object(Path, 'rename', release_directory):
+                response = await client.post('/api/v1/data/backups')
+            assert len(renamed) >= 2, 'Transient file locks must release before publishing a backup'
             assert response.status_code == 200, response.text
             original = response.json()['backup']['id']
             rows = json.loads((backups.root / original / 'state.json').read_text(encoding='utf-8'))
