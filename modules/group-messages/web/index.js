@@ -1,3 +1,5 @@
+import {qqConnection} from './qq-connection.js';
+
 const names = {wechat:'微信', qq:'QQ'};
 const kinds = {assignment:'作业',quiz:'Quiz',exam:'考试',class_change:'课程变更',activity:'活动',material:'资料',notice:'通知'};
 const statuses = {pending:'待核实',accepted:'已确认',applied:'已更新',dismissed:'已忽略'};
@@ -7,6 +9,7 @@ export async function mount(container, context) {
   const e = context.ui.escape, signal = context.signal;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), signal);
   let timer, stopped=false, serial=0, state, courses=[], items=[], itemSignature='', filter='pending';
+  let qqAddress;
   const drafts = new Map(), dirty = new Set(), rendered = new Map(), coverageRendered = new Map();
   const dialog = document.createElement('dialog');
   dialog.className='group-dialog';
@@ -54,7 +57,7 @@ export async function mount(container, context) {
     const root=card(source), config=state.sources[source];
     drafts.delete(source);
     const connection=source==='wechat'?`<form data-connect="wechat"><button type="button" class="button button-secondary" data-discover>检测本机微信</button><p class="gm-hint">Windows 本机实验读取，首次仅扫描你选定的本人微信实例；密钥由系统加密保存。</p><label>微信数据目录<input name="database_dir" autocomplete="off" placeholder="选择本人账号的 db_storage 文件夹" value="${e(config.database_dir||'')}"></label><div data-folders></div><label>微信实例<select name="pid" required><option value="">先检测本机微信</option></select></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权只读访问本人微信，用于整理随后选择的群聊；了解本机非官方读取可能受版本变化影响。</label><button class="button button-primary" type="submit">授权并读取群列表</button></form><details class="gm-snapshot"><summary>导入已有可读快照</summary><form data-snapshot><label>快照目录<input name="path" autocomplete="off" placeholder="包含 message/message_*.db 的目录" required></label><p class="gm-hint">接受已完成导出的微信 4 可读快照。选择后仅同步快照内的数据。</p><button class="button button-secondary" type="submit">检查并读取群列表</button></form></details>`:
-      `<form data-connect="qq"><p class="gm-hint">使用已经运行并登录本人账号的 NapCat／OneBot 本机 HTTP 服务。接入后仅轮询所选群。</p><label>本机服务地址<input name="base_url" type="url" value="${e(config.base_url||'http://127.0.0.1:3000')}" required></label><label>Access Token<input name="access_token" type="password" autocomplete="new-password" required></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权读取本人 QQ 中随后选择的群聊。</label><button class="button button-primary" type="submit">验证连接并读取群列表</button></form>`;
+      qqConnection({...config,base_url:qqAddress??config.base_url},e);
     root.innerHTML=`<div class="gm-source-heading"><h3>${names[source]}</h3><span class="gm-badge" data-source-state></span></div><p class="gm-hint" data-source-status></p><p class="gm-error" data-source-error></p>
       <details class="gm-connect" ${config.connected?'':'open'}><summary>${config.connected?'重新连接 / 更换账号':'连接消息来源'}</summary>${connection}</details>
       ${config.connected?`<form data-selection="${source}"><label class="gm-search">选择课程群<input type="search" data-group-search placeholder="搜索群名称" autocomplete="off"></label><p class="gm-hint" data-group-count></p><div class="gm-group-list" data-groups></div>
@@ -71,6 +74,12 @@ export async function mount(container, context) {
     root.querySelector('[data-source-state]').textContent=!config.connected?'未连接':config.enabled?'自动同步中':'已暂停';
     root.querySelector('[data-source-status]').textContent=config.connected?`${config.account_label||names[source]} · 最近同步 ${date(config.last_synced_at)}${config.approved_version?' · 微信 '+config.approved_version:''}`:'选择自己的账号与需要整理的群，默认不读取任何群。';
     root.querySelector('[data-source-error]').textContent=config.error||'';
+    const connectionFeedback=root.querySelector('[data-connection-feedback]');
+    if(connectionFeedback){
+      const connecting=state.running?.source===source&&state.running?.kind==='connect';
+      connectionFeedback.textContent=connecting?'正在验证连接口令和 QQ 登录状态…':config.error|| (config.connected?'已连接，请选择下方需要同步的群聊。':'连接时先验证 QQ 账号并读取群列表，保存选群后才开始同步。');
+      connectionFeedback.classList.toggle('gm-error',!connecting&&!!config.error);
+    }
     if(config.connected&&!dirty.has(source)&&coverageRendered.get(source)!==JSON.stringify(config.coverage))renderGroups(source);
   }
   function renderItems() {
@@ -100,7 +109,7 @@ export async function mount(container, context) {
     if(values[0].account_revision!==values[1].account_revision)return;
     state=values[0];items=values[1].items;
     if(oldOwner&&oldOwner!==state.account_revision){
-      dirty.clear();drafts.clear();rendered.clear();dialog.close();courses=[];
+      dirty.clear();drafts.clear();rendered.clear();dialog.close();courses=[];qqAddress=undefined;
       const catalog=await api('/courses');if(stopped||token!==serial)return;courses=catalog.items;
       feedback('账号已变化，请重新核对连接与选群。');
     }
@@ -125,6 +134,7 @@ export async function mount(container, context) {
   on(container,'input',event=>{
     const source=event.target.closest('[data-source]')?.dataset.source;
     if(!source)return;
+    if(source==='qq'&&event.target.name==='base_url')qqAddress=event.target.value;
     if(event.target.matches('[data-group-search]')){renderGroups(source);return;}
     dirty.add(source);
   });
@@ -147,7 +157,13 @@ export async function mount(container, context) {
       if(form.matches('[data-connect]')){
         const body=source==='wechat'?{database_dir:form.elements.database_dir.value.trim(),pid:Number(form.elements.pid.value),acknowledge_local_read:form.elements.consent.checked}:
           {base_url:form.elements.base_url.value.trim(),access_token:form.elements.access_token.value,acknowledge_local_read:form.elements.consent.checked};
-        try{await api(`/${source}/connect`,{method:'POST',body});}finally{if(form.elements.access_token)form.elements.access_token.value='';form.elements.consent.checked=false;}
+        try{await api(`/${source}/connect`,{method:'POST',body});}finally{
+          if(form.elements.access_token){
+            form.elements.access_token.value='';form.elements.access_token.type='password';
+            const toggle=form.querySelector('[data-toggle-token]');toggle.textContent='显示口令';toggle.setAttribute('aria-pressed','false');
+          }
+          form.elements.consent.checked=false;
+        }
         dirty.delete(source);feedback('正在验证本人连接，完成后请选择需要同步的群。');
       }else if(form.matches('[data-snapshot]')){
         await api('/wechat/snapshot',{method:'POST',body:{path:form.elements.path.value.trim()}});dirty.delete(source);feedback('正在检查快照和群列表。');
@@ -165,6 +181,10 @@ export async function mount(container, context) {
     const button=event.target.closest('button');if(!button)return;
     const source=button.closest('[data-source]')?.dataset.source, gid=button.closest('[data-gid]')?.dataset.gid;
     call(async()=>{
+      if(button.hasAttribute('data-toggle-token')){
+        const input=button.closest('form').elements.access_token, visible=input.type==='password';
+        input.type=visible?'text':'password';button.textContent=visible?'隐藏口令':'显示口令';button.setAttribute('aria-pressed',String(visible));return;
+      }
       if(button.hasAttribute('data-refresh')){await refresh(true);return;}
       if(button.hasAttribute('data-stop')){await api('/stop',{method:'POST'});feedback('已请求停止，正在结束当前处理。');await refresh();return;}
       if(button.dataset.filter){filter=button.dataset.filter;for(const node of container.querySelectorAll('[data-filter]'))node.setAttribute('aria-pressed',String(node.dataset.filter===filter));renderItems();return;}
@@ -198,7 +218,7 @@ export async function mount(container, context) {
       if(button.hasAttribute('data-compatibility')){await api('/wechat/compatibility',{method:'POST'});feedback('已暂停并开始兼容性检查。');await refresh();return;}
       if(button.hasAttribute('data-forget')){
         openDialog('移除'+names[source]+'连接',`<p>停止读取并删除本模块的连接密钥。已有事项及日程保留。</p><button type="button" class="button button-danger" data-confirm-forget>移除连接</button>`);
-        on(dialog.querySelector('[data-confirm-forget]'),'click',()=>call(async()=>{await api(`/sources/${source}`,{method:'DELETE'});dirty.delete(source);dialog.close();await refresh(true);feedback('连接已移除。');}));return;
+        on(dialog.querySelector('[data-confirm-forget]'),'click',()=>call(async()=>{await api(`/sources/${source}`,{method:'DELETE'});dirty.delete(source);if(source==='qq')qqAddress=undefined;dialog.close();await refresh(true);feedback('连接已移除。');}));return;
       }
       if(button.dataset.decision){
         const item=items.find(row=>row.id===button.closest('[data-item]').dataset.item);

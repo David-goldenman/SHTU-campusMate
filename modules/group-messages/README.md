@@ -5,7 +5,7 @@
 ## 使用
 
 1. 微信：正常登录 Windows 微信 4，检测本人实例并选择本人的 `db_storage`，勾选只读授权。复用 QJQ 的本机密钥捕获、SQLCipher 页面校验和已提交 WAL 合并；首次授权只返回群列表。也可选择已完成导出的可读微信 4 快照。
-2. QQ：使用已运行、已登录本人的 NapCat／OneBot HTTP 服务，填写回环地址与 Access Token。仅调用读取接口，不发送消息、不安装或启动 QQ 适配器。
+2. QQ：按照卡片中的三步引导准备 NapCat／OneBot HTTP 服务，填写回环地址与连接口令（Access Token）。口令在 NapCat“网络配置 → HTTP 服务端 → Token”中设置或复制，与 QQ 密码和管理页面登录口令分开。连接成功后仅展示群列表，选择并保存群后才开始同步。仅调用读取接口，不发送消息、不安装或启动 QQ 适配器。
 3. 勾选群、关联课程并保存。微信可每 5／15／30 分钟同步；QQ 可每 20 秒／1／5／15 分钟轮询。每次同步更新近 7／30 天的正文窗口，首次提取覆盖整个已同步范围。
 4. 先同步一次即可查看发言者，再指定可信老师／助教（按稳定账号标识，不凭昵称）。单独选择自动提取与自动应用；开启自动提取前确认发送相关正文及前文给当前 AI 服务。手动“整理一次”也说明发送范围。
 5. 事项可查看逐条引用，确认信息、加入本地待办／日程、忽略或撤销。调课先产生核对待办，不直接修改教务课程节次。活动始终需要明确参加。
@@ -13,6 +13,8 @@
 自动应用要求课程绑定、可信的新消息引用、可核实时间、无疑问措辞，且所选群策略仍有效。课程平台已有相似作业时要求人工核对；群事项只创建本地计划，不改变学校提交状态。Quiz／考试自动入日程要求完整时段与可完整比较的课表；重叠、不完整时段和缺失来源均转人工核对。已有目标被手动编辑或删除后不覆盖、不自动重建。取消通知需人工确认。
 
 界面使用共享的主操作、次操作和删除按钮，沿用四个主题的颜色与表面层次；PRTS 使用直角组件。群消息、来源与选群、提取结果分级显示，弹窗提供可访问名称。
+
+QQ 首次配置：按 [NapCat Windows 启动说明](https://napneko.github.io/guide/boot/Shell) 启动并登录本人 QQ，在“网络配置”新建并启用 HTTP 服务端，Host 使用 `127.0.0.1`、端口例如 `3000`，设置 Token 后把同一口令填入工作台。管理页面通常使用 `6099`，以 NapCat 启动提示为准；它与工作台要连接的 HTTP 接口分开。详见 [官方配置说明](https://napneko.github.io/config/basic)。连接口令可临时显示核对，提交后清空并重新隐藏；失败重试在当前页面保留接口地址，账号切换时清除该地址草稿；持久凭据只写入 `context.secrets`。失败提示区分接口不可达、口令验证失败、地址不匹配与 QQ 尚未登录。
 
 ## 范围与兼容性
 
@@ -34,4 +36,4 @@
 
 `server/native/`、微信文字解析及合成加密夹具改编自团队 QJQ 的 `wechat_crypto.py`、`wechat_native.py`、`wechat_version.py`、`wechat_snapshot.py`、`wechat.py` 和 `test_wechat_native.py`，保留 `native/WCDB_LICENSE`。QQ 本机只读客户端复用团队 WYT 的 `message-hub/source_api.py`，补充账号、群、稳定发送者与缺口状态校验。旧应用的独立 AI 客户端、全局工作线程和私有数据库未接入。
 
-`checks/check_native.py` 验证加密页、已提交 WAL、选群、7 天范围、版本变化、取消及失败清理；`checks/check_flow.py` 验证增量、引用、信任、换号、暂停及真实公开待办／日程接口的更新与撤销。两项纳入项目 `check.ps1`／`check.sh`；官方 Harness 合成模型检查同时加载本插件。`node modules/group-messages/checks/check_web.mjs <本机地址>` 使用浏览器内合成数据，不读取个人聊天、不保存真实设置，截图进入 `.codex/tmp/group-messages-ui/`。
+`checks/check_qq_connection.py` 验证本机服务、口令、接口地址及 QQ 登录失败的分项提示与秘密不泄漏；`checks/check_native.py` 验证加密页、已提交 WAL、选群、7 天范围、版本变化、取消及失败清理；`checks/check_flow.py` 验证增量、引用、信任、换号、暂停及真实公开待办／日程接口的更新与撤销。这些检查纳入项目 `check.ps1`／`check.sh`；官方 Harness 合成模型检查同时加载本插件。`node modules/group-messages/checks/check_web.mjs <本机地址>` 使用浏览器内合成数据，不读取个人聊天、不保存真实设置，截图进入 `.codex/tmp/group-messages-ui/`。
