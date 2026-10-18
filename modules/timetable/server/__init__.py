@@ -229,8 +229,9 @@ def create_router(context):
 
     @router.post("/schedule/sync", status_code=202)
     async def sync_schedule():
+        own = source.sync()
         results = await asyncio.gather(*(context.api(name, "/sync", method="POST") for name in SCHEDULE_SOURCES))
-        return {"sources": {"timetable": source.sync(), **{name: result.json() if result.status_code == 202 else {"status": "unavailable"} for name, result in zip(SCHEDULE_SOURCES, results)}}}
+        return {"sources": {"timetable": own, **{name: result.json() if result.status_code == 202 else {"status": "unavailable"} for name, result in zip(SCHEDULE_SOURCES, results)}}}
 
     return router
 

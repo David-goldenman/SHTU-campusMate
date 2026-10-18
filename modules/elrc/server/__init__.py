@@ -30,6 +30,7 @@ def create_router(context):
     router = APIRouter()
     lock = threading.Lock()
     accounts = AccountCache(context, "ids")
+    collection = None
 
     def cache():
         current = accounts.capture()
@@ -65,7 +66,10 @@ def create_router(context):
 
     @router.get("/sync")
     def sync_status():
-        return accounts.capture().store.read("sync", {"status": "idle"})
+        state = accounts.capture().store.read("sync", {"status": "idle"})
+        if state['status'] == 'syncing' and (collection is None or collection.done()):
+            return {**state, 'status': 'interrupted', 'message': '上次同步已停止，已保存内容保留，可重试。'}
+        return state
 
     @router.get("/courses/{course_id}")
     def course(course_id: str):
@@ -74,20 +78,37 @@ def create_router(context):
         accounts.check(current)
         return result
 
-    @router.post("/courses/{course_id}/sync")
+    @router.post("/courses/{course_id}/sync", status_code=202)
     def sync(course_id: str, body: SyncCourse):
+        nonlocal collection
         current, offline, library = cache()
         selected = library.course(course_id)
         if not lock.acquire(blocking=False):
             raise HTTPException(409, "课程同步正在进行，请稍后再试。")
         state = {"status": "syncing", "course_id": course_id, "started_at": now()}
         try:
+            if _source.cancelled.is_set():
+                raise HTTPException(409, '模块正在停止。')
             current.store.write("sync", state)
-            with context.auth.authenticated_client("ids", target="elrc") as client:
+            collection = _source.executor.submit(collect, current, library, selected, body, state)
+            if getattr(context, 'runtime', None):
+                context.runtime.watch('课程资料同步', collection)
+            return state
+        except Exception:
+            lock.release()
+            raise
+
+    def collect(current, library, selected, body, state):
+        course_id = state['course_id']
+        try:
+            with context.auth.authenticated_client("ids", target="elrc", cancelled=_source.cancelled) as client:
                 accounts.check(current)
                 worker = ContentLibrary(ELRC(current.data_dir, client))
 
                 def progress(lesson):
+                    accounts.check(current)
+                    if _source.cancelled.is_set():
+                        raise RuntimeError('课程同步已停止。')
                     current.store.write("sync", {**state, "lesson": lesson})
 
                 async def run():

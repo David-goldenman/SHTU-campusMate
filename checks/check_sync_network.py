@@ -2,6 +2,7 @@
 import asyncio
 import json
 import sys
+import threading
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -124,9 +125,14 @@ with sandbox("elrc-inline", lambda request: (_ for _ in ()).throw(httpx.ConnectE
             assert response.status_code == 502 and response.json()["detail"]["network_failure"]["target"] == "elrc"
             with patch.object(elrc.ContentLibrary, "course", return_value={"id": "synthetic"}):
                 response = client.post("/courses/synthetic/sync", json={"force": False})
-                assert response.status_code == 502 and response.json()["detail"]["network_failure"]["kind"] == "connection_error"
-                assert client.get("/sync").json()["network_failure"]["id"] == response.json()["detail"]["network_failure"]["id"]
-                assert "synthetic-secret" not in response.text
+                assert response.status_code == 202
+                for _ in range(100):
+                    state = client.get('/sync').json()
+                    if state['status'] != 'syncing':
+                        break
+                    threading.Event().wait(.01)
+                assert state['status'] == 'error' and state['network_failure']['kind'] == 'connection_error'
+                assert 'synthetic-secret' not in json.dumps(state)
             with patch.object(context.auth, "authenticated_client", side_effect=LoginRequired("Login needed")):
                 try:
                     client.post("/discover", json={"semester": "current"})
