@@ -36,7 +36,8 @@ export function quoteFor(topic = 'general') {
   const pool = copyCatalog[name];
   let remembered;
   try { remembered = sessionStorage.getItem(prefix + name); } catch { /* Storage may be blocked. */ }
-  const item = pool.find(entry => entry.id === remembered) || pool[Math.floor(Math.random() * pool.length)];
+  const candidates = pool.length > 1 ? pool.filter(entry => entry.id !== remembered) : pool;
+  const item = candidates[Math.floor(Math.random() * candidates.length)];
   selected.set(name,item);
   try { sessionStorage.setItem(prefix + name,item.id); } catch { /* The module cache remains stable. */ }
   return item;
