@@ -1,6 +1,6 @@
 # 共享认证服务
 
-框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`ecourse`、`timetable`，默认 `blackboard`。E 云课堂使用原站登录页中的已登录账号标识验证身份，其课程数据由独立模块只读同步。
+框架提供 Gradescope、Piazza、学校 IDS 与 Coremail 四个独立认证提供方。认证层保存账号与会话、完成登录与二次验证、向 Python 模块提供已验证的 HTTP 客户端；具体课程、邮件与文件功能由各模块实现。提供方 ID 固定为 `gradescope`、`piazza`、`ids`、`coremail`。IDS 的登录目标固定为 `blackboard`、`elrc`、`ecourse`、`timetable`，默认 `blackboard`。学校邮箱同时支持推荐的 IMAP 专用密码登录与官方网页会话；配置 IMAP 后优先使用 IMAP，网页会话及其缓存会被删除。E 云课堂使用原站登录页中的已登录账号标识验证身份，其课程数据由独立模块只读同步。
 
 ## 用户连接流程
 
@@ -12,6 +12,14 @@
 恢复按需触发，不持续轮询或保证永不过期。绑定结果不确定时先加密保留私钥，可点击“检查上次绑定结果”，不会连续注册设备。删除本机凭据只清除本机私钥；学校端设备需到账号安全页自行撤销。
 
 Gradescope、Piazza 与 IDS 的卡片提供“账号密码登录”：输入账号密码，点击“保存并登录”即可完成两个步骤；服务确认保存后清空密码框。已保存密码的同一账号可留空直接登录，修改账号时必须重新填写密码。密码登录遇到二次验证时，卡片显示原因，可继续打开官方窗口并在完成后连接。每张卡片独立显示进度与结果，操作期间禁用其控件；其他账号、AI 配置及尚未提交的输入保持原状。设备绑定进度也在原卡片更新。
+
+## 学校邮箱 IMAP（推荐）
+
+设置 → 账号连接 → 学校邮箱首先显示 IMAP 登录。使用学校邮箱“安全设置 → 客户端专用密码”生成的专用密码，不填写统一认证密码。收件服务器固定为 `imap.shanghaitech.edu.cn`，端口可编辑，默认 `993` 且启用 SSL/TLS；关闭 SSL 时按普通 IMAP 连接（常用端口 `143`）。卡片内的“设置指引”提供可关闭的两页说明：第一页对应学校邮箱中的设置入口与专用密码生成位置，第二页对应复制专用密码并核对 IMAP 服务器与端口。
+
+保存前服务使用 `imaplib` 实际登录并选择只读的 `INBOX`，成功后才写入 Vault。账号与专用密码保存在 `auth:imap:coremail`，不返回前端；状态只暴露 `configured/host/port/ssl/username/password_saved/verified_at`。接口为 `GET/PUT/DELETE /api/v1/auth/coremail/imap` 与 `POST /api/v1/auth/coremail/imap/check`；PUT 请求体为 `{username,password,port,ssl}`，同一账号可留空密码继续使用已保存值。
+
+IMAP 成功后，认证层删除 `auth:credentials:coremail`、`auth:session:coremail` 与邮箱浏览器资料，并切换账号版本，避免旧网页缓存继续生效。存在 IMAP 时，官方网页登录入口在设置页隐藏，打开官方窗口、导入会话和网页认证客户端均被拒绝；如确需改用网页方式，先删除 IMAP 登录。删除账号、清除凭据与应用完整清理都会同时删除 IMAP 配置。邮件模块通过 `AuthService.imap_connection()` 获取只读连接，凭证不进入模块；同步使用 `UID SEARCH ALL` 读取最近 100 个 UID，正文使用 `BODY.PEEK[]`，不会把邮件标记为已读。
 
 ## 校园网络、代理与校外 VPN
 
@@ -128,7 +136,7 @@ ELRC/Piazza 原有本地资料、关注课程和阅读状态按账号分区；�
 
 ## 存储与清理
 
-`backend/core/vault.py` 的 `Vault` 默认写入项目 `.private/vault.dpapi`，使用 Windows DPAPI `CurrentUser` 加密整份 JSON，先写加密临时文件再原子替换。`get()` 返回副本，`save()`、`delete()`、`delete_prefix()` 与 `clear()` 统一管理秘密。认证键为 `auth:credentials:{provider}` 和 `auth:session:{provider}`；账号、密码、Cookie、sid 与其他密钥全部留在加密 Vault。普通认证状态写入 Store 的 `auth:state:{provider}`，其中只含状态、提示、阻断标志与探测时间。DPAPI 文件与当前 Windows 账号绑定，运行于该账号或启用 Windows 互操作的 WSL。
+`backend/core/vault.py` 的 `Vault` 默认写入项目 `.private/vault.dpapi`，使用 Windows DPAPI `CurrentUser` 加密整份 JSON，先写加密临时文件再原子替换。`get()` 返回副本，`save()`、`delete()`、`delete_prefix()` 与 `clear()` 统一管理秘密。认证键为 `auth:credentials:{provider}`、`auth:session:{provider}` 与邮箱专用的 `auth:imap:coremail`；账号、密码、专用密码、Cookie、sid 与其他密钥全部留在加密 Vault。普通认证状态写入 Store 的 `auth:state:{provider}`，其中只含状态、提示、阻断标志与探测时间。DPAPI 文件与当前 Windows 账号绑定，运行于该账号或启用 Windows 互操作的 WSL。
 
 验证浏览器的固定用户目录位于 `.private/runtime/auth/{provider}`。成功导入会话或正常退出服务时关闭框架创建的独立窗口，并保留 Cookie、localStorage 与浏览器身份；删除提供方或切换账号时清除对应目录。导入失败时保留窗口供用户继续验证。私有运行数据由 Git 忽略，打包和交付按代码文件清单进行。
 
@@ -138,7 +146,7 @@ ELRC/Piazza 原有本地资料、关注课程和阅读状态按账号分区；�
 
 ## 验证范围
 
-`checks/check_auth.py` 使用合成凭据和模拟原站，检查 DPAPI 往返与原子落盘、Cookie 的安全属性及主机范围、一次自动重登、失败与二次验证后暂停、导入筛选、状态输出和独立清理；`check_auth_browser.py` 验证关闭与清除浏览器资料的区别。运行 Windows `check.ps1` 或 WSL `check.sh`，或在项目 uv 环境中执行该检查。真实账号与二次验证需要用户在本项目独立初始化，实际会话有效性由固定只读登录探测确认。
+`checks/check_auth.py` 使用合成凭据和模拟原站，检查 DPAPI 往返与原子落盘、Cookie 的安全属性及主机范围、一次自动重登、失败与二次验证后暂停、导入筛选、状态输出和独立清理；同时验证 IMAP 专用密码写入 Vault、端口与 SSL 参数传递、删除官方网页会话、网页入口被 IMAP 优先规则拒绝，以及状态接口不泄露密码。`modules/mail/checks/check_mail.py` 使用合成 IMAP 邮箱覆盖最近 100 封 UID 列表、未读标记、`BODY.PEEK[]` 正文读取、HTML 清理与附件元数据。`check_auth_browser.py` 验证关闭与清除浏览器资料的区别。运行 Windows `check.ps1` 或 WSL `check.sh`，或在项目 uv 环境中执行该检查。真实账号与二次验证需要用户在本项目独立初始化，实际会话有效性由固定只读登录探测确认。
 
 `checks/check_auth_recovery.py` 覆盖同账号续期、账号 A/B 隔离与切回、旧请求拒绝、分页中途一次恢复、MFA 不重试、其他账号设备停用、未知旧会话不迁移、跨 Vault 实例更新、失败后计数器持久化，以及注册结果不确定后的恢复。所有身份与密钥均为合成数据。
 

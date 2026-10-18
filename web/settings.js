@@ -1,4 +1,4 @@
-import {api, escape, toast, safeAction, confirmDialog, empty} from './shared.js';
+import {api, escape, toast, safeAction, confirmDialog, empty, dialog} from './shared.js';
 import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
 import {generatePassword} from './password-generator.js';
@@ -10,7 +10,71 @@ const moduleStatuses = {ready:'已加载',disabled:'已停用',error:'异常',st
 let selectedTab = 'accounts';
 
 function recoveryHint(provider) {
+  if (provider.id === 'coremail' && provider.imap?.configured) return 'IMAP 专用密码已加密保存，读取邮件时直接连接，不需要重新验证。';
   return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '绑定本机设备或保存密码后，可在过期时自动恢复登录。' : provider.id === 'coremail' ? '邮箱会话失效时，请重新打开官方登录窗口。' : '仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
+}
+
+function imapPanel(provider) {
+  const imap = provider.imap || {};
+  const configured = imap.configured === true;
+  const username = imap.username || provider.username || '';
+  return `<section class="imap-login" data-imap>
+    <header class="imap-login-heading"><div><h4>IMAP 登录<span class="imap-recommend">推荐</span></h4><p>用学校生成的客户端专用密码直连邮箱，不依赖容易过期的网页会话。</p></div><button class="text-button" data-imap-guide type="button">设置指引</button></header>
+    <p class="imap-note">使用 IMAP 登录邮箱，推荐此方法，不会出现验证失败或者重新认证的问题。</p>
+    <form class="imap-form" data-imap-form>
+      <label for="imap-username">邮箱账号</label>
+      <input id="imap-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(username)}" placeholder="例如 name@shanghaitech.edu.cn" required>
+      <label for="imap-password">客户端专用密码</label>
+      <div class="password-field"><input id="imap-password" name="password" type="password" autocomplete="off" maxlength="4096" aria-describedby="imap-password-hint" ${configured ? '' : 'required'}><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button></div>
+      <p class="field-hint" id="imap-password-hint">${imap.password_saved ? '专用密码已加密保存；留空继续使用，填写新密码可更新。' : '请先在学校邮箱“安全设置 → 客户端专用密码”生成，不要填写统一认证密码。'}</p>
+      <div class="imap-server-grid">
+        <label for="imap-host">收件服务器<input id="imap-host" value="${escape(imap.host || 'imap.shanghaitech.edu.cn')}" readonly aria-readonly="true"></label>
+        <label for="imap-port">端口<input id="imap-port" name="port" type="number" inputmode="numeric" min="1" max="65535" step="1" value="${Number(imap.port) || 993}" required></label>
+        <label class="imap-ssl" for="imap-ssl"><input id="imap-ssl" name="ssl" type="checkbox" ${imap.ssl === false ? '' : 'checked'}> 使用 SSL/TLS</label>
+      </div>
+      <div class="form-actions">
+        <button class="button button-primary" type="submit">保存并登录</button>
+        <button class="button button-secondary" data-imap-check type="button" ${configured ? '' : 'hidden'}>检查连接</button>
+        <button class="text-button danger-text" data-imap-forget type="button" ${configured ? '' : 'hidden'}>删除 IMAP 登录</button>
+      </div>
+      <p class="field-hint imap-state" data-imap-state role="status">${configured ? 'IMAP 已配置并优先使用；官方网页登录缓存已停用。' : '尚未配置 IMAP。保存后会优先使用此登录方式。'}</p>
+    </form>
+  </section>`;
+}
+
+function openImapGuide() {
+  const body = document.createElement('div');
+  body.className = 'imap-guide';
+  body.innerHTML = `<div class="imap-guide-pages">
+      <section class="imap-guide-page" data-guide-page="1" aria-label="第一页：生成客户端专用密码">
+        <div class="imap-guide-copy"><span class="imap-guide-step">步骤 1 · 生成专用密码</span><h3>在学校邮箱安全设置中生成</h3><ol><li>打开学校邮箱，点击左下角“设置”。</li><li>进入“安全设置”，选择“客户端专用密码”。</li><li>点击“生成专用密码”，填写便于识别的名称并确认。</li></ol><p>专用密码只在生成时完整显示一次，请立即复制。</p></div>
+        <figure class="imap-guide-figure"><img src="/assets/mail-imap-guide-1.png" alt="学校邮箱设置入口、安全设置与客户端专用密码生成位置示意图" width="1908" height="1072"><figcaption>图中标出了从设置到生成专用密码的完整入口。</figcaption></figure>
+      </section>
+      <section class="imap-guide-page" data-guide-page="2" aria-label="第二页：填写 IMAP 登录信息" hidden>
+        <div class="imap-guide-copy"><span class="imap-guide-step">步骤 2 · 填写登录信息</span><h3>复制专用密码并核对服务器</h3><ol><li>复制刚生成的客户端专用密码。</li><li>回到本页，在 IMAP 登录中填写邮箱账号和专用密码。</li><li>确认服务器为 <code>imap.shanghaitech.edu.cn</code>，SSL 端口为 <code>993</code>。</li></ol><p>不要把专用密码发给他人；如怀疑泄露，请在学校邮箱中移除并重新生成。</p></div>
+        <figure class="imap-guide-figure"><img src="/assets/mail-imap-guide-2.png" alt="客户端专用密码生成结果、复制按钮与 IMAP 服务器端口示意图" width="752" height="590"><figcaption>第二张图对应复制专用密码和核对 IMAP 参数的位置。</figcaption></figure>
+      </section>
+    </div>
+    <footer class="imap-guide-footer"><span data-guide-count aria-live="polite">第 1 / 2 页</span><div class="form-actions"><button class="button button-secondary" data-guide-prev type="button" disabled>上一页</button><button class="button button-secondary" data-guide-next type="button">下一页</button><button class="button button-primary" data-guide-done type="button" hidden>我已知晓</button></div></footer>`;
+  const pages = [...body.querySelectorAll('[data-guide-page]')];
+  const prev = body.querySelector('[data-guide-prev]'), next = body.querySelector('[data-guide-next]'), done = body.querySelector('[data-guide-done]'), count = body.querySelector('[data-guide-count]');
+  let page = 1;
+  const draw = () => {
+    pages.forEach(section => { section.hidden = Number(section.dataset.guidePage) !== page; });
+    prev.disabled = page === 1;
+    next.hidden = page === pages.length;
+    done.hidden = page !== pages.length;
+    count.textContent = `第 ${page} / ${pages.length} 页`;
+    pages[page - 1].querySelector('h3')?.focus?.();
+  };
+  prev.onclick = () => { if (page > 1) { page -= 1; draw(); } };
+  next.onclick = () => { if (page < pages.length) { page += 1; draw(); } };
+  done.onclick = () => node.close();
+  const node = dialog('使用 IMAP 登录学校邮箱', body);
+  node.classList.add('imap-guide-dialog');
+  node.addEventListener('close', () => node.classList.remove('imap-guide-dialog'), {once:true});
+  draw();
+  return node;
 }
 
 function deviceCard(provider) {
@@ -22,7 +86,10 @@ function providerCard(provider) {
   const target = provider.targets?.length ? '<label>登录服务<select data-auth-target>' + provider.targets.map(id => '<option value="' + escape(id) + '" ' + (provider.target === id ? 'selected' : '') + '>' + escape(targetNames[id] || id) + '</option>').join('') + '</select></label>' : '';
   const credentials = provider.id === 'coremail' ? '' : `<details class="auth-alternative"><summary>账号密码登录</summary><form class="credential-form" data-credentials="${id}"><p class="field-hint">提交后加密保存账号密码，并立即登录。需要验证码时，请使用官方窗口继续验证。</p><label for="auth-${id}-username">账号</label><input id="auth-${id}-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(provider.username)}" required><label for="auth-${id}-password">密码</label><div class="password-field"><input id="auth-${id}-password" name="password" type="password" autocomplete="current-password" maxlength="4096" aria-describedby="auth-${id}-password-hint"><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button><button class="text-button" data-generate-password type="button" aria-label="由种子生成密码" title="同一种子、平台和长度会生成同一密码">生成</button></div><p class="field-hint" id="auth-${id}-password-hint" data-password-hint></p><button class="button button-primary" type="submit">登录</button></form></details>`;
   const description = provider.id === 'ids' ? '课表、Blackboard、E 云课堂与教学社区' : provider.id === 'coremail' ? '校园邮件与智能分类' : provider.id === 'gradescope' ? '作业、题目与提交状态' : '课程讨论与公告';
-  return `<article class="provider-card" data-provider="${id}"><details class="provider-connection"><summary><div><h3>${escape(provider.name)}</h3><p>${description}</p></div><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span><span class="provider-chevron" aria-hidden="true">⌄</span></summary><div class="provider-expanded"><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>使用官方窗口连接</summary><div class="provider-actions"><button class="button button-primary" data-auth-action="browser" type="button">打开登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">登录完成，连接账号</button></div><p class="field-hint">在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。</p></details><button class="text-button" data-auth-action="refresh" type="button">检查连接</button>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></div></details></article>`;
+  const imap = provider.id === 'coremail' ? imapPanel(provider) : '';
+  const browserSummary = provider.id === 'coremail' ? '改用官方网页登录' : '使用官方窗口连接';
+  const browserHint = provider.id === 'coremail' ? '网页会话过期后需要重新验证；配置 IMAP 后此入口会停用。' : '在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。';
+  return `<article class="provider-card" data-provider="${id}"><details class="provider-connection"><summary><div><h3>${escape(provider.name)}</h3><p>${description}</p></div><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span><span class="provider-chevron" aria-hidden="true">⌄</span></summary><div class="provider-expanded"><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${imap}${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>${browserSummary}</summary><div class="provider-actions"><button class="button button-primary" data-auth-action="browser" type="button">打开登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">登录完成，连接账号</button></div><p class="field-hint">${browserHint}</p></details><button class="text-button" data-auth-action="refresh" type="button">检查连接</button>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></div></details></article>`;
 }
 
 const localTime = value => value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '暂无';
@@ -163,6 +230,7 @@ export async function mount(container, context) {
     const controls = card.querySelector('fieldset');
     const feedback = card.querySelector('[data-auth-feedback]');
     const form = card.querySelector('[data-credentials]');
+    const imapForm = card.querySelector('[data-imap-form]');
     const path = '/auth/' + provider.id;
     const targetBody = () => { const target = card.querySelector('[data-auth-target]')?.value; return target ? {target} : {}; };
     function passwordRequirement() {
@@ -171,6 +239,15 @@ export async function mount(container, context) {
       card.querySelector('[data-password-hint]').textContent = form.elements.password.required ? '请输入此账号的密码。' : '已保存此账号密码，留空可直接登录；填写新密码可更新。';
       form.querySelector('[type=submit]').textContent = form.elements.password.value || !provider.has_password ? '保存并登录' : '登录';
     }
+    function imapPasswordRequirement() {
+      if (!imapForm) return;
+      const imap = provider.imap || {};
+      const changed = imapForm.elements.username.value.trim() !== (imap.username || '');
+      imapForm.elements.password.required = !imap.configured || changed;
+      const hint = card.querySelector('#imap-password-hint');
+      if (hint) hint.textContent = imapForm.elements.password.required ? '请填写学校邮箱“客户端专用密码”，不要使用统一认证密码。' : '专用密码已加密保存；留空继续使用，填写新密码可更新。';
+      imapForm.querySelector('[type=submit]').textContent = imap.configured ? '更新并登录' : '保存并登录';
+    }
     function update(result) {
       provider = result;
       if (['verification_required','login_required'].includes(provider.status)) card.querySelector('.provider-connection').open = true;
@@ -178,9 +255,25 @@ export async function mount(container, context) {
       badge.textContent = authStatuses[provider.status];
       badge.className = 'status-badge auth-' + provider.status;
       card.querySelector('[data-recovery-hint]').textContent = recoveryHint(provider);
-      card.querySelector('[data-auth-summary]').textContent = (provider.has_session ? '登录状态已在本机加密保存' : '尚未连接') + (provider.identity_verified ? ' · 账号已确认' : '');
+      const imap = provider.imap || {};
+      card.querySelector('[data-auth-summary]').textContent = (provider.id === 'coremail' ? imap.configured ? 'IMAP 专用密码已加密保存' : '尚未配置 IMAP' : provider.has_session ? '登录状态已在本机加密保存' : '尚未连接') + (provider.identity_verified ? ' · 账号已确认' : '');
       card.querySelector('[data-browser-options]').open = provider.status !== 'ready';
+      card.querySelector('[data-browser-options]').hidden = provider.id === 'coremail' && imap.configured;
       card.querySelector('[data-auth-action=refresh]').hidden = !provider.has_session;
+      if (imapForm) {
+        if (imap.configured) {
+          imapForm.elements.username.value = imap.username || '';
+          imapForm.elements.port.value = Number(imap.port) || 993;
+          imapForm.elements.ssl.checked = imap.ssl !== false;
+        }
+        imapForm.querySelector('[data-imap-check]').hidden = !imap.configured;
+        imapForm.querySelector('[data-imap-forget]').hidden = !imap.configured;
+        const state = imapForm.querySelector('[data-imap-state]');
+        if (state) state.textContent = imap.configured
+          ? `IMAP 已配置并优先使用（${imap.username} · ${imap.host}:${imap.port}${imap.ssl === false ? ' · 非 SSL' : ' · SSL'}）。官方网页登录缓存已停用。`
+          : '尚未配置 IMAP。保存后会优先使用此登录方式。';
+        imapPasswordRequirement();
+      }
       passwordRequirement();
       if (provider.id === 'ids') card.querySelector('.auth-device').outerHTML = deviceCard(provider);
       clearTimeout(deviceTimer);
@@ -237,15 +330,49 @@ export async function mount(container, context) {
         });
       };
     }
+    if (imapForm) {
+      imapForm.oninput = imapPasswordRequirement;
+      imapForm.onsubmit = event => {
+        event.preventDefault();
+        if (!imapForm.reportValidity()) return;
+        const data = new FormData(imapForm);
+        return run('正在验证 IMAP 登录…',async () => {
+          const result = await request('/auth/coremail/imap',{method:'PUT',body:{
+            username:String(data.get('username') || '').trim(), password:String(data.get('password') || ''),
+            port:Number(data.get('port')), ssl:data.get('ssl') === 'on',
+          }});
+          imapForm.elements.password.value = '';
+          imapForm.elements.password.type = 'password';
+          const show = imapForm.querySelector('[data-show-password]');
+          show.textContent = '显示'; show.setAttribute('aria-label','显示密码'); show.setAttribute('aria-pressed','false');
+          return result;
+        },'IMAP 登录已保存。');
+      };
+    }
     card.onclick = async event => {
       const button = event.target.closest('button');
       if (!button || controls.disabled) return;
       if (button.hasAttribute('data-show-password')) {
-        const show = form.elements.password.type === 'password';
-        form.elements.password.type = show ? 'text' : 'password';
+        const targetForm = button.closest('form');
+        const input = targetForm?.elements.password;
+        if (!input) return;
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
         button.textContent = show ? '隐藏' : '显示';
         button.setAttribute('aria-label',show ? '隐藏密码' : '显示密码');
         button.setAttribute('aria-pressed',String(show));
+      } else if (button.hasAttribute('data-imap-guide')) {
+        openImapGuide();
+      } else if (button.hasAttribute('data-imap-check')) {
+        await run('正在检查 IMAP 连接…',() => request('/auth/coremail/imap/check',{method:'POST'}),'IMAP 连接正常。');
+      } else if (button.hasAttribute('data-imap-forget')) {
+        if (!await confirmDialog('删除 IMAP 登录','删除加密保存的邮箱账号和客户端专用密码，并停止使用 IMAP 读取邮件。','删除 IMAP 登录')) return;
+        await run('正在删除 IMAP 登录…',async () => {
+          const result = await request('/auth/coremail/imap',{method:'DELETE'});
+          imapForm.elements.username.value = '';
+          imapForm.elements.password.value = '';
+          return result;
+        },'IMAP 登录已删除。');
       } else if (button.hasAttribute('data-generate-password')) {
         const lengthRaw = window.prompt('密码长度（12-32，默认 16）：','16');
         if (lengthRaw === null) return;
@@ -282,6 +409,7 @@ export async function mount(container, context) {
         await run('正在删除账号…',async () => {
           const result = await request(path,{method:'DELETE'});
           if (form) { form.elements.username.value = ''; form.elements.password.value = ''; }
+          if (imapForm) { imapForm.elements.username.value = ''; imapForm.elements.password.value = ''; }
           return result;
         },'账号已删除。');
       } else if (button.dataset.deviceAction) {

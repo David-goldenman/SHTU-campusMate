@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import httpx
 
 from ...core.paths import RUNTIME
+from . import imap as imap_access
 from . import protocols
 from .browser import VerificationBrowser
 from .protocols import LoginRequired, VerificationRequired
@@ -29,6 +30,11 @@ class AuthService:
         self.setup_future = None
         if self.store.read("auth:device_setup", {}).get("status") == "waiting":
             self.store.write("auth:device_setup", {"status": "interrupted", "message": "上次设备连接已中断，请重新连接或检查待确认凭据。"})
+        # Keep the IMAP-over-web priority true for installations upgraded from an
+        # earlier version where both credential sets may already be present.
+        imap = self.vault.get("auth:imap:coremail")
+        if imap.get("username") and imap.get("password") and (self.vault.get("auth:session:coremail") or self.vault.get("auth:credentials:coremail")):
+            self._drop_official_mail()
 
     def _adopt_identity(self, provider, subject, *, migrate=False):
         """Change cache ownership only after a verified account actually changes."""
@@ -76,13 +82,14 @@ class AuthService:
         credentials = self.vault.get("auth:credentials:" + provider)
         session = self.vault.get("auth:session:" + provider)
         saved = self.store.read("auth:state:" + provider, {})
+        imap = self.vault.get("auth:imap:" + provider) if provider == "coremail" else {}
         result = {
             "id": provider, "name": protocols.PROVIDERS[provider]["name"], "username": credentials.get("username", ""),
             "has_password": bool(credentials.get("password")), "has_session": bool(session),
             "account_revision": self.get_account_revision(provider),
             "identity_verified": bool(self.vault.get("auth:identity:" + provider).get("subject")),
             "session_revision": self.store.read("auth:session_revision:" + provider, "initial"),
-            "status": saved.get("status", "login_required" if credentials or session else "not_connected"),
+            "status": saved.get("status", "ready" if imap.get("username") and imap.get("password") else "login_required" if credentials or session else "not_connected"),
         }
         for key in ("message", "checked_at", "target"):
             if key in saved:
@@ -91,11 +98,103 @@ class AuthService:
             result["targets"] = list(protocols.SERVICES)
             result["device"] = {**self.device.status(), "enabled": self.store.read("auth:device_enabled", True)}
             result["device"]["setup"] = self.store.read("auth:device_setup", {"status": "idle"})
-        result["automatic_recovery"] = bool(provider != "coremail" and credentials.get("password")) or bool(provider == "ids" and result["device"]["configured"] and result["device"]["enabled"])
+        if provider == "coremail":
+            result["imap"] = {
+                "configured": bool(imap.get("username") and imap.get("password")),
+                "host": imap.get("host", imap_access.IMAP_HOST), "port": imap.get("port", imap_access.DEFAULT_PORT),
+                "ssl": imap.get("ssl", True), "username": imap.get("username", ""),
+                "password_saved": bool(imap.get("password")), "verified_at": imap.get("verified_at"),
+            }
+        result["automatic_recovery"] = bool(provider != "coremail" and credentials.get("password")) or bool(provider == "coremail" and imap.get("password")) or bool(provider == "ids" and result["device"]["configured"] and result["device"]["enabled"])
         return result
 
     def providers(self):
         return [self.get_status(provider) for provider in protocols.PROVIDERS]
+
+    def imap_enabled(self, provider: str = "coremail") -> bool:
+        protocols.checked_target(provider)
+        if provider != "coremail":
+            return False
+        saved = self.vault.get("auth:imap:" + provider)
+        return bool(saved.get("username") and saved.get("password"))
+
+    def _drop_official_mail(self):
+        """IMAP is the preferred mailbox transport; never retain its web session."""
+        self.browser.forget("coremail")
+        self.vault.delete("auth:credentials:coremail")
+        self.vault.delete("auth:session:coremail")
+
+    def save_imap(self, username: str, password: str, port=None, secure=True):
+        provider = "coremail"
+        username = (username or "").strip()
+        if not username:
+            raise ValueError("请填写学校邮箱账号。")
+        settings = imap_access.checked_settings(port, secure)
+        with self.locks[provider]:
+            previous = self.vault.get("auth:imap:" + provider)
+            password = password or previous.get("password", "")
+            if not password:
+                raise ValueError("请填写学校邮箱的客户端专用密码。")
+            imap_access.verify(username, password, settings["port"], settings["ssl"])
+            self._drop_official_mail()
+            self.vault.delete("auth:identity:" + provider)
+            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
+            self.vault.save("auth:imap:" + provider, {
+                "host": settings["host"], "port": settings["port"], "ssl": settings["ssl"],
+                "username": username, "password": password, "verified_at": now(),
+            })
+            self._adopt_identity(provider, username.casefold())
+            self.store.write("auth:session_revision:" + provider, secrets.token_hex(12))
+            self._record(provider, "ready", message="已使用 IMAP 登录学校邮箱。", checked_at=now())
+        return self.get_status(provider)
+
+    def check_imap(self):
+        provider = "coremail"
+        with self.locks[provider]:
+            saved = self.vault.get("auth:imap:" + provider)
+            if not saved.get("username") or not saved.get("password"):
+                raise VerificationRequired("请先填写邮箱账号和客户端专用密码，使用 IMAP 登录。")
+            try:
+                imap_access.verify(saved["username"], saved["password"], saved.get("port"), saved.get("ssl", True))
+            except LoginRequired as error:
+                self._record(provider, "login_required", message=str(error), blocked=True)
+                raise
+            if not self.vault.get("auth:identity:" + provider).get("subject"):
+                self._adopt_identity(provider, saved["username"].casefold())
+            self._record(provider, "ready", message="IMAP 连接正常。", checked_at=now())
+        return self.get_status(provider)
+
+    @contextmanager
+    def imap_connection(self, provider: str = "coremail"):
+        """Yield a logged-in, read-only IMAP mailbox; credentials stay in Vault."""
+        protocols.checked_target(provider)
+        if provider != "coremail":
+            raise ValueError("只有学校邮箱支持 IMAP。")
+        saved = self.vault.get("auth:imap:" + provider)
+        if not saved.get("username") or not saved.get("password"):
+            raise VerificationRequired("请先使用 IMAP 登录学校邮箱。")
+        try:
+            mailbox = imap_access.connect(saved["username"], saved["password"], saved.get("port"), saved.get("ssl", True))
+        except LoginRequired as error:
+            self._record(provider, "login_required", message=str(error), blocked=True)
+            raise
+        try:
+            yield mailbox
+        finally:
+            try:
+                mailbox.logout()
+            except Exception:
+                pass
+
+    def forget_imap(self):
+        provider = "coremail"
+        with self.locks[provider]:
+            self._drop_official_mail()
+            self.vault.delete("auth:imap:" + provider)
+            self.vault.delete("auth:identity:" + provider)
+            self.store.delete("auth:state:" + provider)
+            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
+        return self.get_status(provider)
 
     def _record(self, provider, status, target=None, message=None, blocked=False, checked_at=None):
         state = {"status": status, "blocked": blocked}
@@ -119,6 +218,8 @@ class AuthService:
 
     def save_credentials(self, provider: str, username: str, password: str):
         protocols.checked_target(provider)
+        if provider == "coremail" and self.imap_enabled(provider):
+            raise VerificationRequired("学校邮箱已使用 IMAP 登录。如需改用官方网页，请先删除 IMAP 登录。")
         username = username.strip()
         if not username:
             raise ValueError("请填写账号。")
@@ -159,6 +260,8 @@ class AuthService:
 
     def login(self, provider: str, target: str | None = None, *, force=False):
         target = protocols.checked_target(provider, target)
+        if provider == "coremail" and self.imap_enabled(provider):
+            return self.check_imap()
         with self.locks[provider]:
             self._baseline_identity(provider)
             state = self.vault.get("auth:session:" + provider)
@@ -180,6 +283,8 @@ class AuthService:
 
     def open_browser(self, provider: str, target: str | None = None):
         target = protocols.checked_target(provider, target)
+        if provider == "coremail" and self.imap_enabled(provider):
+            raise VerificationRequired("学校邮箱已使用 IMAP 登录。如需改用官方网页，请先删除 IMAP 登录。")
         with self.locks[provider]:
             self.browser.open(provider, protocols.browser_url(provider, target))
             self._record(provider, "verification_required", target, "请在验证窗口登录，完成后导入会话。", blocked=True)
@@ -187,6 +292,9 @@ class AuthService:
 
     def import_session(self, provider: str, target: str | None = None):
         target = protocols.checked_target(provider, target)
+        if provider == "coremail" and self.imap_enabled(provider):
+            self.browser.close(provider)
+            return self.get_status(provider)
         with self.locks[provider]:
             self._baseline_identity(provider)
             state = protocols.filtered_state(provider, self.browser.state(provider))
@@ -302,6 +410,8 @@ class AuthService:
     @contextmanager
     def authenticated_client(self, provider: str, target: str | None = None, *, cancelled=None):
         target = protocols.checked_target(provider, target)
+        if provider == "coremail" and self.imap_enabled(provider):
+            raise VerificationRequired("学校邮箱已使用 IMAP 登录，网页邮箱会话不再使用。")
         with self._client_lock(provider, cancelled):
             state = self.vault.get("auth:session:" + provider)
             with protocols.http_client(state) as client:
@@ -334,6 +444,8 @@ class AuthService:
     def refresh(self, provider: str, target: str | None = None):
         """Explicit recovery also clears a previous automatic-login pause."""
         target = protocols.checked_target(provider, target)
+        if provider == "coremail" and self.imap_enabled(provider):
+            return self.check_imap()
         with self.locks[provider]:
             saved = self.store.read('auth:state:' + provider, {})
             self.store.write('auth:state:' + provider, {**saved, 'blocked': False})
@@ -358,6 +470,8 @@ class AuthService:
         protocols.checked_target(provider)
         if provider != "coremail":
             return {}
+        if self.imap_enabled(provider):
+            raise VerificationRequired("学校邮箱已使用 IMAP 登录，网页邮箱参数不再使用。")
         state = self.vault.get("auth:session:" + provider)
         if not state.get("sid"):
             raise VerificationRequired("请先完成学校邮箱浏览器验证。")
@@ -371,6 +485,7 @@ class AuthService:
             self.browser.forget(provider)
             self.vault.delete("auth:credentials:" + provider)
             self.vault.delete("auth:session:" + provider)
+            self.vault.delete("auth:imap:" + provider)
             self.vault.delete("auth:identity:" + provider)
             if provider == "ids":
                 self.device.forget()

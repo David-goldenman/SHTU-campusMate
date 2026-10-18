@@ -18,7 +18,7 @@ function browser(action) {
 
 function fixture(initial, categories, themeCatalog) {
   const savedFetch = window.fetch.bind(window);
-  const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {})}));
+  const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {}),...(id === 'coremail' ? {imap:{configured:false,host:'imap.shanghaitech.edu.cn',port:993,ssl:true,username:'',password_saved:false,verified_at:null}} : {})}));
   const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
   ai.providers.push({provider:'openai',display_name:'OpenAI',model:'gpt-4',custom:false,key_saved:false});
   const state = window.webCheck = {modules:initial.map(item => ({...item,enabled:true,status:'ready'})),providers,ai,calls:[],unexpected:[],failLogin:true,localEvents:[],assignmentOrder:{},assignmentDue:{}};
@@ -27,7 +27,7 @@ function fixture(initial, categories, themeCatalog) {
     const path = new URL(url,location.origin).pathname.replace('/api/v1','');
     if (!new URL(url,location.origin).pathname.startsWith('/api/v1/')) return savedFetch(url,options);
     const method = options.method || 'GET', body = options.body ? JSON.parse(options.body) : {};
-    state.calls.push({path,method,target:body.target});
+    state.calls.push({path,method,target:body.target,body});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/themes') return json(themeCatalog);
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
@@ -53,6 +53,13 @@ function fixture(initial, categories, themeCatalog) {
     const auth = path.match(/^\/auth\/([^/]+)\/(.+)$/);
     if (auth) {
       const provider = providers.find(item => item.id === auth[1]);
+      if (auth[1] === 'coremail' && auth[2] === 'imap' && method === 'PUT') {
+        Object.assign(provider,{status:'ready',identity_verified:true,automatic_recovery:true,imap:{configured:true,host:'imap.shanghaitech.edu.cn',port:body.port,ssl:body.ssl,username:body.username,password_saved:true,verified_at:new Date().toISOString()}});
+      }
+      if (auth[1] === 'coremail' && auth[2] === 'imap' && method === 'DELETE') {
+        Object.assign(provider,{status:'not_connected',identity_verified:false,automatic_recovery:false,imap:{configured:false,host:'imap.shanghaitech.edu.cn',port:993,ssl:true,username:'',password_saved:false,verified_at:null}});
+      }
+      if (auth[1] === 'coremail' && auth[2] === 'imap/check') Object.assign(provider,{status:'ready'});
       if (auth[2] === 'credentials') Object.assign(provider,{username:body.username,has_password:true,status:'login_required'});
       if (auth[2] === 'login') {
         await new Promise(resolve => setTimeout(resolve,350));
@@ -195,6 +202,48 @@ try {
   })()`);
   assert.deepEqual({...login,failure:undefined},{shown:true,busy:true,failure:undefined,cleared:true,ready:true,required:true,invalidBlocked:true,draft:'synthetic-draft',aiDraft:'synthetic-key-draft',sameAI:true,saves:1,logins:2,browsers:0});
   assert.match(login.failure,/验证码/);
+  const imap = await evaluate(`(async()=>{
+    const card=document.querySelector('[data-provider=coremail]');card.querySelector('.provider-connection').open=true;
+    const form=card.querySelector('[data-imap-form]'),host=form.querySelector('#imap-host');
+    const initial={host:host.value,port:form.elements.port.value,ssl:form.elements.ssl.checked,readonly:host.readOnly};
+    card.querySelector('[data-imap-guide]').click();
+    await waitFor(()=>document.querySelector('#dialog').open);
+    const page1=!document.querySelector('[data-guide-page="1"]').hidden;
+    const image1=document.querySelector('[data-guide-page="1"] img');
+    await image1.decode().catch(()=>{});
+    const loaded1=image1.complete&&image1.naturalWidth>0;
+    document.querySelector('[data-guide-next]').click();
+    await waitFor(()=>!document.querySelector('[data-guide-page="2"]').hidden);
+    const page2=!document.querySelector('[data-guide-page="2"]').hidden;
+    const count=document.querySelector('[data-guide-count]').textContent;
+    const image2=document.querySelector('[data-guide-page="2"] img');
+    await image2.decode().catch(()=>{});
+    const loaded2=image2.complete&&image2.naturalWidth>0;
+    document.querySelector('[data-guide-done]').click();
+    await waitFor(()=>!document.querySelector('#dialog').open);
+    form.elements.username.value='synthetic-mail@example.edu';form.elements.password.value='synthetic-app-password';
+    form.elements.port.value='143';form.elements.ssl.checked=false;
+    form.dispatchEvent(new Event('input',{bubbles:true}));
+    form.requestSubmit();
+    await waitFor(()=>!card.querySelector('fieldset').disabled&&card.querySelector('.status-badge').textContent==='已连接');
+    const saved={configured:card.querySelector('[data-imap-state]').textContent.includes('IMAP 已配置'),officialHidden:card.querySelector('[data-browser-options]').hidden,passwordCleared:form.elements.password.value==='',state:card.querySelector('[data-imap-state]').textContent};
+    const call=webCheck.calls.find(item=>item.path==='/auth/coremail/imap'&&item.method==='PUT');
+    card.querySelector('[data-imap-check]').click();
+    await waitFor(()=>!card.querySelector('fieldset').disabled);
+    card.querySelector('[data-imap-forget]').click();
+    await waitFor(()=>document.querySelector('#dialog').open);
+    document.querySelector('#dialog button[value=confirm]').click();
+    await waitFor(()=>!card.querySelector('fieldset').disabled&&card.querySelector('.status-badge').textContent==='待连接');
+    return {initial,page1,page2,loaded1,loaded2,count,saved,body:call.body,checked:webCheck.calls.some(item=>item.path==='/auth/coremail/imap/check'),forgotten:webCheck.calls.some(item=>item.path==='/auth/coremail/imap'&&item.method==='DELETE'),cleared:form.elements.username.value===''};
+  })()`);
+  assert.deepEqual(imap.initial,{host:'imap.shanghaitech.edu.cn',port:'993',ssl:true,readonly:true});
+  assert(imap.page1 && imap.page2 && imap.loaded1 && imap.loaded2,'Both guide pages display their screenshot');
+  assert.equal(imap.count,'第 2 / 2 页');
+  assert.equal(imap.body.username,'synthetic-mail@example.edu');
+  assert.deepEqual({port:imap.body.port,ssl:imap.body.ssl},{port:143,ssl:false});
+  assert(imap.saved.configured && imap.saved.officialHidden && imap.saved.passwordCleared,'IMAP is preferred and the official entry is dropped');
+  assert.match(imap.saved.state,/imap\.shanghaitech\.edu\.cn:143 · 非 SSL/);
+  assert(imap.checked && imap.forgotten && imap.cleared,'IMAP check and removal use dedicated endpoints');
   await evaluate(`(async()=>{const card=document.querySelector('[data-provider=ids]');card.querySelector('.provider-connection').open=true;card.querySelector('[data-auth-target]').value='elrc';card.querySelector('[data-auth-action=browser]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);card.querySelector('[data-auth-action=import-session]').click();await waitFor(()=>!card.querySelector('fieldset').disabled);card.querySelector('.auth-device').open=true;card.querySelector('[data-device-action=start]').click();await waitFor(()=>document.querySelector('#dialog').open);document.querySelector('#dialog button[value=confirm]').click();await waitFor(()=>card.querySelector('.auth-device>summary').textContent.includes('已绑定'));if(document.querySelector('#ai-form')!==originalAI)throw new Error('Device polling replaced settings');return true;})()`);
   assert.deepEqual(await evaluate(`webCheck.calls.filter(c=>['/auth/ids/browser','/auth/ids/import-session'].includes(c.path)).map(c=>c.target)`),['elrc','elrc']);
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
@@ -290,7 +339,7 @@ try {
   await evaluate(`toggleModule('assistant')`); await evaluate(`toggleModule('assignments')`); assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-nav]')].map(a=>a.dataset.nav)`),['settings']);
   await evaluate(`location.hash='timetable';waitFor(()=>location.hash.split('?')[0]==='#settings' && document.querySelector('[data-module-toggle=timetable]'))`);
   assert.deepEqual(await evaluate(`webCheck.unexpected`),[]);
-  console.log('PASS: pinned assignment schedule, school-calendar zoom, inline default deadlines, saved drag order, module-driven navigation, password login/retry, saved-password reuse, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
+  console.log('PASS: pinned assignment schedule, school-calendar zoom, inline default deadlines, saved drag order, module-driven navigation, password login/retry, saved-password reuse, IMAP priority and two-page guide, MFA/browser flow, device polling, preserved drafts, mobile layout and cleanup');
 } finally {
   socket?.close();
   browser('close');
