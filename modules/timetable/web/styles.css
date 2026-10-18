@@ -138,3 +138,21 @@
 .week-planner .planner-overview>summary small { color:var(--muted); font-size:12px; font-weight:400; }
 .week-planner .planner-overview>.overview-heading { padding:0 16px 12px; }.week-planner .planner-overview h3 { display:none; }.week-planner .planner-overview .field-hint { margin:4px 0; font-size:12px; }.week-planner .overview-scroll { margin:0 12px 12px; }
 .week-planner .planner-week-detail>summary { font-size:13px; }.week-planner .planner-toolbar { gap:12px; }.week-planner .planner-legend { gap:10px 16px; font-size:12px; }.week-planner .planner-footer { margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; }
+
+.week-planner .planner-school-calendar { margin-top:18px; border:1px solid var(--border); border-radius:12px; background:var(--surface-low,var(--paper)); }
+.week-planner .planner-school-calendar>summary { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:10px 14px; cursor:pointer; font-size:13px; font-weight:600; }
+.week-planner .planner-school-calendar>summary small { color:var(--muted); font-size:11px; font-weight:400; }
+.week-planner .school-calendar-body { padding:0 14px 14px; }
+.week-planner .school-calendar-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px 14px; margin:0 0 12px; }
+.week-planner .school-calendar-actions .field-hint { margin:0; font-size:11px; }
+.week-planner .school-calendar-pages { display:grid; gap:12px; }
+.week-planner .school-calendar-page { display:block; width:100%; padding:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#fff; cursor:zoom-in; }
+.week-planner .school-calendar-page:hover { border-color:var(--nord10); box-shadow:var(--shadow); }
+.week-planner .school-calendar-page img { display:block; width:100%; height:auto; }
+dialog.school-calendar-dialog { width:min(1400px,96vw); max-width:96vw; }
+.school-calendar-zoom { margin:0 auto; max-width:min(96vw,1500px); text-align:center; }
+.school-calendar-zoom img { display:block; width:100%; height:auto; margin:0 auto; background:#fff; }
+@media (max-width:760px) {
+  .week-planner .planner-school-calendar>summary { align-items:flex-start; flex-direction:column; gap:4px; }
+  .week-planner .school-calendar-actions .button { width:100%; }
+}

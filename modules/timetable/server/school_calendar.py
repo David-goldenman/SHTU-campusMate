@@ -8,8 +8,10 @@ import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
+from zoneinfo import ZoneInfo
 
 import httpx
+import pypdfium2 as pdfium
 from bs4 import BeautifulSoup
 from fastapi import HTTPException
 from pypdf import PdfReader
@@ -22,6 +24,9 @@ from backend.services.campus.data import digest
 BASE = 'https://www.shanghaitech.edu.cn'
 INDEX = BASE + '/1024/list.htm'
 SEASONS = {'秋': 'fall', '春': 'spring', '暑': 'summer', '夏': 'summer'}
+ZONE = ZoneInfo('Asia/Shanghai')
+PDF_SCALE = 2.2
+BOUNDARY_DAYS = 3
 
 
 def term_key(metadata):
@@ -73,7 +78,94 @@ class SchoolCalendar:
     def due(self, metadata):
         saved = self.saved(metadata)
         checked = saved.get('checked_at')
-        return bool(saved.get('error')) or not checked or datetime.now(timezone.utc) - datetime.fromisoformat(checked) > timedelta(days=7)
+        if saved.get('error') or not checked:
+            return True
+        try:
+            checked_at = datetime.fromisoformat(checked)
+        except ValueError:
+            return True
+        if datetime.now(timezone.utc) - checked_at > timedelta(days=7):
+            return True
+        # Refresh once more around the first and last teaching week so a
+        # calendar published just before the semester boundary is picked up.
+        key = term_key(metadata)
+        term = saved.get('terms', {}).get(key) if key else None
+        if not term or not term.get('week_one'):
+            return False
+        try:
+            start = date.fromisoformat(term['week_one'])
+            weeks = int(metadata.get('week_count') or 18)
+            end = start + timedelta(weeks=weeks) - timedelta(days=1)
+            last = checked_at.astimezone(ZONE).date()
+        except (TypeError, ValueError):
+            return True
+        today = datetime.now(ZONE).date()
+        return any(abs((today - boundary).days) <= BOUNDARY_DAYS and last < boundary
+                   for boundary in (start, end))
+
+    def directory(self, key):
+        return self.context.data_dir / 'calendar' / key
+
+    def images(self, key):
+        folder = self.directory(key)
+        if not folder.is_dir():
+            return []
+        return sorted((path for path in folder.glob('page-*.png') if path.is_file()),
+                      key=lambda path: int(path.stem.split('-')[-1]))
+
+    def render(self, content, key):
+        """Cache the original PDF and rasterize every page for the web panel."""
+        folder = self.directory(key)
+        folder.mkdir(parents=True, exist_ok=True)
+        pdf_path = folder / 'calendar.pdf'
+        pdf_path.write_bytes(content)
+        for path in folder.glob('page-*.png'):
+            path.unlink()
+        document = pdfium.PdfDocument(str(pdf_path))
+        try:
+            for index in range(len(document)):
+                page = document[index]
+                try:
+                    bitmap = page.render(scale=PDF_SCALE)
+                    try:
+                        image = bitmap.to_pil()
+                        try:
+                            image.save(folder / f'page-{index + 1}.png', format='PNG', optimize=True)
+                        finally:
+                            image.close()
+                    finally:
+                        bitmap.close()
+                finally:
+                    page.close()
+        finally:
+            document.close()
+        return self.images(key)
+
+    def image(self, metadata, number=1):
+        key = term_key(metadata)
+        if key is None:
+            raise HTTPException(409, '请先同步教务课表，再读取本学年校历。')
+        folder = self.directory(key)
+        path = folder / f'page-{int(number)}.png'
+        with self.lock:
+            if not path.is_file():
+                pdf_path = folder / 'calendar.pdf'
+                if not pdf_path.is_file():
+                    raise HTTPException(404, '校历图片尚未缓存，请点击更新。')
+                self.render(pdf_path.read_bytes(), key)
+            if not path.is_file():
+                raise HTTPException(404, '校历中没有这一页。')
+        return path
+
+    def view(self, metadata):
+        key = term_key(metadata)
+        saved = self.saved(metadata) if key else {}
+        images = self.images(key) if key else []
+        return {'available': bool(images), 'pages': len(images),
+                'url': saved.get('url'), 'pdf_url': saved.get('pdf_url'),
+                'checked_at': saved.get('checked_at'), 'error': saved.get('error'),
+                'version': saved.get('fingerprint') or saved.get('checked_at'),
+                'due': bool(key) and self.due(metadata)}
 
     def refresh(self, metadata):
         key = term_key(metadata)
@@ -119,12 +211,13 @@ class SchoolCalendar:
                     pdf_url = urljoin(url, attachment.get('pdfsrc') or attachment['href'])
                     content = read(pdf_url, 10 * 1024 * 1024)
                 fingerprint = digest(content.hex())
-                if fingerprint == previous.get('fingerprint'):
+                reader = PdfReader(io.BytesIO(content))
+                if reader.is_encrypted or len(reader.pages) > 4:
+                    raise ValueError('请使用至多 4 页且未加密的校历 PDF。')
+                if fingerprint == previous.get('fingerprint') and len(self.images(key)) == len(reader.pages):
                     saved = {**previous, 'checked_at': checked, 'error': None}
                 else:
-                    reader = PdfReader(io.BytesIO(content))
-                    if reader.is_encrypted or len(reader.pages) > 4:
-                        raise ValueError('请使用至多 4 页且未加密的校历 PDF。')
+                    self.render(content, key)
                     text = '\n'.join(page.extract_text() or '' for page in reader.pages)
                     if not text.strip():
                         temporary = self.context.data_dir / 'tmp'

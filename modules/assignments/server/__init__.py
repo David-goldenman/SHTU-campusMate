@@ -1,12 +1,12 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from backend.services.campus import SECTIONS, assignment_section, timestamp
-from backend.services.campus.assignments import semester_start
+from backend.services.campus.assignments import SHANGHAI, semester_start
 from backend.services.campus.analysis import account_revision
 
 SUBMISSION_STATES = ('not_submitted', 'draft', 'submitted', 'needs_grading', 'graded', 'exempt', 'unknown')
@@ -36,18 +36,35 @@ def apply_order(values, order=None):
     return sorted(values, key=lambda item: (positions.get(item["category"], {}).get(item["id"], float("inf")), -_release(item)))
 
 
-def arrange(data, now=None, order=None):
+def default_due(metadata):
+    """Teaching week 18 Sunday is the fallback when a source omits a deadline."""
+    start = semester_start(metadata)
+    if not start:
+        return None
+    first = date.fromisoformat(start)
+    first -= timedelta(days=first.weekday())
+    day = first + timedelta(weeks=18) - timedelta(days=1)
+    return datetime.combine(day, time(23, 59), tzinfo=SHANGHAI).isoformat()
+
+
+def arrange(data, now=None, order=None, dues=None):
     at = now or datetime.now(timezone.utc)
     metadata = data.get("metadata", {})
     current = metadata.get("current_semester")
     start = semester_start(metadata)
+    fallback = default_due(metadata)
     groups = {member: course for course in data["courses"] for member in course["course_ids"]}
     values = []
     for item in data["assignments"]:
         if item["source"] not in {"gradescope", "blackboard", "ecourse"}:
             continue
         group = groups.get(item.get("course_id"), {})
-        category = assignment_section(item, at, course=group, current=current, start=start)
+        saved_due = timestamp((dues or {}).get(item["id"]))
+        due = saved_due or timestamp(item.get("due_at"))
+        category = assignment_section({**item, "due_at": due}, at, course=group, current=current, start=start)
+        due_default = False
+        if not due and not saved_due and category == "pending" and fallback:
+            due, due_default = fallback, True
         state = submission_state(item)
         source = data.get("metadata", {}).get("source_metadata", {}).get(item["source"], {})
         source_stale = source.get("status") in {"error", "login_required", "verification_required", "not_connected"}
@@ -57,7 +74,9 @@ def arrange(data, now=None, order=None):
         # explicit "unavailable" history or an exempt record is not actionable.
         pending = (bool(group.get("current")) and category in {"pending", "late"}
                    and state != "exempt" and item.get("submission_evidence") != "unavailable")
-        values.append({**item, "submission_status": state, "source_status": source.get("status"),
+        values.append({**item, "due_at": due, "due_default": due_default,
+                       "due_source": "manual" if saved_due else "default" if due_default else "source" if due else None,
+                       "submission_status": state, "source_status": source.get("status"),
                        "source_updated_at": source.get("updated_at"), "source_stale": source_stale,
                        "needs_review": state == "unknown" or bool(item.get("stale") or item.get("submission_stale") or source_stale),
                        "group_id": group.get("id"), "course_title": group.get("title", "未关联课程"),
@@ -69,6 +88,12 @@ def arrange(data, now=None, order=None):
 class OrderUpdate(BaseModel):
     section: Literal["pending", "late", "graded", "completed", "ended"]
     ids: list[str] = Field(max_length=5000)
+    account_revision: str = Field(min_length=1, max_length=100)
+
+
+class DeadlineUpdate(BaseModel):
+    assignment_id: str = Field(min_length=1, max_length=300)
+    due_at: AwareDatetime | None = None
     account_revision: str = Field(min_length=1, max_length=100)
 
 
@@ -93,12 +118,22 @@ def create_router(context):
     def order_key(owner):
         return "assignment-order:" + owner
 
+    def due_key(owner):
+        return "assignment-due:" + owner
+
     def saved_order(owner):
         value = context.store.read(order_key(owner), {})
         if not isinstance(value, dict):
             return {}
         return {section: [identity for identity in value.get(section, []) if isinstance(identity, str)]
                 for section in SECTIONS if isinstance(value.get(section), list)}
+
+    def saved_dues(owner):
+        value = context.store.read(due_key(owner), {})
+        if not isinstance(value, dict):
+            return {}
+        return {identity: due for identity, due in value.items()
+                if isinstance(identity, str) and timestamp(due)}
 
     @router.get("/snapshot")
     async def snapshot():
@@ -108,14 +143,14 @@ def create_router(context):
         value = response.json()
         data = value["data"]
         owner = account_revision(context)
-        order = saved_order(owner)
-        assignments = arrange(data, order=order)
+        order, dues = saved_order(owner), saved_dues(owner)
+        assignments = arrange(data, order=order, dues=dues)
         pending = sorted((item for item in assignments if item["pending"]), key=lambda item: datetime.fromisoformat(timestamp(item.get("due_at"))).timestamp() if timestamp(item.get("due_at")) else float("inf"))
         if owner != account_revision(context):
             raise HTTPException(409, "账号已切换，请重新读取作业。")
         return {"status": value["status"], "data": {**data, "assignments": assignments}, "pending": pending,
                 "summary": summary(assignments), "counts": counts(assignments), "updated_at": value.get("updated_at"),
-                "order": order, "account_revision": owner}
+                "order": order, "due_overrides": dues, "account_revision": owner}
 
     @router.put("/order")
     async def save_order(body: OrderUpdate):
@@ -134,6 +169,25 @@ def create_router(context):
         order[body.section] = body.ids
         context.store.write(order_key(owner), order)
         return {"order": order, "account_revision": owner}
+
+    @router.put("/deadline")
+    async def save_deadline(body: DeadlineUpdate):
+        owner = account_revision(context)
+        if body.account_revision != owner:
+            raise HTTPException(409, "账号已切换，请重新读取作业后再设置截止时间。")
+        current = await snapshot()
+        if owner != account_revision(context):
+            raise HTTPException(409, "账号已切换，请重新读取作业后再设置截止时间。")
+        if not any(item["id"] == body.assignment_id for item in current["data"]["assignments"]):
+            raise HTTPException(404, "作业不在当前缓存中。")
+        dues = saved_dues(owner)
+        if body.due_at is None:
+            dues.pop(body.assignment_id, None)
+        else:
+            dues[body.assignment_id] = body.due_at.astimezone(SHANGHAI).isoformat()
+        context.store.write(due_key(owner), dues)
+        return {"assignment_id": body.assignment_id, "due_at": dues.get(body.assignment_id),
+                "due_overrides": dues, "account_revision": owner}
 
     @router.post("/sync", status_code=202)
     async def sync():
