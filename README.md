@@ -1,6 +1,10 @@
 # campusMate
 
-<img src="web/themes/default/campusmate.svg" width="72" height="72" alt="campusMate">
+<img src="web/brand/campusmate-app-icon.png" width="72" height="72" alt="campusMate">
+
+<img src="web/brand/campusmate-promo.png" width="760" alt="CampusMate 学士帽机器人与校园地图：课程、时间表、校园信息、截止提醒和问答。">
+
+主品牌采用 [CampusMate 校园品牌视觉指南](web/brand/campusmate-visual-guide.png)。[图标、宣传图与使用说明](docs/BRAND.md) 可用于产品介绍和演示；其他主题保留各自标识。
 
 本地校园工作台，统一提供 Nord 界面、导航、设置、加密凭据、学校登录、统一 AI 服务与官方 DeepSeek Harness 插件运行时。模型设置沿用 Harness 内置的 39 个提供商目录，并支持三种自定义 API 协议；保存 API Key 后默认启用，密钥按提供商分别加密保存。首页默认展示待办、截止与今明日安排，学习助手入口可展开完整对话；采用居中阅读区、自适应输入框与明确的历史对话入口，支持 Markdown、流式回答，以及按账号保存在本机的新建、切换、归档和删除对话。学习助手能查询资料、规划作业、引用 PDF／PPTX 页码，并结合已有课程和培养方案讨论选课。
 
