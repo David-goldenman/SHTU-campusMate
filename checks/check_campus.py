@@ -1,5 +1,6 @@
 import sys
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -56,6 +57,26 @@ def check_source():
         source.run()
         assert source.snapshot()["status"] == "ready"
         original = source.snapshot()["data"]
+        expired = (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()
+        saved = context.store.read(source.snapshot_key)
+        context.store.write(source.snapshot_key, {**saved, "updated_at": expired})
+        entered, release, calls = threading.Event(), threading.Event(), []
+
+        def refresh(remote, previous):
+            calls.append(previous)
+            entered.set()
+            assert release.wait(3)
+            remote.check()
+            return original
+
+        source.fetch = refresh
+        cached = source.snapshot()
+        assert cached["status"] == "cached" and cached["data"] == original
+        assert entered.wait(2)
+        assert source.sync()["queued"] is False and source.snapshot()["status"] == "syncing"
+        release.set()
+        source.future.result(timeout=5)
+        assert len(calls) == 1 and source.snapshot()["status"] == "ready"
 
         def failure(remote, previous):
             raise SourceError("Synthetic API failure")
@@ -82,6 +103,9 @@ def check_source():
         assert source.snapshot()["status"] == "syncing"
         source.close()
         assert source.future.done()
+        context.store.write(source.snapshot_key, {"owner": source.owner(), "data": original, "updated_at": expired})
+        context.store.write(source.sync_key, {"owner": source.owner(), "status": "ready"})
+        assert source.snapshot()["status"] == "cached", "A stopped source can expose cached data without queuing work"
     assert validate_bundle({"courses": [{"id": "x:1", "source": "x"}]})["courses"]
 
 

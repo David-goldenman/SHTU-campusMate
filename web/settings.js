@@ -10,7 +10,7 @@ const moduleStatuses = {ready:'已加载',disabled:'已停用',error:'异常',st
 let selectedTab = 'accounts';
 
 function recoveryHint(provider) {
-  if (provider.id === 'coremail' && provider.imap?.configured) return 'IMAP 专用密码已加密保存，读取邮件时直接连接，不需要重新验证。';
+  if (provider.id === 'coremail' && provider.imap?.configured) return 'IMAP 专用密码已加密保存，读取邮件时直接连接，无需每次在浏览器验证。';
   return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '登录一次即可自动连接校内服务；绑定本机设备或保存密码后，可在统一登录过期时自动恢复。' : provider.id === 'coremail' ? '邮箱单独连接；会话失效时，请重新打开官方登录窗口。' : '当前使用平台独立账号。仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
 }
 
@@ -20,7 +20,7 @@ function imapPanel(provider) {
   const username = imap.username || provider.username || '';
   return `<section class="imap-login" data-imap>
     <header class="imap-login-heading"><div><h4>IMAP 登录<span class="imap-recommend">推荐</span></h4><p>用学校生成的客户端专用密码直连邮箱，不依赖容易过期的网页会话。</p></div><button class="text-button" data-imap-guide type="button">设置指引</button></header>
-    <p class="imap-note">使用 IMAP 登录邮箱，推荐此方法，不会出现验证失败或者重新认证的问题。</p>
+    <p class="imap-note">专用密码保存后可继续使用；连接失效时，请在这里更新专用密码。</p>
     <form class="imap-form" data-imap-form>
       <label for="imap-username">邮箱账号</label>
       <input id="imap-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(username)}" placeholder="例如 name@shanghaitech.edu.cn" required>
