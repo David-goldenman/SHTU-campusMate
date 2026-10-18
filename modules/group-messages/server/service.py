@@ -395,7 +395,9 @@ class Service:
 
     def _automatic_task(self, owner):
         now = time.monotonic()
-        for source, config in self.sources(owner).items():
+        sources = self.sources(owner)
+        # Collect every due source before spending another batch on a large AI backlog.
+        for source, config in sources.items():
             if not config.get('enabled') or not config.get('selected'):
                 continue
             if now >= self.next_sync.get((owner, source), 0):
@@ -409,6 +411,9 @@ class Service:
                         return {'kind': 'compatibility', 'source': source, 'owner': owner}
                 except NativeError:
                     return {'kind': 'compatibility', 'source': source, 'owner': owner}
+        for source, config in sources.items():
+            if not config.get('enabled') or not config.get('selected'):
+                continue
             if not config.get('allow_ai') or not self.context.ai.settings().get('enabled'):
                 continue
             for group in config['selected']:

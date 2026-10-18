@@ -4,6 +4,7 @@ import copy
 import json
 import sys
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -178,6 +179,12 @@ async def check():
         restored_service=Service(context)
         assert restored_service.items()==service.items()
         assert restored_service.messages.rows(owner,'qq','conn','g1')['total']>=7
+        context.store.write('sources:'+owner,{'wechat':{**config,'mode':'snapshot'},'qq':config})
+        cache.ingest(owner,'wechat','conn','g1',[raw('backlog')],since)
+        service.next_sync[(owner,'wechat')]=time.monotonic()+300
+        service.next_sync[(owner,'qq')]=0
+        assert service._automatic_task(owner)['source']=='qq', 'A WeChat AI backlog must not starve due QQ collection'
+        context.store.write('sources:'+owner,{'qq':config})
         service.pause('qq');service.start();service.close();assert not service.thread.is_alive()
         study.stop(study_context);calendar.stop(calendar_context)
     print('PASS: selected scope, incremental extraction, evidence/time/trust, real work/calendar commands, undo, edit conflicts, account/pause races and lifecycle')
