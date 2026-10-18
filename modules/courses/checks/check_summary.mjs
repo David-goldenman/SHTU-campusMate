@@ -24,6 +24,15 @@ assert.deepEqual(result[0].contents.materials.map(item=>item.id),['m:1'],'Course
 assert.equal(result[0].pending,1,'Only confirmed actionable, unsubmitted work is pending');
 assert.equal(result[0].contents.grades[0].source,'blackboard');
 assert.deepEqual(data,before,'Snapshot remains unchanged');
+const states = structuredClone(data);
+states.assignments = [
+  ...['not_submitted','draft','exempt','unknown','submitted','needs_grading','graded'].map(state => ({
+    id:state, source:'ecourse', course_id:'bb:1', submitted:false, actionable:true, submission_status:state,
+  })),
+  {id:'explicit-exemption',source:'ecourse',course_id:'bb:1',submitted:false,actionable:true,submission_status:'not_submitted',exempt:true},
+  {id:'closed',source:'ecourse',course_id:'bb:1',submitted:false,actionable:false,submission_status:'not_submitted'},
+];
+assert.equal(courseSummaries(states)[0].pending,2,'Ecourse pending counts match the catalog: unsubmitted/draft only, never exempt, uncertain or completed');
 for (const status of ['syncing','partial','error','cached','not_connected','login_required']) {
   data.metadata.source_metadata.elrc.status=status;
   result=courseSummaries(data);
