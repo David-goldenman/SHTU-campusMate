@@ -19,7 +19,10 @@ const load = async (value, target = storage, source = '../web/themes/campus-copy
 try {
   const first = await load(0);
   assert.deepEqual(Object.keys(first.copyCatalog),['general','grades','deadlines','timetable','documents']);
-  assert.equal(first.copyCatalog.general.length,7);
+  assert.ok(first.copyCatalog.general.length > 7,'The homepage offers the expanded greeting collection');
+  const quotes = Object.values(first.copyCatalog).flat();
+  assert.equal(new Set(quotes.map(item => item.id)).size,quotes.length,'Quote IDs remain unique across topics');
+  assert.equal(new Set(quotes.map(item => item.en)).size,quotes.length,'Repeated greetings must not bias random selection');
   const general = first.quoteFor();
   const count = draws;
   assert.equal(first.quoteFor('general'),general,'Switching views must retain the same cached quote');
