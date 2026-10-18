@@ -3,14 +3,14 @@ import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
 import {generatePassword} from './password-generator.js';
 import {appearancePanel, bindAppearance} from './themes/appearance.js';
+import {schoolServices} from './school-login.js';
 
-const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录'};
-const targetNames = {blackboard:'Blackboard',elrc:'虚拟教学社区',ecourse:'E 云课堂',timetable:'教务系统'};
+const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录',error:'暂不可用'};
 const moduleStatuses = {ready:'已加载',disabled:'已停用',error:'异常',stopping:'正在停止'};
 let selectedTab = 'accounts';
 
 function recoveryHint(provider) {
-  return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '绑定本机设备或保存密码后，可在过期时自动恢复登录。' : provider.id === 'coremail' ? '邮箱会话失效时，请重新打开官方登录窗口。' : '仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
+  return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '登录一次即可自动连接校内服务；绑定本机设备或保存密码后，可在统一登录过期时自动恢复。' : provider.id === 'coremail' ? '邮箱单独连接；会话失效时，请重新打开官方登录窗口。' : '当前使用平台独立账号。仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
 }
 
 function deviceCard(provider) {
@@ -19,10 +19,11 @@ function deviceCard(provider) {
 
 function providerCard(provider) {
   const id = escape(provider.id);
-  const target = provider.targets?.length ? '<label>登录服务<select data-auth-target>' + provider.targets.map(id => '<option value="' + escape(id) + '" ' + (provider.target === id ? 'selected' : '') + '>' + escape(targetNames[id] || id) + '</option>').join('') + '</select></label>' : '';
+  const school = provider.id === 'ids';
+  const target = school ? '<div data-school-services>' + schoolServices(provider) + '</div>' : '';
   const credentials = provider.id === 'coremail' ? '' : `<details class="auth-alternative"><summary>账号密码登录</summary><form class="credential-form" data-credentials="${id}"><p class="field-hint">提交后加密保存账号密码，并立即登录。需要验证码时，请使用官方窗口继续验证。</p><label for="auth-${id}-username">账号</label><input id="auth-${id}-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" value="${escape(provider.username)}" required><label for="auth-${id}-password">密码</label><div class="password-field"><input id="auth-${id}-password" name="password" type="password" autocomplete="current-password" maxlength="4096" aria-describedby="auth-${id}-password-hint"><button class="text-button" data-show-password type="button" aria-label="显示密码" aria-pressed="false">显示</button><button class="text-button" data-generate-password type="button" aria-label="由种子生成密码" title="同一种子、平台和长度会生成同一密码">生成</button></div><p class="field-hint" id="auth-${id}-password-hint" data-password-hint></p><button class="button button-primary" type="submit">登录</button></form></details>`;
   const description = provider.id === 'ids' ? '课表、Blackboard、E 云课堂与教学社区' : provider.id === 'coremail' ? '校园邮件与智能分类' : provider.id === 'gradescope' ? '作业、题目与提交状态' : '课程讨论与公告';
-  return `<article class="provider-card" data-provider="${id}"><details class="provider-connection"><summary><div><h3>${escape(provider.name)}</h3><p>${description}</p></div><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span><span class="provider-chevron" aria-hidden="true">⌄</span></summary><div class="provider-expanded"><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>使用官方窗口连接</summary><div class="provider-actions"><button class="button button-primary" data-auth-action="browser" type="button">打开登录窗口</button><button class="button button-secondary" data-auth-action="import-session" type="button">登录完成，连接账号</button></div><p class="field-hint">在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。</p></details><button class="text-button" data-auth-action="refresh" type="button">检查连接</button>${credentials}${provider.id === 'ids' ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></div></details></article>`;
+  return `<article class="provider-card" data-provider="${id}"><details class="provider-connection"><summary><div><h3>${escape(provider.name)}</h3><p>${description}</p></div><span class="status-badge auth-${escape(provider.status)}">${authStatuses[provider.status]}</span><span class="provider-chevron" aria-hidden="true">⌄</span></summary><div class="provider-expanded"><p class="provider-message" data-auth-feedback role="status">${escape(provider.message || '')}</p><fieldset class="provider-controls" aria-label="${escape(provider.name)}登录操作">${target}<p class="field-hint" data-recovery-hint>${recoveryHint(provider)}</p><details class="auth-alternative" data-browser-options><summary>使用官方窗口连接</summary><div class="provider-actions"><button class="button button-primary" data-auth-action="browser" type="button">${school ? '登录学校账号' : '打开登录窗口'}</button><button class="button button-secondary" data-auth-action="import-session" type="button">${school ? '登录完成，连接全部服务' : '登录完成，连接账号'}</button></div><p class="field-hint">${school ? '在学校窗口登录一次，返回后自动连接 Blackboard、教学社区、E 云课堂和教务。' : '在本机 Edge 中登录后连接，后续复用此服务的浏览器资料。'}</p></details><button class="text-button" data-auth-action="${school ? 'connect' : 'refresh'}" type="button">${school ? '连接／恢复全部校内服务' : '检查连接'}</button>${credentials}${school ? deviceCard(provider) : ''}<div class="provider-footer"><span data-auth-summary></span><button class="text-button danger-text" data-forget-auth type="button">删除账号</button></div></fieldset></div></details></article>`;
 }
 
 const localTime = value => value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '暂无';
@@ -158,13 +159,13 @@ export async function mount(container, context) {
   });
 
   auth.providers.forEach(initial => {
-    let provider = initial, deviceTimer;
+    let provider = initial, statusTimer;
     const card = container.querySelector('[data-provider="' + provider.id + '"]');
     const controls = card.querySelector('fieldset');
     const feedback = card.querySelector('[data-auth-feedback]');
     const form = card.querySelector('[data-credentials]');
     const path = '/auth/' + provider.id;
-    const targetBody = () => { const target = card.querySelector('[data-auth-target]')?.value; return target ? {target} : {}; };
+    const targetBody = action => action === 'import-session' && provider.browser_target ? {target:provider.browser_target} : {};
     function passwordRequirement() {
       if (!form) return;
       form.elements.password.required = !provider.has_password || form.elements.username.value.trim() !== provider.username;
@@ -180,20 +181,24 @@ export async function mount(container, context) {
       card.querySelector('[data-recovery-hint]').textContent = recoveryHint(provider);
       card.querySelector('[data-auth-summary]').textContent = (provider.has_session ? '登录状态已在本机加密保存' : '尚未连接') + (provider.identity_verified ? ' · 账号已确认' : '');
       card.querySelector('[data-browser-options]').open = provider.status !== 'ready';
-      card.querySelector('[data-auth-action=refresh]').hidden = !provider.has_session;
+      card.querySelector('[data-auth-action=refresh],[data-auth-action=connect]').hidden = !provider.has_session && !provider.automatic_recovery;
       passwordRequirement();
-      if (provider.id === 'ids') card.querySelector('.auth-device').outerHTML = deviceCard(provider);
-      clearTimeout(deviceTimer);
-      if (provider.device?.setup?.status === 'waiting') deviceTimer = setTimeout(pollDevice,2000);
+      if (provider.id === 'ids') {
+        card.querySelector('.auth-device').outerHTML = deviceCard(provider);
+        card.querySelector('[data-school-services]').innerHTML = schoolServices(provider);
+      }
+      clearTimeout(statusTimer);
+      if (provider.device?.setup?.status === 'waiting' || ['connecting','waiting_for_login'].includes(provider.connection?.status)) statusTimer = setTimeout(pollConnection,1500);
     }
-    async function pollDevice() {
+    async function pollConnection() {
       try {
         const result = await request(path + '/status');
         if (context.signal.aborted) return;
-        if (controls.disabled) { deviceTimer = setTimeout(pollDevice,2000); return; }
+        if (controls.disabled) { statusTimer = setTimeout(pollConnection,1500); return; }
         update(result);
+        feedback.textContent = result.device?.setup?.status === 'waiting' ? result.device.setup.message : result.message || '';
       } catch (error) {
-        if (!context.signal.aborted) card.querySelector('[data-device-progress]').textContent = '暂时无法读取绑定进度，请点击检查连接与恢复。';
+        if (!context.signal.aborted) feedback.textContent = '暂时无法读取连接进度，请重新检查连接。';
       }
     }
     const run = (message, action, success) => {
@@ -274,9 +279,11 @@ export async function mount(container, context) {
           feedback.textContent = '密码已生成并填入，平台现有密码不会自动更改。';
         })();
       } else if (button.dataset.authAction) {
-        const action = button.dataset.authAction, body = targetBody();
-        const messages = {browser:'正在打开官方登录窗口…','import-session':'正在验证并连接账号…',refresh:'正在检查连接与恢复…'};
+        const action = button.dataset.authAction, body = targetBody(button.dataset.authAction);
+        const messages = {browser:'正在打开官方登录窗口…','import-session':'正在验证并连接账号…',refresh:'正在检查连接与恢复…',connect:'正在连接校内服务…'};
         await run(messages[action],() => request(path + '/' + action,{method:'POST',body}));
+      } else if (button.dataset.schoolVerify) {
+        await run('正在打开该服务的验证窗口…',() => request(path + '/browser',{method:'POST',body:{target:button.dataset.schoolVerify}}));
       } else if (button.hasAttribute('data-forget-auth')) {
         if (!await confirmDialog('删除账号','删除 ' + provider.name + ' 保存的账号与登录状态。','删除账号')) return;
         await run('正在删除账号…',async () => {
@@ -292,7 +299,7 @@ export async function mount(container, context) {
       }
     };
     update(provider);
-    context.signal.addEventListener('abort',() => clearTimeout(deviceTimer),{once:true});
+    context.signal.addEventListener('abort',() => clearTimeout(statusTimer),{once:true});
   });
 
   mountAISettings(container.querySelector('.ai-settings'),ai,{request,refresh:context.refresh,signal:context.signal});

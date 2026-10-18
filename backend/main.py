@@ -92,6 +92,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
         modules.loop = asyncio.get_running_loop()
         await run_in_threadpool(modules.reload)
         try:
+            await run_in_threadpool(auth.school.resume)
             yield
         finally:
             try:

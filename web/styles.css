@@ -199,6 +199,12 @@ main:has(.module-focus) .module-shortcuts { display:none; }
 .module-info h3 { font-size:14px; overflow-wrap:anywhere; }
 .module-info>p { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin-top:3px; color:var(--muted); font-size:12px; }
 .provider-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+.school-services { list-style:none; margin:12px 0; padding:0; display:grid; gap:8px; }
+.school-services li { padding:10px 12px; border:1px solid var(--border); border-radius:6px; }
+.school-services li>div { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; }
+.school-services li span { color:var(--muted); font-size:12px; }
+.school-services .field-hint { margin:6px 0 0; overflow-wrap:anywhere; }
+.school-services .text-button { margin-top:6px; }
 .provider-card { min-width:0; padding:22px; border:1px solid var(--border); border-radius:6px; }
 .provider-card>header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
 .provider-card>header h3 { font-size:18px; }
