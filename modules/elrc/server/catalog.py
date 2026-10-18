@@ -93,7 +93,7 @@ class ELRC:
         if path not in allowed:
             raise ValueError("Unsupported ELRC endpoint")
         if self.client is None:
-            raise ELRCError("请在设置中连接学校 IDS，目标选择 ELRC。")
+            raise ELRCError("请在设置中登录学校账号，并检查虚拟教学社区的连接状态。")
         token = next((cookie.value for cookie in self.client.cookies.jar
                       if cookie.name == "CsrfToken" and
                       "elrc.shanghaitech.edu.cn".endswith(cookie.domain.lstrip("."))), "")

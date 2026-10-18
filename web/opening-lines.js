@@ -27,11 +27,11 @@ let selectedLine;
 export function openingLine() {
   if (selectedLine) return selectedLine;
   const key = 'campus.opening-line.v1';
-  try { selectedLine = sessionStorage.getItem(key); } catch {}
-  if (!lines.includes(selectedLine)) {
-    selectedLine = lines[Math.floor(Math.random() * lines.length)];
-    try { sessionStorage.setItem(key, selectedLine); } catch {}
-  }
+  let previous;
+  try { previous = sessionStorage.getItem(key); } catch {}
+  const candidates = lines.filter(line => line !== previous);
+  selectedLine = candidates[Math.floor(Math.random() * candidates.length)];
+  try { sessionStorage.setItem(key, selectedLine); } catch {}
   return selectedLine;
 }
 
