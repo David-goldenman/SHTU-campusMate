@@ -304,7 +304,7 @@ class Task:
         source = item['source']
         url = urlsplit(item.get('download_url') or '')
         prefix = '/api/v1/modules/' + source
-        if url.scheme or url.netloc or url.path != prefix + '/file' or source not in {'blackboard', 'gradescope'}:
+        if url.scheme or url.netloc or url.path != prefix + '/file' or source not in {'blackboard', 'gradescope', 'piazza'}:
             raise HTTPException(422, '该资料当前没有支持的下载接口，请通过原站查看。')
         revision = data['metadata'].get('source_metadata', {}).get(source, {}).get('updated_at')
         directory = self.context.data_dir / 'documents' / self.owner

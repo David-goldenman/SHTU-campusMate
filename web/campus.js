@@ -33,7 +33,7 @@ export function records(items, escape) {
   return items.length ? '<div class="campus-list">' + items.map(item => {
     const text=item.body_text?.slice(0,900);
     const preview=text ? text.length>180 ? '<details class="record-preview"><summary>内容摘要</summary><p>'+escape(text)+'</p></details>' : '<p>'+escape(text)+'</p>' : '';
-    return `<article class="campus-item"><h4>${link(item.url,item.title,escape)}</h4><p class="field-hint">${escape([item.source,item.term,item.sender,item.teacher,item.location,item.path?.join(' / ')].filter(Boolean).join(' · '))}</p>${preview}${item.download_url ? link(item.download_url,'下载文件',escape) : ''}</article>`;
+    return `<article class="campus-item"><h4>${link(item.preview_url||item.url,item.title,escape)}</h4><p class="field-hint">${escape([item.source,item.term,item.sender,item.teacher,item.location,item.path?.join(' / ')].filter(Boolean).join(' · '))}</p>${preview}${item.preview_url ? link(item.preview_url,'查看文件',escape)+' · ' : ''}${item.download_url ? link(item.download_url,'下载文件',escape) : ''}${item.preview_url && item.url ? ' · '+link(item.url,'原站',escape) : ''}</article>`;
   }).join('') + '</div>' : '<p class="field-hint">当前范围没有内容。</p>';
 }
 
