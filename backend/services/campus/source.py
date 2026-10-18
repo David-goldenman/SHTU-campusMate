@@ -12,10 +12,11 @@ from .remote import Remote
 
 
 class Source:
-    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None):
+    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, stale_after=21600):
         self.context, self.provider, self.hosts, self.fetch, self.target = context, provider, hosts, fetch, target
         self.network_target = network_target
         self.sync_key, self.snapshot_key = state_prefix + "sync", state_prefix + "snapshot"
+        self.stale_after = stale_after
         self.cancelled, self.lock = threading.Event(), threading.RLock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=context.id)
         self.future = None
@@ -35,7 +36,32 @@ class Source:
                 state = {"status": "not_connected", "message": "请在设置连接账号，然后同步。"}
             if saved.get("owner") != owner:
                 saved = {"data": validate_bundle({}), "updated_at": None}
-            return {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
+            result = {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
+            # stale 降级：快照超期且当前状态不是正在同步/出错时，标记为 cached 并后台静默同步
+            if self._is_stale(saved) and result["status"] == "ready":
+                result["status"] = "cached"
+                result["message"] = "本地缓存，待核实"
+                self._background_sync()
+            return result
+
+    def _is_stale(self, saved):
+        if not saved.get("updated_at"):
+            return False
+        from datetime import datetime, timezone
+        try:
+            updated = datetime.fromisoformat(saved["updated_at"].replace("Z", "+00:00"))
+            return (datetime.now(timezone.utc) - updated).total_seconds() > self.stale_after
+        except (ValueError, AttributeError):
+            return False
+
+    def _background_sync(self):
+        with self.lock:
+            if self.future is not None and not self.future.done():
+                return
+            self.context.store.write(self.sync_key, {"status": "syncing", "owner": self.owner()})
+            self.future = self.executor.submit(self.run)
+            if getattr(self.context, 'runtime', None):
+                self.context.runtime.watch(self.sync_key, self.future)
 
     def sync(self):
         with self.lock:
