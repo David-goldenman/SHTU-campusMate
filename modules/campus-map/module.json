@@ -1,0 +1,14 @@
+{
+  "id": "campus-map",
+  "name": "校园地图",
+  "version": "0.5.0",
+  "category": "campus-map",
+  "api_version": 1,
+  "navigation": {
+    "label": "校园地图",
+    "icon": "⌖",
+    "description": "规划校内步行路线，维护施工与通行情况，查看课程地点与电梯说明。",
+    "order": 35,
+    "layout": "primary"
+  }
+}

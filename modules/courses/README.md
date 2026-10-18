@@ -14,7 +14,9 @@ E 云课堂（`ecourse`）通过公开快照接入课程、课件说明、公告
 
 课程列表直接展示录播状态与已收录条数、待办及资料数量，支持「有录播／暂无录播／待确认」筛选。录播状态依据当前快照中按来源课程 ID 关联的 `lessons`，不把教学社区平台入口当作录播证据；只有来源读取成功、无该来源问题、无未关联录播且课程已关联教学社区时，零条记录才显示「暂无录播」。未同步、读取失败、缓存或课程尚未关联时显示「录播待确认」，已有录播仍保持可见。数量代表快照记录条数，不推断实际课时数。详情始终保留录播标签及空状态，有记录时提供直接进入录播列表和原站的入口。
 
-搜索、录播筛选、课程切换和内容标签使用一次 `/snapshot` 的公开数据在本页完成，不反复请求聚合 `/course`；关联课程时才读取 `/groups`。新增状态检查在 `checks/check_summary.py`，由完整检查入口自动运行。
+搜索、录播筛选、课程切换和内容标签使用一次 `/snapshot` 的公开数据在本页完成，不反复请求聚合 `/course`；关联课程时才读取 `/groups`。课程待办数量与公开 `pending` 筛选保持一致：包含 Blackboard、Gradescope 和 E 云课堂中明确开放、未提交或草稿的作业，排除豁免、待核实和已提交状态。新增状态检查在 `checks/check_summary.py`，由完整检查入口自动运行。
+
+浏览器回归使用 `node modules/courses/checks/check_web.mjs <本机地址>`，以合成数据检查录播证据与筛选、跨平台待办、课程关联、键盘切换、四种主题的电脑／手机布局和卸载清理。截图保存在 `.codex/tmp/courses-ui/`。公共工作区联动检查沿用 `node checks/check_campus_workspace.mjs <本机地址>`。
 
 自动关联先规范课程代码中的空格、横线与大小写，再按代码和学期合并。缺少代码时，只在相同规范名称和学期唯一对应一个已知课程代码时关联；有多个候选保留独立，交由用户手动选择。
 
@@ -22,7 +24,7 @@ Blackboard 活跃课程缺少学期时，只有相同规范课程代码在已有
 
 通过 `context.api` 读取六个来源的公开快照，维护自身课程关联设置。代码与规范学期一致时自动合并；缺失代码的唯一名称匹配见上文，其他课程保持独立。`GET /snapshot` 返回聚合课程、八类内容、来源状态及读取范围。本学期依次采用教务当前学期、ELRC 学校当前学期；二者都未提供时才按上海日期估计。`POST /sync` 请求已配置账号的来源同步。
 
-`GET /catalog/{collection}` 支持 course_id、current、pending、source、q、offset、limit，limit 最大 500。pending 只适用于作业，要求来源为 Gradescope 或 Blackboard、明确开放且明确未提交；未知状态保持独立。`GET /course?course_id=聚合ID` 返回各平台课程、资料、讨论、录播、作业和折叠课表。
+`GET /catalog/{collection}` 支持 course_id、current、pending、source、q、offset、limit，limit 最大 500。pending 只适用于作业，要求来源为 Gradescope、Blackboard 或 E 云课堂、明确开放且明确未提交，并排除豁免与待核实状态。`GET /course?course_id=聚合ID` 返回各平台课程、资料、讨论、录播、作业和折叠课表。
 
 `GET/PUT /groups` 读取或完整保存 `{groups:[{id,title,course_ids}]}`；每组 2–20 个已知来源课程，每门课仅属于一个手动组，空数组恢复自动关联。模块不读取其他模块数据库。项目 `check.sh` 执行来源不可用、学期关联、三态待办及手动关联检查。
 

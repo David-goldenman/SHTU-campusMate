@@ -1,0 +1,23 @@
+[
+  {
+    "id": "west-gate-investigation-20261017",
+    "title": "西门施工与步行通行情况待核实",
+    "state": "pending",
+    "effect": "blocked",
+    "scope": "place",
+    "place_id": "bf9445e8e352431984e9176c1eb6bd78",
+    "edge_keys": [],
+    "bounds": [],
+    "starts_on": "2026-10-17",
+    "expected_end": null,
+    "review_on": "2026-10-20",
+    "source_kind": "report",
+    "source_title": "使用者提供的待核实线索",
+    "source_date": "2026-10-17",
+    "source_url": "",
+    "note": "使用者不确定施工位置是否为西门。公开检索暂未找到现行封闭通知，施工范围、行人与车辆受影响情况均未确认。此记录不是封路公告。",
+    "created_at": "2026-10-18T00:11:57+08:00",
+    "updated_at": "2026-10-18T00:11:57+08:00",
+    "revision": 0
+  }
+]
