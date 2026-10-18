@@ -12,9 +12,12 @@ from .remote import Remote
 
 
 class Source:
-    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, stale_after=21600):
+    def __init__(self, context, provider, hosts, fetch, target=None, state_prefix="", network_target=None, direct=None, stale_after=21600):
         self.context, self.provider, self.hosts, self.fetch, self.target = context, provider, hosts, fetch, target
         self.network_target = network_target
+        # A direct source authenticates its own transport (for example IMAP) and
+        # receives ``None`` instead of an HTTP client from the shared auth layer.
+        self.direct = direct
         self.sync_key, self.snapshot_key = state_prefix + "sync", state_prefix + "snapshot"
         self.stale_after = stale_after
         self.cancelled, self.lock = threading.Event(), threading.RLock()
@@ -78,7 +81,10 @@ class Source:
                     return validate_bundle(self.fetch(remote, previous))
                 finally:
                     observed_network_error = remote.network_error
-            data = self.context.auth.read_with_recovery(self.provider, read, target=self.target, cancelled=self.cancelled)
+            if self.direct is not None and self.direct():
+                data = validate_bundle(self.fetch(None, previous))
+            else:
+                data = self.context.auth.read_with_recovery(self.provider, read, target=self.target, cancelled=self.cancelled)
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
                     return

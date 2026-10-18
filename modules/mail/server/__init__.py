@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.campus import Remote, Source, SourceError, rows
 from .reader import inbox, read_message
+from .imap import inbox as imap_inbox, read_message as imap_read_message
 from .intelligence import BUCKETS, INTERESTS, Intelligence, Preferences, Submission, Decision
 from .digests import Digests, DigestRequest
 
@@ -98,7 +99,11 @@ def create_router(context):
 
     def refresh_inbox(remote, previous):
         owner = _source.owner()
-        result = inbox(remote, context.auth.session_parameters("coremail"), previous)
+        if remote is None:
+            with context.auth.imap_connection("coremail") as mailbox:
+                result = imap_inbox(mailbox, previous)
+        else:
+            result = inbox(remote, context.auth.session_parameters("coremail"), previous)
         with lock:
             bodies = scoped(context, "bodies", {})
             for item in result["messages"]:
@@ -107,7 +112,8 @@ def create_router(context):
             save(context, "labels", values, owner)
         return result
 
-    _source = Source(context, "coremail", ["mail.shanghaitech.edu.cn"], refresh_inbox)
+    _source = Source(context, "coremail", ["mail.shanghaitech.edu.cn"], refresh_inbox,
+                     direct=lambda: bool(getattr(context.auth, "imap_enabled", lambda provider: False)("coremail")))
     router = _source.router()
 
     def messages():
@@ -125,8 +131,12 @@ def create_router(context):
         cached = scoped(context, 'bodies', {}).get(message_id)
         if cached:
             return cached
-        with context.auth.authenticated_client("coremail") as client:
-            detail = read_message(Remote(client, _source.cancelled, _source.hosts), context.auth.session_parameters("coremail"), item["source_id"])
+        if getattr(context.auth, "imap_enabled", lambda provider: False)("coremail"):
+            with context.auth.imap_connection("coremail") as mailbox:
+                detail = imap_read_message(mailbox, item["source_id"])
+        else:
+            with context.auth.authenticated_client("coremail") as client:
+                detail = read_message(Remote(client, _source.cancelled, _source.hosts), context.auth.session_parameters("coremail"), item["source_id"])
         if owner != _source.owner():
             raise HTTPException(409, "账号已更新，请重新读取。")
         with lock, _source.lock:

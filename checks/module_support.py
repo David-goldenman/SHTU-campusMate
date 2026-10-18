@@ -33,12 +33,20 @@ class Auth:
     def __init__(self, handler):
         self.transport = httpx.MockTransport(handler)
         self.revision = "synthetic-account-one"
+        self.mailbox = None
 
     def get_status(self, provider):
         return {"username": "synthetic@example.edu", "has_session": True, "account_revision": self.revision}
 
     def get_account_revision(self, provider):
         return self.revision
+
+    def imap_enabled(self, provider):
+        return self.mailbox is not None
+
+    @contextmanager
+    def imap_connection(self, provider):
+        yield self.mailbox
 
     @contextmanager
     def authenticated_client(self, provider, target=None, *, cancelled=None):
