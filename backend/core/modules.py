@@ -6,7 +6,7 @@ import shutil
 import sys
 import threading
 import types
-import uuid
+import hashlib
 import time
 from contextlib import contextmanager
 from urllib.parse import unquote
@@ -167,7 +167,15 @@ class ModuleManager:
             if not info["enabled"]:
                 info["status"] = "disabled"
                 return entry
-            revision = uuid.uuid4().hex
+            # revision 取模块 web/ 内容指纹：内容不变则 URL 恒定，浏览器与 ESM 缓存可跨 reload 命中
+            digest = hashlib.sha1()
+            web_root = folder / "web"
+            if web_root.is_dir():
+                for item in sorted(web_root.rglob("*")):
+                    if item.is_file():
+                        digest.update(item.relative_to(web_root).as_posix().encode())
+                        digest.update(item.read_bytes())
+            revision = digest.hexdigest()[:12]
             data_dir = self.data / "modules" / manifest.id
             data_dir.mkdir(parents=True, exist_ok=True)
             entry.context = ModuleContext(manifest.id, self.store.for_module(manifest.id), ModuleSecrets(self.vault, manifest.id), data_dir, self.auth, self.ai, self.call_api, self.list, entry.runtime)
@@ -186,8 +194,8 @@ class ModuleManager:
                 entry.app.middleware('http')(catch_errors)
                 if hasattr(entry.package, "start"):
                     entry.package.start(entry.context)
-            info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js?v={revision}" if frontend.is_file() else None)
-            info['background_url'] = f'/module-assets/{manifest.id}/{revision}/web/background.js?v={revision}' if background.is_file() else None
+            info.update(status="ready", revision=revision, frontend_url=f"/module-assets/{manifest.id}/{revision}/web/index.js" if frontend.is_file() else None)
+            info['background_url'] = f'/module-assets/{manifest.id}/{revision}/web/background.js' if background.is_file() else None
         except Exception as error:
             try:
                 self._stop(entry)
