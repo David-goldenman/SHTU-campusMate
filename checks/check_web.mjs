@@ -17,6 +17,7 @@ function browser(action) {
 }
 
 function fixture(initial, categories, themeCatalog) {
+  window.waitFor = async condition => {for(let n=0;n<100;n++){if(condition())return;await new Promise(resolve=>setTimeout(resolve,50));}throw new Error('UI condition timed out');};
   const savedFetch = window.fetch.bind(window);
   const providers = ['gradescope','piazza','ids','coremail'].map(id => ({id,name:id,username:'',has_password:false,has_session:false,status:'not_connected',identity_verified:false,automatic_recovery:false,...(id === 'ids' ? {targets:['blackboard','elrc','timetable'],target:'blackboard',device:{configured:false,pending:false,enabled:true,setup:{status:'idle'}}} : {}),...(id === 'coremail' ? {imap:{configured:false,host:'imap.shanghaitech.edu.cn',port:993,ssl:true,username:'',password_saved:false,verified_at:null}} : {})}));
   const ai = {provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,enabled:false,key_saved:false,providers:[{provider:'deepseek',display_name:'DeepSeek',model:'deepseek-flash',base_url:'https://api.deepseek.com',custom:false,key_saved:false}]};
@@ -113,7 +114,7 @@ function fixture(initial, categories, themeCatalog) {
         return {offset,week_start:weekDays[0].date,week_end:weekDays[6].date,week_one:currentWeek,teaching_week:5 + offset,periods:[],days:weekDays,conflicts:{items:[],complete:true,message:''}};
       });
       const overview = {week_start:homework.week_start,start:homework.start,end:homework.end,weeks:overviewWeeks,pending:homework.pending,late:homework.late};
-      return json({status:'ready',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview,school_calendar:{available:true,pages:1,url:'https://www.shanghaitech.edu.cn/1024/list.htm',pdf_url:null,checked_at:at,error:null,due:false,version:'synthetic'}});
+      return json({status:'ready',account_revision:'synthetic-revision',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview,school_calendar:{available:true,pages:1,url:'https://www.shanghaitech.edu.cn/1024/list.htm',pdf_url:null,checked_at:at,error:null,due:false,version:'synthetic'}});
     }
     if (path === '/modules/timetable/calendar/refresh' && method === 'POST') return json({week_one:'2026-09-14',source:'school'});
     if (path === '/modules/assignments/snapshot') {
@@ -142,18 +143,19 @@ function fixture(initial, categories, themeCatalog) {
       return json({assignment_id:body.assignment_id,due_at:body.due_at || null,due_overrides:state.assignmentDue,account_revision:'synthetic-revision'});
     }
     if (path === '/modules/timetable/calendar-settings') return json({week_one:'2026-09-14',source:'school'});
-    if (path === '/modules/timetable/commands' && method === 'POST') {
-      const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);return json({applied:true,event:item});
-    }
     if (path === '/modules/timetable/events' && method === 'POST') {
       const item = {...body,id:'local:test',source:'local',at:body.starts_at};state.localEvents.push(item);return json(item,201);
     }
     if (path === '/modules/timetable/commands' && method === 'POST') {
       if (body.action === 'create') {
-        const item = {...body.event,id:'local:test',source:'local',at:body.event.starts_at};state.localEvents.push(item);
+        const item = {...body.event,id:'local:test',source:'local',revision:'synthetic-event-v1',at:body.event.starts_at};state.localEvents.push(item);
         return json({applied:true,after:item});
       }
-      if (body.action === 'delete') state.localEvents = [];
+      if (body.action === 'delete') {
+        if (state.deleteConflict) return json({detail:'安排已变化，请重新读取后修改。'},409);
+        if (body.account_revision !== 'synthetic-revision' || body.expected_revision !== 'synthetic-event-v1' || body.record_id !== 'local:test') return json({detail:'Synthetic event version mismatch'},409);
+        state.localEvents = [];
+      }
       return json({applied:true});
     }
     if (path === '/modules/timetable/events/local%3Atest' && method === 'DELETE') {state.localEvents=[];return json({deleted:true});}
@@ -329,10 +331,38 @@ try {
   await evaluate(`document.querySelector('#dialog').close();document.querySelector('.planner-overview [data-event=homework-late]').click()`);
   assert(await evaluate(`document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent==='合成迟交作业'`),'Timetable events retain their detail action');
   await evaluate(`document.querySelector('#dialog').close()`);
+  await evaluate(`document.querySelector('.calendar-desktop [data-event="local:test"]').click()`);
+  assert(await evaluate(`Boolean(document.querySelector('.planner-event-detail [data-edit]')&&document.querySelector('.planner-event-detail [data-delete]'))`),'Local events expose editing and deletion in their detail view');
+  await evaluate(`document.querySelector('#dialog [data-delete]').click();new Promise(resolve=>setTimeout(resolve,100))`);
+  assert.equal(await evaluate(`document.querySelector('#dialog-title').textContent`),'删除安排','Opening confirmation from another dialog must wait for the user');
+  assert.equal(await evaluate(`webCheck.localEvents.length`),1,'Opening confirmation must not delete an event');
+  await evaluate(`document.querySelector('#dialog [value=cancel]').click();waitFor(()=>document.querySelector('.planner-event-detail [data-delete]'))`);
+  assert.equal(await evaluate(`webCheck.localEvents.length`),1,'Cancel returns to the event details');
+  await evaluate(`webCheck.deleteConflict=true;document.querySelector('#dialog [data-delete]').click();waitFor(()=>document.querySelector('#dialog [value=confirm]'))`);
+  await evaluate(`document.querySelector('#dialog [value=confirm]').click();waitFor(()=>document.querySelector('.planner-event-detail [role=alert]')?.textContent.includes('安排已变化'))`);
+  assert.equal(await evaluate(`webCheck.localEvents.length`),1,'A stale event remains visible with its actionable error');
+  await evaluate(`webCheck.deleteConflict=false;document.querySelector('#dialog [data-delete]').click();waitFor(()=>document.querySelector('#dialog [value=confirm]'))`);
+  await evaluate(`document.querySelector('#dialog [value=confirm]').click();waitFor(()=>!webCheck.localEvents.length&&!document.querySelector('[data-event="local:test"]'))`);
+  assert.match(await evaluate(`document.querySelector('#toast').textContent`),/已删除安排/);
   await writeFile(resolve('.codex/tmp/timetable-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
   assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile planner fits the viewport');
   await writeFile(resolve('.codex/tmp/timetable-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  for (const theme of ['observatory','star-notes','arknights','default']) {
+    await evaluate(`location.hash='settings?tab=appearance';waitFor(()=>document.querySelector('[name="art-theme"][value="${theme}"]'))`);
+    await evaluate(`document.querySelector('[name="art-theme"][value="${theme}"]').click()`);
+    await command('Page.reload');
+    await evaluate(`waitFor(()=>document.documentElement.dataset.theme==='${theme}'&&document.querySelector('[name="art-theme"][value="${theme}"]')?.checked)`);
+    await evaluate(`webCheck.localEvents=[{id:'local:test',source:'local',revision:'synthetic-event-v1',title:'合成形策活动',event_type:'activity',origin_id:'campus-agent:synthetic',at:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date())+'T16:00:00+08:00',notes:'活动说明第一段。\\n活动说明第二段。'}];location.hash='timetable';waitFor(()=>document.querySelector('[data-event="local:test"]'))`);
+    await evaluate(`document.querySelector('[data-event="local:test"]').click()`);
+    for (const [width,height] of [[1440,1000],[375,812]]) {
+      await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<850});
+      assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth&&[...document.querySelectorAll('.planner-detail-actions button')].every(button=>{const r=button.getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth&&r.bottom<=innerHeight;})`),`${theme}: event actions fit the ${width}px viewport`);
+      await writeFile(resolve(`.codex/tmp/timetable-actions-${theme}-${width}.png`),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+    }
+    await evaluate(`document.querySelector('#dialog [data-delete]').click();waitFor(()=>document.querySelector('#dialog [value=confirm]'))`);
+    await evaluate(`document.querySelector('#dialog [value=confirm]').click();waitFor(()=>!webCheck.localEvents.length&&!document.querySelector('[data-event="local:test"]'))`);
+  }
   await evaluate(`location.hash='assignments';waitFor(()=>document.querySelectorAll('[data-assignment]').length===2)`);
   assert.deepEqual(await evaluate(`[...document.querySelectorAll('[data-assignment]')].map(item=>item.dataset.assignment)`),['assignment-a','assignment-b']);
   assert.match(await evaluate(`document.querySelector('[data-assignment="assignment-a"]').innerText`),/待完成 · 时间待定/);

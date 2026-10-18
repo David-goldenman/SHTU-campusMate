@@ -68,6 +68,7 @@ export async function mount(container, context) {
 | `context.services.ai.chat(body)` | 调用通用对话 |
 | `context.services.ai.plugins()`、`.run(body)` | 列出原生插件，调用所选插件执行任务 |
 | `context.ui` | 公共 UI helper，组件约定见 [设计文档](DESIGN.md) |
+| `await context.ui.confirmDialog(title, message, confirmLabel?)` | 返回用户是否明确确认；从详情或编辑弹窗调用时关闭原弹窗，以独立节点接收确认选择 |
 | `context.ui.useStyle(url, signal)` | 挂载样式并在中止时移除，返回幂等清理函数；在首次 await 前调用 |
 | `context.ui.bindMenus(container, signal)` | 管理 `details[data-action-menu]` 的外部点击、操作后与 Esc 关闭；Esc 返回 summary，动态菜单适用，监听随 signal 清理 |
 | `context.theme` | 当前主题、展示区域、主题专属偏好和选择接口，见 [主题契约 v1](UI_THEME.md) |
