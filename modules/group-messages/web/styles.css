@@ -13,6 +13,11 @@
 .group-messages .gm-hint,.group-dialog .gm-hint{font-size:12px;color:var(--muted);line-height:1.8;margin:10px 0;overflow-wrap:anywhere}
 .group-messages details>summary{cursor:pointer;color:var(--link);font-size:14px;min-height:34px;padding:5px 0}
 .group-messages .gm-connect form,.group-messages .gm-snapshot form{display:grid;gap:13px;padding:12px 0}
+.group-messages .gm-qq-guide{padding:10px 14px;border:1px solid var(--border);background:var(--bg)}
+.group-messages .gm-qq-guide ol{padding-left:20px;margin:10px 0;font-size:13px;line-height:1.8}.group-messages .gm-qq-guide li+li{margin-top:13px}.group-messages .gm-qq-guide li p{margin:4px 0;color:var(--muted);overflow-wrap:anywhere}
+.group-messages .gm-secret-row{display:flex;gap:8px}.group-messages .gm-secret-row input{flex:1;min-width:0}.group-messages .gm-secret-row button{flex:none;font-size:12px}
+.group-messages .gm-qq-setup form>.gm-hint{margin:-7px 0 0}
+.group-messages .gm-qq-setup form>.gm-feedback{margin:0;min-height:0;font-size:13px;line-height:1.8}
 .group-messages label:not(.gm-check){display:grid;gap:5px;font-size:13px;color:var(--muted)}
 .group-messages .gm-check,.group-dialog .gm-check{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.75;color:var(--text);margin:8px 0}
 .group-messages .gm-check input,.group-dialog .gm-check input{width:17px;min-height:17px;height:17px;flex:0 0 17px;margin-top:4px;accent-color:var(--link)}
