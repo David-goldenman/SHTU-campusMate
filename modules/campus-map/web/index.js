@@ -4,6 +4,7 @@ import {buildWalkingGraph, planWalk} from './routing.js';
 import {compileConditions,routeConditionWarnings} from './conditions.js';
 import {createMaintenance} from './maintenance.js';
 import {createDiscovery} from './discovery.js';
+import {bindMapGestures,zoomView} from './interactions.js';
 
 const kinds = {class:'课程', deadline:'作业截止', exam:'考试', quiz:'Quiz', tutorial:'习题课', study:'学习', presentation:'展示', activity:'活动', lecture:'讲座', calendar:'校历'};
 const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在图上标记', ambiguous:'包含多个建筑，请选择具体地点'};
@@ -11,8 +12,8 @@ const notices = {missing:'尚未提供地点', unknown:'地点待确认，未在
 export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), context.signal);
-  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', drag, moved = false, observer;
-  const cleanup = () => {request?.abort();observer?.disconnect();removeStyle();container.classList.remove('campus-map','map-expanded');};
+  let request, serial = 0, data, projection, schedule, selected, selectedEvent, layer = 'day', observer, cancelGesture;
+  const cleanup = () => {request?.abort();cancelGesture?.();observer?.disconnect();removeStyle();container.classList.remove('campus-map','map-expanded');};
   context.signal.addEventListener('abort', cleanup, {once:true});
   container.classList.add('campus-map');
   const params = new URLSearchParams(location.hash.split('?')[1] || '');
@@ -31,11 +32,10 @@ export async function mount(container, context) {
   const routePlaceLabel = building => buildingLabel(building)+(building.walking_approach?' · '+building.walking_approach.label:'');
   const entries = () => (schedule?.events || []).map((item, index) => ({item, index, match:matchLocation(item.location, data.buildings)}));
   function setView() {if(view){svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);drawAnnotations();}}
-  function resetView() {if (!projection) return;view={x:0,y:0,w:projection.width,h:projection.height};setView();}
-  function zoom(factor) {
+  function resetView() {if (!projection) return;cancelGesture?.();view={x:0,y:0,w:projection.width,h:projection.height};setView();}
+  function zoom(factor,anchor) {
     if (!view) return;
-    const w = Math.min(projection.width*1.2, Math.max(projection.width/5,view.w*factor)), h = w*projection.height/projection.width;
-    view={x:view.x+(view.w-w)/2,y:view.y+(view.h-h)/2,w,h};setView();
+    cancelGesture?.();view=zoomView(view,projection,factor,anchor);setView();
   }
   function mapMarks() {
     const marks = new Map();
@@ -46,6 +46,7 @@ export async function mount(container, context) {
   const primaryNames = ['图书馆','教学中心','体育馆','生命学院','信息学院1号楼','信息学院2号楼','信息学院3号楼','创意与艺术学院','数学科学研究所','行政中心','创业与管理学院','体育场','游泳馆','会议中心','H1,校园服务中心,309室 IT服务中心','H2楼,学生科创中心','博士公寓11号楼','博士公寓12号楼','博士公寓13号楼'];
   function drawAnnotations() {
     const host=svg.querySelector('[data-annotations]');if(!host||!projection||!view)return;
+    const restoreFocus=host.contains(document.activeElement);
     const size=svg.getBoundingClientRect(),marks=mapMarks(),zoomLevel=projection.width/view.w;
     const candidates=data.buildings.filter(b=>b.kind==='gate'||b.id===selected||marks.has(b.id)||primaryNames.includes(b.name)||zoomLevel>1.4).map(b=>({id:b.id,label:buildingLabel(b),point:projection.center(b.polygon),kind:b.kind||'building',marker:marks.has(b.id),priority:b.id===selected?100:b.kind==='gate'?90:marks.has(b.id)?85:primaryNames.includes(b.name)?60-primaryNames.indexOf(b.name):20}));
     const roadsByName=new Map();
@@ -62,16 +63,19 @@ export async function mount(container, context) {
       const ends=route.length<2?[[route.start.point,'起 / 终','start']]:[[route.start.point,'起','start'],[route.end.point,'终','end']];
       host.innerHTML+=ends.map(([point,label,kind])=>{const [x,y]=projection.point(point);return `<g class="map-route-pin is-${kind}" transform="translate(${x},${y}) scale(${units})" aria-label="${label}点，室外道路"><circle r="15"/><text y="5">${label}</text></g>`;}).join('');
     }
+    if(restoreFocus)svg.focus({preventScroll:true});
   }
   function drawMap() {
     if (!data) return;
+    const restoreFocus=svg.contains(document.activeElement);
     const marks=mapMarks(),basemap=data.basemap||{roads:[],landscape:[]};
     const roadMarkup=basemap.roads.map(road=>`<polyline class="map-road ${road.type==='footway'?'is-footway':''}" points="${projection.polygon(road.points)}"/>`).join('');
     svg.innerHTML=`<polygon class="map-boundary" points="${projection.polygon(data.campus.polygon)}"/><g class="map-landscape">${basemap.landscape.map(item=>item.polygon?`<polygon class="map-land-${e(item.kind)}" points="${projection.polygon(item.polygon)}"/>`:`<polyline class="map-land-waterway" points="${projection.polygon(item.points)}"/>`).join('')}</g><g class="map-road-casings">${roadMarkup}</g><g class="map-road-surfaces">${roadMarkup}</g><g class="map-buildings">`+data.buildings.filter(b=>b.kind!=='gate').map(building=>`<g data-building="${e(building.id)}" role="button" tabindex="0" aria-label="${e(building.name)}" aria-pressed="${selected===building.id}" class="map-building category-${e(building.category)}${selected===building.id?' is-selected':''}${marks.has(building.id)?' is-marked':''}"><title>${e(building.name)}</title><polygon points="${projection.polygon(building.polygon)}"/></g>`).join('')+`</g>${maintenance?.overlay(projection,layer==='conditions')||''}${route?.status==='ok'?`<polyline class="map-route-outline" points="${projection.polygon(route.points)}"/><polyline class="map-route-line" points="${projection.polygon(route.points)}"><title>室外步行路线</title></polyline>`:''}<g data-annotations></g>`;
     container.querySelector('.map-canvas').classList.toggle('is-editing-conditions',!!maintenance?.mode);
     container.querySelector('[data-condition-done]').hidden=!maintenance?.mode;
-    container.querySelector('.map-gesture-hint').textContent=maintenance?.mode==='edges'?'点选道路 · 再点可取消':maintenance?.mode==='area'?'点击施工范围的两个对角点':'拖动浏览 · 放大查看更多楼名';
+    container.querySelector('.map-gesture-hint').textContent=maintenance?.mode==='edges'?'点选道路 · 再点可取消':maintenance?.mode==='area'?'点击施工范围的两个对角点':'拖动浏览 · 滚轮缩放';
     drawAnnotations();
+    if(restoreFocus)svg.focus({preventScroll:true});
   }
   function renderAgenda() {
     if (!schedule) return;
@@ -88,6 +92,7 @@ export async function mount(container, context) {
   }
   function selectBuilding(id, locationText='', focus=true) {
     selected=id;const building=buildingById(id);if(!building)return;
+    cancelGesture?.();
     if(focus) {const [x,y]=projection.center(building.polygon),w=projection.width/2,h=projection.height/2;view={x:x-w/2,y:y-h/2,w,h};setView();}
     drawMap();renderDetail(locationText);renderAgenda();
   }
@@ -111,6 +116,7 @@ export async function mount(container, context) {
   }
   function fitRoute() {
     if(route?.status!=='ok')return;
+    cancelGesture?.();
     const points=route.points.map(projection.point),xs=points.map(p=>p[0]),ys=points.map(p=>p[1]);
     const cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
     const w=Math.min(projection.width*1.1,Math.max(250,Math.max(...xs)-Math.min(...xs)+150,(Math.max(...ys)-Math.min(...ys)+150)*projection.width/projection.height));
@@ -182,7 +188,8 @@ export async function mount(container, context) {
     if(button.dataset.gate){selectedEvent=undefined;selectBuilding(button.dataset.gate);}
     if(button.dataset.zoom){if(button.dataset.zoom==='reset')resetView();else zoom(button.dataset.zoom==='in'?.75:1.333);}
     if(button.hasAttribute('data-event'))selectEvent(Number(button.dataset.event));
-    if(button.dataset.building&&!moved){selectedEvent=undefined;selectBuilding(button.dataset.building,'',false);}
+    // Pointer taps are handled once on release; detail=0 retains assistive activation.
+    if(button.dataset.building&&event.detail===0){selectedEvent=undefined;selectBuilding(button.dataset.building,'',false);}
     if(button.dataset.candidate){selectedEvent=undefined;selectBuilding(button.dataset.candidate);container.querySelector('[data-results]').hidden=true;}
     if(button.dataset.day){day=button.dataset.day==='today'?today():shiftDay(day,button.dataset.day==='prev'?-1:1);container.querySelector('[data-date]').value=day;void loadDay();}
     if(button.hasAttribute('data-retry'))void loadDay();
@@ -196,21 +203,16 @@ export async function mount(container, context) {
   });
   on(svg,'keydown',event=>{
     if(!view)return;
+    if(['Enter',' ','+','=','-','0','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))cancelGesture?.();
     if(maintenance?.mode&&['Enter',' '].includes(event.key)){const road=event.target.closest('[data-maint-road]');if(road){event.preventDefault();maintenance.mapClick(null,road.dataset.maintRoad);}return;}
     const building=event.target.closest('[data-building]');
     if(building&&['Enter',' '].includes(event.key)){event.preventDefault();selectedEvent=undefined;selectBuilding(building.dataset.building,'',false);return;}
     if(['+','=','-','0','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();if(['+','='].includes(event.key))zoom(.75);else if(event.key==='-')zoom(1.333);else if(event.key==='0')resetView();else {view.x+=({'ArrowLeft':-1,'ArrowRight':1}[event.key]||0)*view.w*.08;view.y+=({'ArrowUp':-1,'ArrowDown':1}[event.key]||0)*view.h*.08;setView();}}
   });
-  on(svg,'pointerdown',event=>{if(!view||event.button!==0)return;moved=false;drag={id:event.pointerId,x:event.clientX,y:event.clientY,view:{...view},building:event.target.closest('[data-building]')?.dataset.building,road:event.target.closest('[data-maint-road]')?.dataset.maintRoad};svg.setPointerCapture(event.pointerId);});
-  on(svg,'pointermove',event=>{if(!drag||drag.id!==event.pointerId)return;const dx=event.clientX-drag.x,dy=event.clientY-drag.y;if(Math.hypot(dx,dy)>4)moved=true;const rect=svg.getBoundingClientRect(),scale=Math.max(drag.view.w/rect.width,drag.view.h/rect.height);view={...drag.view,x:drag.view.x-dx*scale,y:drag.view.y-dy*scale};setView();});
-  const release=event=>{
-    if(drag?.id!==event.pointerId)return;
-    const {building:id,road}=drag;if(svg.hasPointerCapture(event.pointerId))svg.releasePointerCapture(event.pointerId);drag=undefined;
-    if(moved||event.type!=='pointerup')return;
-    if(maintenance?.mode){const point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;const local=point.matrixTransform(svg.getScreenCTM().inverse());maintenance.mapClick(projection.unproject([local.x,local.y]),road);return;}
+  cancelGesture=bindMapGestures(svg,{signal:context.signal,getView:()=>view,setView:next=>{view=next;setView();},onZoom:zoom,onTap:({building:id,road,point})=>{
+    if(maintenance?.mode){if(point)maintenance.mapClick(projection.unproject([point.x,point.y]),road);return;}
     if(id){selectedEvent=undefined;selectBuilding(id,'',false);}
-  };
-  on(svg,'pointerup',release);on(svg,'pointercancel',release);
+  }});
   observer=new ResizeObserver(()=>drawAnnotations());observer.observe(svg);
   try {
     data=await context.api('/places');if(context.signal.aborted)return cleanup;
