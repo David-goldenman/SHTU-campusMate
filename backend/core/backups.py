@@ -2,6 +2,7 @@
 import json
 import re
 import shutil
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,18 @@ class Backups:
         if path.is_symlink() or path.is_junction() or not path.resolve().is_relative_to(self.data):
             raise HTTPException(409, '数据目录包含链接或位于项目私有目录之外，操作已停止。')
         return path
+
+    def rename(self, source, destination):
+        self.checked(source)
+        self.checked(destination)
+        for attempt in range(20):
+            try:
+                source.rename(destination)
+                return
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(.1)
 
     def files(self, directory):
         self.checked(directory)
@@ -104,7 +117,7 @@ class Backups:
             metadata = {'version': 1, 'id': backup_id, 'created_at': timestamp.isoformat(), 'reason': reason,
                         'file_count': len(files), 'size_bytes': sum(files.values()) + (staging / 'state.json').stat().st_size, 'files': files}
             (staging / 'metadata.json').write_text(json.dumps(metadata, ensure_ascii=False), encoding='utf-8')
-            staging.rename(destination)
+            self.rename(staging, destination)
         finally:
             if staging.exists():
                 shutil.rmtree(staging)
@@ -121,9 +134,9 @@ class Backups:
         try:
             shutil.copytree(self.folder(backup_id) / 'modules', work / 'next')
             if current.exists():
-                current.rename(old)
+                self.rename(current, old)
             try:
-                (work / 'next').rename(current)
+                self.rename(work / 'next', current)
                 replaced = True
                 self.store.restore_modules(rows)
                 committed = True
@@ -131,7 +144,7 @@ class Backups:
                 if replaced:
                     shutil.rmtree(current)
                 if old.exists():
-                    old.rename(current)
+                    self.rename(old, current)
                 raise
         finally:
             # Keep the previous files if a filesystem rollback itself could not finish.
