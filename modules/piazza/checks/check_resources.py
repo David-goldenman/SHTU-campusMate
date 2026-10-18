@@ -71,6 +71,8 @@ async def check_api():
             return httpx.Response(200, content=b'small', headers={'content-type': 'application/pdf', 'content-length': str(31 * 1024 * 1024)})
         if mode == 'login':
             return httpx.Response(200, text='<html>Login</html>', headers={'content-type': 'text/html'})
+        if mode == 'svg':
+            return httpx.Response(200, content=b'<svg xmlns="http://www.w3.org/2000/svg"/>', headers={'content-type': 'image/svg+xml'})
         if mode == 'account':
             context.auth.revision = 'second-account'
         if mode == 'revision':
@@ -107,6 +109,10 @@ async def check_api():
                     assert result.status_code == 200 and result.content == b'%PDF-synthetic-material'
                     assert result.headers['content-disposition'].startswith('inline;' if inline else 'attachment;')
                     assert not list((context.data_dir / 'tmp' / 'downloads').iterdir()), 'Response cleanup removes temporary files'
+                mode = 'svg'
+                result = await client.get('/piazza/file', params={'material_id': material['id'], 'inline': True})
+                assert result.status_code == 200 and result.headers['content-disposition'].startswith('attachment;'), 'Only PDF files may render inline on the application origin'
+                assert not list((context.data_dir / 'tmp' / 'downloads').iterdir())
                 for mode in ('redirect', 'oversized', 'login'):
                     result = await client.get('/piazza/file', params={'material_id': material['id']})
                     assert result.status_code == 502, (mode, result.text)

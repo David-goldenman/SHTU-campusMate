@@ -25,7 +25,7 @@
 | --- | --- |
 | `GET /courses` | 关注课程及最近采集状态 |
 | `GET /catalog` | 上次发现的已加入课程、学期匹配结果、参考学校学期及检测时间 |
-| `GET /file?material_id=...&inline=false` | 从当前账号已同步的资源目录读取文件；默认下载，`inline=true` 供浏览器查看 |
+| `GET /file?material_id=...&inline=false` | 从当前账号已同步的资源目录读取文件；默认下载，`inline=true` 可在浏览器预览 PDF，其他类型保持下载 |
 | `POST /discover`，`{"current_semester":{"id":"2026-2027-1","name":"2026-2027学年秋季"}}` | 从 `user.status` 自动发现课程；可省略学校学期，此时标为学期待确认 |
 | `PUT /courses`，`{"courses":[{"id":"...","name":"..."}]}` | 设置最多 30 门课程 |
 | `POST /courses/{id}/sync`，`{"offset":0}` | 返回 202 并在后台采集该课程 20 条帖子；失败帖子不覆盖旧缓存，不推进失败页 |

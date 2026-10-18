@@ -45,7 +45,7 @@ def create_router(context):
             latest = next((row for row in _source.snapshot()['data']['materials'] if row['id'] == material_id), None)
             if owner != _source.owner() or latest != item:
                 raise HTTPException(409, '账号或课件目录已更新，请重新读取。')
-            if inline:
+            if inline and response.media_type == 'application/pdf':
                 response.headers['content-disposition'] = response.headers['content-disposition'].replace('attachment;', 'inline;', 1)
             return response
         except BaseException:
