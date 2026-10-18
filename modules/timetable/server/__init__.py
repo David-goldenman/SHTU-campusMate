@@ -5,7 +5,8 @@ from pydantic import Field, model_validator
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from backend.services.campus import Source, timestamp
+from backend.services.campus import Source, semester, timestamp
+from backend.services.campus.assignments import filter_issues, historical
 from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
 from backend.services.campus.source import snapshots
@@ -160,6 +161,7 @@ def create_router(context):
         course_styles = {member: item for item in appearance.get("courses", []) for member in item["course_ids"]}
         values = {"timetable": source.snapshot(), **values}
         dates = settings()
+        current = semester(values["timetable"]["data"]["metadata"].get("semester"))
         events, issues = local_events(), []
         if not dates['week_one'] and values['timetable']['data']['timetable']:
             issues.append(MISSING_WEEK_ONE)
@@ -171,15 +173,19 @@ def create_router(context):
         for name, value in values.items():
             data = value["data"]
             label = SCHEDULE_SOURCES.get(name, "教务课表")
-            issues.extend(label + "：" + str(issue) for issue in data["issues"])
+            visible = filter_issues(data["issues"], data["assignments"], data["courses"], current, dates["week_one"])
+            issues.extend(label + "：" + str(issue) for issue in visible)
             if value.get("message"):
                 issues.append(label + "：" + value["message"])
-            courses = {item["id"]: item["title"] for item in data["courses"]}
+            courses = {item["id"]: item for item in data["courses"]}
             for item in data["assignments"]:
+                course = courses.get(item.get("course_id"), {})
+                if historical(item, course, current, dates["week_one"]):
+                    continue
                 at = timestamp(item.get("due_at"))
                 if not at:
                     continue
-                events.append({**item, "at": at, "event_type": "exam" if name == "eams" else "deadline", "course_title": courses.get(item.get("course_id"), "")})
+                events.append({**item, "at": at, "event_type": "exam" if name == "eams" else "deadline", "course_title": course.get("title", "")})
         if unavailable:
             issues.append("以下来源未启用或暂时不可用：" + "、".join(SCHEDULE_SOURCES[name] for name in unavailable))
         events.sort(key=lambda item: (datetime.fromisoformat(item.get('at') or item['date'] + 'T00:00:00+08:00').timestamp(), item.get('period_start') or 0, item['id']))
@@ -195,7 +201,7 @@ def create_router(context):
         if missing:
             issues.append(str(len(missing)) + ' 项课程调整暂时无法匹配最新教务课表，原调整记录仍保留。')
         plan = calendar(data, week_start or datetime.now(ZONE).date(), dates['week_one'], adjustments)
-        reminders = homework_window(values)
+        reminders = homework_window(values, start=dates['week_one'])
         return {"status": "syncing" if syncing else "partial" if issues and updated else "ready" if updated else "not_connected",
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,

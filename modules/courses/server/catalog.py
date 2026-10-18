@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from backend.services.campus import KINDS, semester
+from backend.services.campus.assignments import filter_issues, semester_start
 from backend.services.campus.data import digest
 
 SOURCES = {"timetable": "ids", "blackboard": "ids", "gradescope": "gradescope", "piazza": "piazza", "elrc": "ids", "ecourse": "ids", "mail": "coremail"}
@@ -34,7 +35,11 @@ def combine(snapshots, groups, current):
             if kind != "courses":
                 result[kind].extend(data[kind])
         result["metadata"]["source_metadata"][source] = {"status": snapshot.get("status"), "updated_at": snapshot.get("updated_at"), **data["metadata"]}
-        result["issues"].extend(source + "：" + str(issue) for issue in data["issues"])
+    start = semester_start(result["metadata"])
+    for source, snapshot in snapshots.items():
+        data = snapshot["data"]
+        result["issues"].extend(source + "：" + str(issue) for issue in
+                                filter_issues(data["issues"], data["assignments"], data["courses"], current, start))
         if snapshot.get("message"):
             result["issues"].append(source + "：" + str(snapshot["message"]))
     manual = {member: group for group in groups for member in group["course_ids"]}

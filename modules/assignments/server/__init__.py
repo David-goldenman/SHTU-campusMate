@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.campus import SECTIONS, assignment_section, timestamp
+from backend.services.campus.assignments import semester_start
 from backend.services.campus.analysis import account_revision
 
 SUBMISSION_STATES = ('not_submitted', 'draft', 'submitted', 'needs_grading', 'graded', 'exempt', 'unknown')
@@ -37,13 +38,16 @@ def apply_order(values, order=None):
 
 def arrange(data, now=None, order=None):
     at = now or datetime.now(timezone.utc)
+    metadata = data.get("metadata", {})
+    current = metadata.get("current_semester")
+    start = semester_start(metadata)
     groups = {member: course for course in data["courses"] for member in course["course_ids"]}
     values = []
     for item in data["assignments"]:
         if item["source"] not in {"gradescope", "blackboard", "ecourse"}:
             continue
         group = groups.get(item.get("course_id"), {})
-        category = assignment_section(item, at)
+        category = assignment_section(item, at, course=group, current=current, start=start)
         state = submission_state(item)
         source = data.get("metadata", {}).get("source_metadata", {}).get(item["source"], {})
         source_stale = source.get("status") in {"error", "login_required", "verification_required", "not_connected"}
