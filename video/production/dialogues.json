@@ -1,0 +1,34 @@
+{
+  "study": {
+    "prompt": "这周作业较多，结合概率课资料，帮我安排一次条件概率复习。",
+    "text": "## 先排截止，再理解条件概率\n\n**周二 18:00 前：完成信号与系统 HW2。**\n\n**周二晚：30 分钟复习条件概率。**\n先看 Lecture Slides L2 第 5 页的定义：P(A|B) = P(A∩B) / P(B)，其中 P(B)>0。[1]\n再用第 6 页的掷骰子例子，比较条件改变前后的样本空间。\n\n**周三：检查 CS100 HW2_p1 / HW2_p2。**\n为周四 23:59 截止预留调试和提交时间。",
+    "citations": [
+      {
+        "source_id": "public:material:page5",
+        "record_id": "public:material:l2",
+        "title": "Lecture Slides L2 · Conditional Probability",
+        "page": 5,
+        "kind": "pdf",
+        "evidence_type": "original_text",
+        "quote": "Definition of Conditional Probability: P(A|B) = P(A ∩ B) / P(B), P(B) > 0.",
+        "url": "https://bb.shanghaitech.edu.cn/"
+      }
+    ],
+    "changes": []
+  },
+  "advising": {
+    "prompt": "我对机器人感兴趣，结合培养方案和当前课程，下学期怎么选课？",
+    "text": "## 先核对必修，再衔接机器人方向\n\n**先检查电路类专业必修的先修要求。**\n把本学期的编程、概率论、信号与系统接到后续课程。\n\n**再查与你方向有关的选修。**\n培养方案列有控制原理 EE160，以及跨学科选修算法与数据结构 CS101，可继续查询先修条件与当期开设。[1]\n\n**最后检查时间冲突与每周负担。**\n给项目实践和复习留下空间。正式安排以学校当期目录为准。",
+    "citations": [
+      {
+        "source_id": "public:curriculum:2025",
+        "record_id": "public:curriculum:2025",
+        "title": "电子信息工程专业培养计划（2025）",
+        "kind": "text",
+        "quote": "专业必修列有模拟电路、数字电路、电路基础；本学科选修列有控制原理 EE160；跨学科选修列有算法与数据结构 CS101。",
+        "url": "https://eams.shanghaitech.edu.cn/"
+      }
+    ],
+    "changes": []
+  }
+}

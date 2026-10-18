@@ -1,0 +1,29 @@
+{
+  "name": "campus-hub-film",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sources": "node scripts/source-data.mjs",
+    "record": "node scripts/record.mjs",
+    "studio": "node scripts/studio.mjs",
+    "check": "tsc --noEmit && node scripts/check.mjs",
+    "verify": "node scripts/verify.mjs",
+    "render": "node scripts/music.mjs && node scripts/render.mjs",
+    "stills": "node scripts/render.mjs --stills",
+    "music": "node scripts/music.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.536",
+    "@remotion/bundler": "4.0.536",
+    "@remotion/renderer": "4.0.536",
+    "remotion": "4.0.536",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

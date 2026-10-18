@@ -1,0 +1,19 @@
+{
+  "title": "Lecture Slides L2",
+  "source": "Blackboard · SI140A",
+  "sha256": "855632be077de16d0f2292a52ce9d130950a9240d579116de3c7f2255c7e8bb9",
+  "pages": 94,
+  "verified": [
+    {
+      "page": 5,
+      "topic": "Definition of Conditional Probability",
+      "quote": "Definition of Conditional Probability: P(A|B) = P(A ∩ B) / P(B), P(B) > 0."
+    },
+    {
+      "page": 6,
+      "topic": "Example: Rolling the Fair Die",
+      "description": "A 为点数为奇数，B 为点数不大于 3，比较 P(A) 与 P(A|B)。"
+    }
+  ],
+  "fullDocument": "原文 PDF 仅放在项目 .codex/video/source-lecture-l2.pdf；视频保留页码与必要摘录。"
+}

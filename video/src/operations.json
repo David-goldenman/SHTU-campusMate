@@ -1,0 +1,1225 @@
+[
+  {
+    "id": "hub",
+    "route": "#dashboard",
+    "seconds": 8,
+    "ready": ".overview-attention",
+    "steps": [],
+    "modules": [
+      "academic-assistant"
+    ]
+  },
+  {
+    "id": "mail",
+    "route": "#dashboard",
+    "seconds": 20,
+    "ready": ".overview-attention",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": "#navigation a[href='#mail']",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": "#navigation a[href='#mail']",
+        "ready": "[data-message]",
+        "transition": true
+      },
+      {
+        "at": 5.416666666666667,
+        "type": "move",
+        "selector": "[data-message='mail:0']",
+        "duration": 1
+      },
+      {
+        "at": 6.466666666666667,
+        "type": "click",
+        "selector": "[data-message='mail:0']",
+        "ready": ".mail-reader-header",
+        "transition": true
+      },
+      {
+        "at": 8.5,
+        "type": "scrollInside",
+        "container": "[data-reader]",
+        "selector": ".mail-summary",
+        "duration": 0.6,
+        "top": 24
+      },
+      {
+        "at": 9.35,
+        "type": "focus",
+        "selector": ".mail-summary",
+        "label": "时间、地点与要求",
+        "duration": 0.75
+      },
+      {
+        "at": 11.283333333333333,
+        "type": "move",
+        "selector": ".mail-decision summary",
+        "duration": 1
+      },
+      {
+        "at": 12.333333333333334,
+        "type": "click",
+        "selector": ".mail-decision summary"
+      },
+      {
+        "at": 14.283333333333333,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 14.766666666666667,
+        "type": "move",
+        "selector": "[data-bucket=digest]",
+        "duration": 1
+      },
+      {
+        "at": 15.816666666666666,
+        "type": "click",
+        "selector": "[data-bucket=digest]",
+        "ready": "[data-message='mail:5']"
+      }
+    ],
+    "modules": [
+      "academic-assistant",
+      "mail"
+    ]
+  },
+  {
+    "id": "preferences",
+    "route": "#mail",
+    "seconds": 15,
+    "ready": "[data-preferences]",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": "[data-preferences]",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": "[data-preferences]",
+        "ready": ".mail-preferences"
+      },
+      {
+        "at": 4.25,
+        "type": "scrollModal",
+        "selector": "textarea[name=requirements]",
+        "duration": 0.5166666666666667
+      },
+      {
+        "at": 4.85,
+        "type": "move",
+        "selector": "textarea[name=requirements]",
+        "duration": 1
+      },
+      {
+        "at": 5.9,
+        "type": "type",
+        "selector": "textarea[name=requirements]",
+        "text": "关注人工智能与机器人讲座；形策和心理活动优先提醒。已经结束的活动保留摘要。",
+        "duration": 2.716666666666667
+      },
+      {
+        "at": 6.75,
+        "type": "focus",
+        "selector": "textarea[name=requirements]",
+        "label": "用自然语言写偏好",
+        "duration": 0.7
+      },
+      {
+        "at": 10.15,
+        "type": "focus",
+        "duration": 0.7
+      }
+    ],
+    "modules": [
+      "mail"
+    ]
+  },
+  {
+    "id": "timetable",
+    "route": "#timetable",
+    "seconds": 26,
+    "ready": ".calendar-event",
+    "steps": [
+      {
+        "at": 1.0166666666666666,
+        "type": "focus",
+        "selector": ".planner-actions a[download]",
+        "label": "导入苹果日历",
+        "duration": 0.8
+      },
+      {
+        "at": 3.7333333333333334,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 5.066666666666666,
+        "type": "move",
+        "selector": "[data-event=\"class:0\"]",
+        "duration": 1
+      },
+      {
+        "at": 6.116666666666666,
+        "type": "click",
+        "selector": "[data-event=\"class:0\"]",
+        "ready": "#dialog[open]"
+      },
+      {
+        "at": 8.983333333333333,
+        "type": "move",
+        "selector": "dialog[open] [aria-label=\"关闭\"]",
+        "duration": 1
+      },
+      {
+        "at": 10.033333333333333,
+        "type": "close",
+        "selector": "dialog[open] [aria-label=\"关闭\"]"
+      },
+      {
+        "at": 10.533333333333333,
+        "type": "scroll",
+        "selector": ".planner-overview",
+        "duration": 0.6,
+        "top": 100
+      },
+      {
+        "at": 11.216666666666667,
+        "type": "move",
+        "selector": ".planner-overview > summary",
+        "duration": 1
+      },
+      {
+        "at": 12.266666666666667,
+        "type": "click",
+        "selector": ".planner-overview > summary"
+      },
+      {
+        "at": 12.766666666666667,
+        "type": "capture",
+        "selector": ".overview-scroll",
+        "name": "overview"
+      },
+      {
+        "at": 13.116666666666667,
+        "type": "focus",
+        "selector": "[data-overview] tbody tr:nth-child(2)",
+        "label": "当前教学周的截止",
+        "duration": 0.8
+      },
+      {
+        "at": 16.166666666666668,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 16.316666666666666,
+        "type": "move",
+        "selector": ".planner-overview > summary",
+        "duration": 1
+      },
+      {
+        "at": 17.366666666666667,
+        "type": "click",
+        "selector": ".planner-overview > summary"
+      },
+      {
+        "at": 17.783333333333335,
+        "type": "scroll",
+        "selector": ".planner-other-events",
+        "duration": 0.6833333333333333,
+        "top": 90
+      },
+      {
+        "at": 18.55,
+        "type": "move",
+        "selector": ".planner-other-events > summary",
+        "duration": 1
+      },
+      {
+        "at": 19.6,
+        "type": "click",
+        "selector": ".planner-other-events > summary"
+      },
+      {
+        "at": 20.016666666666666,
+        "type": "capture",
+        "selector": ".planner-other-events > section:first-of-type",
+        "name": "agenda"
+      }
+    ],
+    "modules": [
+      "timetable"
+    ]
+  },
+  {
+    "id": "map",
+    "route": "#campus-map",
+    "seconds": 22,
+    "ready": "[data-route-start]:not([disabled])",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": "[data-route-start]",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "select",
+        "selector": "[data-route-start]",
+        "value": "e2473fa9855d45cbb5c5b8d15bc8b8f4"
+      },
+      {
+        "at": 3.3666666666666667,
+        "type": "move",
+        "selector": "[data-walk-event=\"0\"]",
+        "duration": 1
+      },
+      {
+        "at": 4.416666666666667,
+        "type": "click",
+        "selector": "[data-walk-event=\"0\"]",
+        "ready": ".map-route-line"
+      },
+      {
+        "at": 6.633333333333334,
+        "type": "scroll",
+        "selector": ".map-canvas",
+        "duration": 0.6833333333333333,
+        "top": 80
+      },
+      {
+        "at": 7.45,
+        "type": "move",
+        "selector": "[data-route-fit]",
+        "duration": 1
+      },
+      {
+        "at": 8.5,
+        "type": "click",
+        "selector": "[data-route-fit]"
+      },
+      {
+        "at": 9.783333333333333,
+        "type": "focus",
+        "selector": ".map-route-line",
+        "padding": 40,
+        "label": "下一节课的室外路线",
+        "duration": 0.8
+      },
+      {
+        "at": 13.6,
+        "type": "focus",
+        "duration": 0.8
+      },
+      {
+        "at": 14.45,
+        "type": "scroll",
+        "selector": ".map-routing",
+        "duration": 0.6833333333333333,
+        "top": 100
+      },
+      {
+        "at": 15.466666666666667,
+        "type": "focus",
+        "selector": ".map-route-summary",
+        "label": "约计距离与步行时间",
+        "duration": 0.8
+      },
+      {
+        "at": 17,
+        "type": "focus",
+        "duration": 0.7
+      }
+    ],
+    "modules": [
+      "campus-map"
+    ]
+  },
+  {
+    "id": "courses",
+    "route": "#courses",
+    "seconds": 20.5,
+    "ready": "[data-course]",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": ".course-filters [data-filter=available]",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": ".course-filters [data-filter=available]"
+      },
+      {
+        "at": 3.6333333333333333,
+        "type": "move",
+        "selector": "[data-course=\"course:1\"]",
+        "duration": 1
+      },
+      {
+        "at": 4.683333333333334,
+        "type": "click",
+        "selector": "[data-course=\"course:1\"]",
+        "ready": "[data-view-recordings]"
+      },
+      {
+        "at": 5.75,
+        "type": "move",
+        "selector": "[data-view-recordings]",
+        "duration": 1
+      },
+      {
+        "at": 6.8,
+        "type": "click",
+        "selector": "[data-view-recordings]"
+      },
+      {
+        "at": 7.316666666666666,
+        "type": "scroll",
+        "selector": "#course-content",
+        "duration": 0.6,
+        "top": 270
+      },
+      {
+        "at": 8.5,
+        "type": "focus",
+        "selector": ".course-recording-list",
+        "label": "直接回到录播",
+        "duration": 0.8
+      },
+      {
+        "at": 11.9,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 12.55,
+        "type": "move",
+        "selector": ".course-filters [data-filter=all]",
+        "duration": 1
+      },
+      {
+        "at": 13.6,
+        "type": "click",
+        "selector": ".course-filters [data-filter=all]"
+      },
+      {
+        "at": 13.733333333333333,
+        "type": "move",
+        "selector": "[data-course=\"course:0\"]",
+        "duration": 1
+      },
+      {
+        "at": 14.783333333333333,
+        "type": "click",
+        "selector": "[data-course=\"course:0\"]"
+      },
+      {
+        "at": 15.1,
+        "type": "move",
+        "selector": "[data-kind=posts]",
+        "duration": 1
+      },
+      {
+        "at": 16.15,
+        "type": "click",
+        "selector": "[data-kind=posts]"
+      }
+    ],
+    "modules": [
+      "courses"
+    ]
+  },
+  {
+    "id": "assignments",
+    "route": "#assignments",
+    "seconds": 8.5,
+    "ready": ".assignment-card",
+    "steps": [
+      {
+        "at": 2.55,
+        "type": "scroll",
+        "selector": ".assignment-card:last-child",
+        "duration": 0.6833333333333333,
+        "top": 170
+      }
+    ],
+    "modules": [
+      "assignments"
+    ]
+  },
+  {
+    "id": "groups",
+    "route": "#group-messages",
+    "seconds": 31,
+    "ready": "[data-gid=demo-cs100]",
+    "steps": [
+      {
+        "at": 1.2833333333333334,
+        "type": "scroll",
+        "selector": "[data-gid=demo-cs100]",
+        "duration": 0.6,
+        "top": 160
+      },
+      {
+        "at": 2.5166666666666666,
+        "type": "move",
+        "selector": "[data-source=wechat] [data-messages]",
+        "duration": 1
+      },
+      {
+        "at": 3.566666666666667,
+        "type": "click",
+        "selector": "[data-source=wechat] [data-messages]",
+        "ready": ".group-dialog[open]"
+      },
+      {
+        "at": 6.766666666666667,
+        "type": "move",
+        "selector": "dialog[open] [aria-label=\"关闭\"]",
+        "duration": 1
+      },
+      {
+        "at": 7.816666666666666,
+        "type": "close",
+        "selector": "dialog[open] [aria-label=\"关闭\"]"
+      },
+      {
+        "at": 8.55,
+        "type": "move",
+        "selector": "[data-source=wechat] [data-extract]",
+        "duration": 1
+      },
+      {
+        "at": 9.6,
+        "type": "click",
+        "selector": "[data-source=wechat] [data-extract]",
+        "ready": "[data-confirm-extract]"
+      },
+      {
+        "at": 10.85,
+        "type": "move",
+        "selector": "[data-confirm-extract]",
+        "duration": 1
+      },
+      {
+        "at": 11.9,
+        "type": "click",
+        "selector": "[data-confirm-extract]",
+        "ready": "[data-item=demo-hw2]"
+      },
+      {
+        "at": 12.55,
+        "type": "move",
+        "selector": ".gm-filters [data-filter=all]",
+        "duration": 1
+      },
+      {
+        "at": 13.6,
+        "type": "click",
+        "selector": ".gm-filters [data-filter=all]"
+      },
+      {
+        "at": 13.933333333333334,
+        "type": "scroll",
+        "selector": "[data-item=demo-hw2]",
+        "duration": 0.7666666666666667,
+        "top": 130
+      },
+      {
+        "at": 14.783333333333333,
+        "type": "move",
+        "selector": "[data-item=demo-hw2] summary",
+        "duration": 1
+      },
+      {
+        "at": 15.833333333333334,
+        "type": "click",
+        "selector": "[data-item=demo-hw2] summary"
+      },
+      {
+        "at": 16.683333333333334,
+        "type": "focus",
+        "selector": "[data-item=demo-hw2]",
+        "label": "先核对原文依据",
+        "duration": 0.8
+      },
+      {
+        "at": 19.633333333333333,
+        "type": "move",
+        "selector": "[data-decision=apply]",
+        "duration": 1
+      },
+      {
+        "at": 20.683333333333334,
+        "type": "click",
+        "selector": "[data-decision=apply]",
+        "ready": "[data-decision=undo]"
+      },
+      {
+        "at": 23.033333333333335,
+        "type": "move",
+        "selector": "[data-decision=undo]",
+        "duration": 1
+      },
+      {
+        "at": 24.083333333333332,
+        "type": "click",
+        "selector": "[data-decision=undo]"
+      },
+      {
+        "at": 25.783333333333335,
+        "type": "focus",
+        "duration": 0.7
+      }
+    ],
+    "modules": [
+      "group-messages"
+    ]
+  },
+  {
+    "id": "academic",
+    "route": "#eams",
+    "seconds": 7,
+    "ready": ".eams-plan summary",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": ".eams-plan summary",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": ".eams-plan summary"
+      }
+    ],
+    "modules": [
+      "eams"
+    ]
+  },
+  {
+    "id": "schedule",
+    "route": "#dashboard",
+    "mode": "schedule",
+    "seconds": 33.5,
+    "ready": "[data-home]",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": "[data-home]",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": "[data-home]",
+        "ready": ".module-focused .academic-chat",
+        "transition": true
+      },
+      {
+        "at": 3.4833333333333334,
+        "type": "move",
+        "selector": "#study-message",
+        "duration": 1
+      },
+      {
+        "at": 4.533333333333333,
+        "type": "type",
+        "selector": "#study-message",
+        "replyPrompt": true,
+        "duration": 2.3833333333333333
+      },
+      {
+        "at": 7,
+        "type": "move",
+        "selector": "[data-send]",
+        "duration": 1
+      },
+      {
+        "at": 8.05,
+        "type": "click",
+        "selector": "[data-send]",
+        "ready": ".study-streaming"
+      },
+      {
+        "at": 8.383333333333333,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询邮件与当前课程",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "at": 9.4,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询邮件与当前课程",
+            "status": "done"
+          },
+          {
+            "name": "schedule-edit",
+            "label": "核对冲突并编辑时间表",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "at": 10.683333333333334,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询邮件与当前课程",
+            "status": "done"
+          },
+          {
+            "name": "schedule-edit",
+            "label": "核对冲突并编辑时间表",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "at": 11.1,
+        "type": "stream",
+        "duration": 5.516666666666667
+      },
+      {
+        "at": 16.8,
+        "type": "complete"
+      },
+      {
+        "at": 20.433333333333334,
+        "type": "move",
+        "selector": "#navigation a[href='#timetable']",
+        "duration": 1
+      },
+      {
+        "at": 21.483333333333334,
+        "type": "click",
+        "selector": "#navigation a[href='#timetable']",
+        "ready": ".calendar-event",
+        "transition": true
+      },
+      {
+        "at": 22.333333333333332,
+        "type": "scroll",
+        "selector": ".planner-other-events",
+        "duration": 0.3333333333333333,
+        "top": 90
+      },
+      {
+        "at": 22.983333333333334,
+        "type": "move",
+        "selector": ".planner-other-events > summary",
+        "duration": 1
+      },
+      {
+        "at": 24.033333333333335,
+        "type": "click",
+        "selector": ".planner-other-events > summary"
+      },
+      {
+        "at": 24.366666666666667,
+        "type": "scroll",
+        "selector": "[data-event=\"event:shape\"]",
+        "duration": 0.5166666666666667,
+        "top": 230
+      },
+      {
+        "at": 25.216666666666665,
+        "type": "focus",
+        "selector": "[data-event=\"event:shape\"]",
+        "label": "刚加入的安排",
+        "duration": 0.7
+      },
+      {
+        "at": 28.283333333333335,
+        "type": "focus",
+        "duration": 0.7
+      }
+    ],
+    "modules": [
+      "academic-assistant",
+      "timetable"
+    ]
+  },
+  {
+    "id": "notices",
+    "route": "#dashboard",
+    "mode": "notices",
+    "seconds": 18.5,
+    "ready": ".overview-attention",
+    "steps": [
+      {
+        "at": 1.2833333333333334,
+        "type": "notify"
+      },
+      {
+        "at": 1.95,
+        "type": "focus",
+        "selector": ".campus-agent-peek",
+        "label": "后台提炼的重点",
+        "duration": 0.75
+      },
+      {
+        "at": 5.516666666666667,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 6,
+        "type": "move",
+        "selector": ".campus-agent-peek a",
+        "duration": 1
+      },
+      {
+        "at": 7.05,
+        "type": "click",
+        "selector": ".campus-agent-peek a",
+        "ready": ".notice-item",
+        "transition": true
+      },
+      {
+        "at": 7.983333333333333,
+        "type": "move",
+        "selector": "[data-notice-id='notice:1'] summary",
+        "duration": 1
+      },
+      {
+        "at": 9.033333333333333,
+        "type": "click",
+        "selector": "[data-notice-id='notice:1'] summary"
+      },
+      {
+        "at": 11.816666666666666,
+        "type": "move",
+        "selector": "[data-notice-id='notice:2'] summary",
+        "duration": 1
+      },
+      {
+        "at": 12.866666666666667,
+        "type": "click",
+        "selector": "[data-notice-id='notice:2'] summary"
+      },
+      {
+        "at": 13.283333333333333,
+        "type": "scroll",
+        "selector": "[data-notice-id='notice:2']",
+        "duration": 0.6833333333333333,
+        "top": 140
+      }
+    ],
+    "modules": [
+      "academic-assistant",
+      "notifications",
+      "campus-agent"
+    ]
+  },
+  {
+    "id": "study",
+    "route": "#dashboard",
+    "mode": "study",
+    "seconds": 24.5,
+    "ready": "[data-home]",
+    "focus": true,
+    "steps": [
+      {
+        "at": 1.25,
+        "type": "move",
+        "selector": "#study-message",
+        "duration": 1
+      },
+      {
+        "at": 2.3,
+        "type": "type",
+        "selector": "#study-message",
+        "replyPrompt": true,
+        "duration": 2.55
+      },
+      {
+        "at": 4.933333333333334,
+        "type": "move",
+        "selector": "[data-send]",
+        "duration": 1
+      },
+      {
+        "at": 5.983333333333333,
+        "type": "click",
+        "selector": "[data-send]",
+        "ready": ".study-streaming"
+      },
+      {
+        "at": 6.4,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询本周作业与截止",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "at": 7.333333333333333,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询本周作业与截止",
+            "status": "done"
+          },
+          {
+            "name": "search",
+            "label": "检索概率课程资料",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "at": 8.266666666666667,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "查询本周作业与截止",
+            "status": "done"
+          },
+          {
+            "name": "search",
+            "label": "检索概率课程资料",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "at": 8.616666666666667,
+        "type": "stream",
+        "duration": 5.266666666666667
+      },
+      {
+        "at": 14.05,
+        "type": "complete"
+      },
+      {
+        "at": 17.7,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 17.933333333333334,
+        "type": "move",
+        "selector": ".study-references summary",
+        "duration": 1
+      },
+      {
+        "at": 18.983333333333334,
+        "type": "click",
+        "selector": ".study-references summary"
+      },
+      {
+        "at": 19.4,
+        "type": "scrollChat",
+        "fraction": 1,
+        "duration": 0.5166666666666667
+      }
+    ],
+    "modules": [
+      "academic-assistant"
+    ]
+  },
+  {
+    "id": "advising",
+    "route": "#dashboard",
+    "mode": "advising",
+    "seconds": 20,
+    "ready": "[data-home]",
+    "focus": true,
+    "steps": [
+      {
+        "at": 1.25,
+        "type": "move",
+        "selector": "#study-message",
+        "duration": 1
+      },
+      {
+        "at": 2.3,
+        "type": "type",
+        "selector": "#study-message",
+        "replyPrompt": true,
+        "duration": 2.55
+      },
+      {
+        "at": 4.933333333333334,
+        "type": "move",
+        "selector": "[data-send]",
+        "duration": 1
+      },
+      {
+        "at": 5.983333333333333,
+        "type": "click",
+        "selector": "[data-send]",
+        "ready": ".study-streaming"
+      },
+      {
+        "at": 6.4,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "读取培养方案与本学期课程",
+            "status": "running"
+          }
+        ]
+      },
+      {
+        "at": 7.766666666666667,
+        "type": "activity",
+        "steps": [
+          {
+            "name": "query",
+            "label": "读取培养方案与本学期课程",
+            "status": "done"
+          },
+          {
+            "name": "course-search",
+            "label": "核对课程方向与先修关系",
+            "status": "done"
+          }
+        ]
+      },
+      {
+        "at": 8.35,
+        "type": "stream",
+        "duration": 5.1
+      },
+      {
+        "at": 13.616666666666667,
+        "type": "complete"
+      }
+    ],
+    "modules": [
+      "academic-assistant"
+    ]
+  },
+  {
+    "id": "mobile",
+    "route": "#timetable",
+    "mobile": true,
+    "seconds": 17,
+    "ready": ".calendar-mobile",
+    "steps": [
+      {
+        "at": 1.2833333333333334,
+        "type": "scroll",
+        "selector": ".calendar-mobile > section:first-child",
+        "duration": 0.6,
+        "top": 75
+      },
+      {
+        "at": 4.583333333333333,
+        "type": "scroll",
+        "selector": ".calendar-mobile > section:nth-child(2)",
+        "duration": 0.6,
+        "top": 75
+      },
+      {
+        "at": 8.5,
+        "type": "navigate",
+        "route": "#campus-map",
+        "ready": "[data-route-start]:not([disabled])",
+        "transition": true
+      },
+      {
+        "at": 9.683333333333334,
+        "type": "select",
+        "selector": "[data-route-start]",
+        "value": "e2473fa9855d45cbb5c5b8d15bc8b8f4"
+      },
+      {
+        "at": 10.116666666666667,
+        "type": "select",
+        "selector": "[data-route-end]",
+        "value": "edb12f3dec97483791e3d63280b2d22c"
+      },
+      {
+        "at": 10.8,
+        "type": "scroll",
+        "selector": ".map-canvas",
+        "duration": 0.6833333333333333,
+        "top": 80
+      },
+      {
+        "at": 12.5,
+        "type": "click",
+        "selector": "[data-route-fit]"
+      }
+    ],
+    "modules": [
+      "timetable",
+      "campus-map"
+    ]
+  },
+  {
+    "id": "settings",
+    "route": "#settings?tab=accounts",
+    "seconds": 26.5,
+    "ready": ".provider-card",
+    "steps": [
+      {
+        "at": 1.5,
+        "type": "move",
+        "selector": "[data-provider=ids] > details > summary",
+        "duration": 1
+      },
+      {
+        "at": 2.55,
+        "type": "click",
+        "selector": "[data-provider=ids] > details > summary"
+      },
+      {
+        "at": 3.4,
+        "type": "focus",
+        "selector": ".school-connections",
+        "label": "一次学校登录，四个校内服务",
+        "duration": 0.8
+      },
+      {
+        "at": 6.8,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 7.45,
+        "type": "move",
+        "selector": "[data-provider=ids] > details > summary",
+        "duration": 1
+      },
+      {
+        "at": 8.5,
+        "type": "click",
+        "selector": "[data-provider=ids] > details > summary"
+      },
+      {
+        "at": 8.9,
+        "type": "move",
+        "selector": "[data-provider=coremail] > details > summary",
+        "duration": 1
+      },
+      {
+        "at": 9.95,
+        "type": "click",
+        "selector": "[data-provider=coremail] > details > summary"
+      },
+      {
+        "at": 10.366666666666667,
+        "type": "scroll",
+        "selector": "[data-imap]",
+        "duration": 0.55,
+        "top": 130
+      },
+      {
+        "at": 11.383333333333333,
+        "type": "focus",
+        "selector": ".imap-login-heading",
+        "label": "邮箱专用密码直连",
+        "duration": 0.8
+      },
+      {
+        "at": 14.45,
+        "type": "focus",
+        "duration": 0.7
+      },
+      {
+        "at": 15.25,
+        "type": "scroll",
+        "selector": "[data-settings-tab=\"ai\"]",
+        "duration": 0.85,
+        "top": 130
+      },
+      {
+        "at": 16.8,
+        "type": "move",
+        "selector": "[data-settings-tab=\"ai\"]",
+        "duration": 1
+      },
+      {
+        "at": 17.85,
+        "type": "click",
+        "ready": "#ai-form",
+        "transition": true,
+        "selector": "[data-settings-tab=\"ai\"]"
+      },
+      {
+        "at": 21.05,
+        "type": "move",
+        "selector": "[data-settings-tab=\"modules\"]",
+        "duration": 1
+      },
+      {
+        "at": 22.1,
+        "type": "click",
+        "ready": "[data-settings-tab]",
+        "transition": true,
+        "selector": "[data-settings-tab=\"modules\"]"
+      }
+    ],
+    "modules": []
+  },
+  {
+    "id": "prts",
+    "route": "#dashboard",
+    "theme": "arknights",
+    "seconds": 5.5,
+    "ready": ".ark-portrait",
+    "steps": [],
+    "modules": [
+      "academic-assistant"
+    ]
+  },
+  {
+    "id": "observatory",
+    "route": "#dashboard",
+    "theme": "observatory",
+    "seconds": 5.5,
+    "ready": "[data-home]",
+    "focus": true,
+    "steps": [],
+    "modules": [
+      "academic-assistant"
+    ]
+  },
+  {
+    "id": "star-notes",
+    "route": "#dashboard",
+    "theme": "star-notes",
+    "seconds": 5.5,
+    "ready": "[data-home]",
+    "focus": true,
+    "steps": [],
+    "modules": [
+      "academic-assistant"
+    ]
+  }
+]

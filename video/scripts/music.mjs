@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {spawnSync} from 'node:child_process';
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const video=resolve(dirname(fileURLToPath(import.meta.url)),'..'),film=JSON.parse(await readFile(resolve(video,'src/film.json'),'utf8'));
+const duration=film.scenes.reduce((n,s)=>n+s.seconds,0),parts=1+Math.ceil((duration-145)/77);
+assert(duration>145&&duration<=480);
+const labels=Array.from({length:parts},(_,i)=>`[input${i}]`).join('');
+const trims=Array.from({length:parts},(_,i)=>`[input${i}]atrim=start=${i?64:0}:end=145,asetpts=PTS-STARTPTS[part${i}]`);
+const joins=Array.from({length:parts-1},(_,i)=>`[${i?'join'+(i-1):'part0'}][part${i+1}]acrossfade=d=4:c1=qsin:c2=qsin[join${i}]`);
+const filter=[`[0:a]asplit=${parts}${labels}`,...trims,...joins,`[join${parts-2}]atrim=duration=${duration},alimiter=limit=0.95:level=false[music]`].join(';');
+const result=spawnSync('ffmpeg',['-y','-v','error','-i',resolve(video,'public/audio/we-never.ogg'),'-filter_complex',filter,'-map','[music]','-c:a','libvorbis','-q:a','7',resolve(video,'public',film.music)],{encoding:'utf8',windowsHide:true});
+assert.equal(result.status,0,result.stderr);console.log(`Music: ${duration}s / 4s crossfade`);

@@ -1,0 +1,26 @@
+[
+  {
+    "source": "wechat",
+    "name": "微信",
+    "title": "CS100 课程交流群",
+    "members": 82,
+    "course_id": "course:0",
+    "messages": [
+      {"id":"wx-1","sender":"小周","time":"07:58","role":"other","text":"这周的作业已经发布了吗？"},
+      {"id":"wx-2","sender":"林助教","time":"08:00","role":"ta","text":"同学们，HW2 已发布。HW2_p1 和 HW2_p2 都是 10 月 22 日（周四）23:59 截止，请到 Gradescope 查看要求并提交。"},
+      {"id":"wx-3","sender":"小周","time":"08:02","role":"self","text":"看到了，谢谢助教～"}
+    ]
+  },
+  {
+    "source": "qq",
+    "name": "QQ",
+    "title": "信号与系统 · 2026 秋",
+    "members": 64,
+    "course_id": "course:2",
+    "messages": [
+      {"id":"qq-1","sender":"小陈","time":"08:03","role":"other","text":"想确认一下，HW2 是明天交吗？"},
+      {"id":"qq-2","sender":"张助教","time":"08:05","role":"ta","text":"是的，HW2 截止是 10 月 20 日 18:00，Blackboard 上可以查看作业要求。大家记得预留提交时间。"},
+      {"id":"qq-3","sender":"小陈","time":"08:06","role":"self","text":"收到，我去看一下。"}
+    ]
+  }
+]

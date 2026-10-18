@@ -1,0 +1,4751 @@
+{
+  "title": "本科 普通本科生 信息科学与技术学院 电子信息工程 专业培养计划(2025)",
+  "groups": [
+    {
+      "path": [
+        "人文社科通识课程",
+        "思政理论课",
+        "思政必修课"
+      ],
+      "courses": [
+        {
+          "title": "形势与政策",
+          "code": "MT1024",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "department": "思想政治理论课教研部",
+          "note": "大一大二需按规定参加形势与政策课的讲座"
+        },
+        {
+          "title": "思想道德与法治",
+          "code": "GESS1028",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "习近平新时代中国特色社会主义思想概论",
+          "code": "MT1021",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "思想政治理论课教研部",
+          "note": "包括阶段性课程：2学分理论课（思政部开设）+1学分社会实践（书院组织）"
+        },
+        {
+          "title": "中国近现代史纲要",
+          "code": "GESS1018",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "毛泽东思想和中国特色社会主义理论体系概论",
+          "code": "MT1023",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "思想政治理论课教研部",
+          "note": "包括阶段性课程：2学分理论课（思政部开设）+1学分产业实践（书院组织）"
+        },
+        {
+          "title": "马克思主义基本原理",
+          "code": "GESS1027",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "思政理论课",
+        "思政选修课"
+      ],
+      "courses": [
+        {
+          "title": "丝绸之路与东西文化交流",
+          "code": "GEHA1101",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "中国经济发展和改革进程",
+          "code": "GESS1026",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "法治与社会",
+          "code": "MT1013",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "人类命运共同体的历史基础与当代实践",
+          "code": "MT1014",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "《资本论》导读",
+          "code": "MT1015",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "科学技术与社会",
+          "code": "MT1016",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "上海城市史",
+          "code": "MT1017",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "红色上海史",
+          "code": "MT1018",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "新时代中国科技自立自强战略",
+          "code": "MT1019",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "中华民族共同体概论",
+          "code": "MT1029",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "领土争端与地区安全",
+          "code": "MT1031",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "中华优秀传统文化中的心性理论与实践",
+          "code": "MT1032",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "大国博弈与全球治理",
+          "code": "MT1033",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "马克思同时代德国唯物主义与共产主义经典著作导读",
+          "code": "MT1034",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "通识必修课"
+      ],
+      "courses": [
+        {
+          "title": "军事技能",
+          "code": "CPRA1006",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "上道书院",
+          "note": "属于必修环节，获得学分不计入总学分；合格方可毕业"
+        },
+        {
+          "title": "军事理论",
+          "code": "CLEC1003",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "上道书院",
+          "note": "属于必修环节，获得学分不计入总学分；合格方可毕业"
+        },
+        {
+          "title": "大学生心理健康",
+          "code": "CLPS1003",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "上道书院",
+          "note": "大一两个学期各修读1学分阶段性心理课，最后合成为该课程学分，详见书院关于心理课程的修读要求"
+        },
+        {
+          "title": "国家安全教育",
+          "code": "MT1030",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            3
+          ],
+          "department": "思想政治理论课教研部",
+          "note": ""
+        },
+        {
+          "title": "哲学导论B",
+          "code": "GEHA1254",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中华文明通论",
+          "code": "GEHA1050",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "世界文明通论",
+          "code": "GEHA1003",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": "世通/科通二选一"
+        },
+        {
+          "title": "科技文明通论",
+          "code": "GEHA1004",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": "世通/科通二选一"
+        },
+        {
+          "title": "经济学导论",
+          "code": "ECON1001",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            2,
+            4
+          ],
+          "department": "创业与管理学院",
+          "note": "经济学导论：四选一"
+        },
+        {
+          "title": "经济学导论：能源环境产业",
+          "code": "ECON1101",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            2,
+            4
+          ],
+          "department": "创业与管理学院",
+          "note": "经济学导论：四选一"
+        },
+        {
+          "title": "经济学导论：生物医药产业",
+          "code": "ECON1102",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            2,
+            4
+          ],
+          "department": "创业与管理学院",
+          "note": "经济学导论：四选一"
+        },
+        {
+          "title": "经济学导论：信息技术产业",
+          "code": "ECON1103",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            2,
+            4
+          ],
+          "department": "创业与管理学院",
+          "note": "经济学导论：四选一"
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学英语",
+        "基础英语"
+      ],
+      "courses": [
+        {
+          "title": "基础英语I-人文阅读",
+          "code": "GEHA1165",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "基础英语I-公共演讲",
+          "code": "GEHA1173",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "基础英语II-人文阅读",
+          "code": "GEHA1132",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            2
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "基础英语II-写作",
+          "code": "GEHA1150",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            2
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学英语",
+        "人文英语"
+      ],
+      "courses": [
+        {
+          "title": "1770年到1920年间的美国史",
+          "code": "GEHA1114",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "南亚文明史导论",
+          "code": "GEHA1130",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "甘地和英帝国的衰落",
+          "code": "GEHA1131",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "1800年以后的东亚文明史",
+          "code": "GEHA1143",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "弗朗西斯·培根",
+          "code": "GEHA1160",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "1492-1935年的美国修正主义历史",
+          "code": "GEHA1161",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "后殖民时代的南亚",
+          "code": "GEHA1162",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "玩转历史：当代游戏与娱乐文化中的古代史诗故事",
+          "code": "GEHA1163",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "启蒙时代英国小说的兴起",
+          "code": "GEHA1164",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "美国文学与美国梦的始与终",
+          "code": "GEHA1174",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "现代诗歌阅读",
+          "code": "GEHA1175",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "数字人文学",
+          "code": "GEHA1176",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "天方新谭：科学大发现与伊斯兰启蒙运动",
+          "code": "GEHA1189",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "俄罗斯帝国发展史",
+          "code": "GEHA1192",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "浪漫主义神话故事",
+          "code": "GEHA1211",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "美国百年史（1898-1998）",
+          "code": "GEHA1212",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "启蒙时代：现代世界的诞生",
+          "code": "GEHA1213",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "美国电影文化",
+          "code": "GEHA1214",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "书写自我：本杰明·富兰克林与哈丽特·雅各布斯",
+          "code": "GEHA1215",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "苏联史",
+          "code": "GEHA1237",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "大学制度变革史",
+          "code": "GEHA1238",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "神经科学与人工智能",
+          "code": "GEHA1239",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "从舞台到银幕的东亚古典戏剧",
+          "code": "GEHA1255",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "英国百年史 (1850-1950)",
+          "code": "GEHA1256",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "俄罗斯文化概论",
+          "code": "GEHA1257",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "文化人类学",
+          "code": "GEHA1258",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "美国少数族裔文学经典导读",
+          "code": "GEHA1259",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "英国浪漫主义诗歌经典选读",
+          "code": "GEHA1266",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "英国文艺复兴经典爱情诗歌选读",
+          "code": "GEHA1267",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "当代俄罗斯社会与文化导论",
+          "code": "GEHA1272",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "世界近现代史专题",
+          "code": "GEHA1273",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "技术哲学与虚拟世界导论",
+          "code": "GEHA1275",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "笔锋与像素：巴基斯坦现当代文艺",
+          "code": "GEHA1278",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "莎士比亚《李尔王》",
+          "code": "GEHA1279",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "东亚文明的传统与转变",
+          "code": "GEHA1280",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "现代的破晓：1500-1920欧洲史",
+          "code": "GEHA1281",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "全球视野下的科技进步",
+          "code": "GEHA1289",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "技术的应用与反思：在AI时代探寻真实智力的定义",
+          "code": "GEHA1291",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "技术史与技术哲学",
+          "code": "GEHA1292",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "英诗名篇选读",
+          "code": "GEHA1293",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中国传统文化与中医",
+          "code": "GEHA1294",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学体育",
+        "体育基础"
+      ],
+      "courses": [
+        {
+          "title": "游泳运动与健康",
+          "code": "CLPE1001",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "科学健身与田径运动",
+          "code": "CLPE1002",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            1,
+            2
+          ],
+          "department": "上道书院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学体育",
+        "体育专项"
+      ],
+      "courses": [
+        {
+          "title": "击剑与防卫 I",
+          "code": "GEPE1007",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "健美操I",
+          "code": "GEPE1009",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "篮球 I",
+          "code": "GEPE1011",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "乒乓球 I",
+          "code": "GEPE1015",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "拳击与塑形 I",
+          "code": "GEPE1017",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "跆拳道 I",
+          "code": "GEPE1019",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "网球I",
+          "code": "GEPE1023",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "游泳 I",
+          "code": "GEPE1025",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "羽毛球 I",
+          "code": "GEPE1028",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "足球 I",
+          "code": "GEPE1030",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "武术 I",
+          "code": "GEPE1032",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "基础瑜伽I",
+          "code": "GEPE1042",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "匹克球 I",
+          "code": "GEPE1046",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "赛艇 I",
+          "code": "GEPE1047",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "击剑与防卫 II",
+          "code": "GEPE1008",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "健美操II",
+          "code": "GEPE1010",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "篮球 II",
+          "code": "GEPE1012",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "乒乓球 II",
+          "code": "GEPE1016",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "拳击与塑形 II",
+          "code": "GEPE1018",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "跆拳道 II",
+          "code": "GEPE1020",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "网球II",
+          "code": "GEPE1024",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "游泳 II",
+          "code": "GEPE1026",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "羽毛球 II",
+          "code": "GEPE1029",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "足球 II",
+          "code": "GEPE1031",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "武术 II",
+          "code": "GEPE1033",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "基础瑜伽II",
+          "code": "GEPE1043",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "匹克球 II",
+          "code": "GEPE1048",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "赛艇 II",
+          "code": "GEPE1049",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "上道书院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学体育",
+        "体育兴趣"
+      ],
+      "courses": [
+        {
+          "title": "击剑运动",
+          "code": "CLPE1049",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "健美操运动",
+          "code": "CLPE1050",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "篮球运动",
+          "code": "CLPE1051",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "乒乓球运动",
+          "code": "CLPE1052",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "拳击运动",
+          "code": "CLPE1053",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "跆拳道运动",
+          "code": "CLPE1054",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "网球运动",
+          "code": "CLPE1055",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "游泳运动",
+          "code": "CLPE1056",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "羽毛球运动",
+          "code": "CLPE1057",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "足球运动",
+          "code": "CLPE1058",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "武术运动",
+          "code": "CLPE1059",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "瑜伽运动",
+          "code": "CLPE1060",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "匹克球运动",
+          "code": "CLPE1061",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "赛艇运动",
+          "code": "CLPE1062",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            7,
+            8
+          ],
+          "department": "上道书院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "大学体育",
+        "体育健康"
+      ],
+      "courses": [
+        {
+          "title": "健康体适能",
+          "code": "CLPE1048",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            10
+          ],
+          "department": "上道书院",
+          "note": "属于必修环节，获得学分不计入总学分；合格方可毕业\n；达到一定条件者可免修"
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "人文写作课程群"
+      ],
+      "courses": [
+        {
+          "title": "说理写作",
+          "code": "GEHA1123",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "小说阅读与批评",
+          "code": "GEHA1124",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中国古代文学与现代风华",
+          "code": "GEHA1125",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "唐前诗文之美",
+          "code": "GEHA1126",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中国现代文学选读",
+          "code": "GEHA1128",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "武侠小说与宋元历史",
+          "code": "GEHA1151",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "唐宋文学精华",
+          "code": "GEHA1152",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "港台文学与电影",
+          "code": "GEHA1153",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "文学中的“空间”",
+          "code": "GEHA1154",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "阅读城市：小说与电影",
+          "code": "GEHA1155",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "海派文学与文化",
+          "code": "GEHA1156",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "性别视角下的文学与电影",
+          "code": "GEHA1157",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "论证与写作",
+          "code": "GEHA1158",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "叙事与伦理",
+          "code": "GEHA1177",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "非虚构写作导论",
+          "code": "GEHA1193",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "明清小说选读",
+          "code": "GEHA1194",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "昆曲文本与艺术",
+          "code": "GEHA1195",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "现代文学中的情爱叙事",
+          "code": "GEHA1196",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中国的历史叙事",
+          "code": "GEHA1197",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中日“武”传统",
+          "code": "GEHA1220",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "从小说到电影",
+          "code": "GEHA1233",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "世界文学名著导读",
+          "code": "GEHA1234",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "电影中的东亚传统戏剧",
+          "code": "GEHA1235",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "古代散文的叙事与思辨",
+          "code": "GEHA1236",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "哲学思辨与写作",
+          "code": "GEHA1260",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "比较视域中的叙事艺术",
+          "code": "GEHA1261",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "中国文人传统",
+          "code": "GEHA1270",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "“家”的故事：从传统到现代",
+          "code": "GEHA1271",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "社会科学写作",
+          "code": "GEHA1295",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "department": "人文科学研究院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "文明经典导读课程群"
+      ],
+      "courses": [
+        {
+          "title": "《史记》导读",
+          "code": "GEHA1046",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《资治通鉴》导读",
+          "code": "GEHA1047",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《周易》与文化",
+          "code": "GEHA1074",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《庄子》的世界",
+          "code": "GEHA1076",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "柏拉图《理想国》导读",
+          "code": "GEHA1087",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "老子与《老子》",
+          "code": "GEHA1088",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "宋词导读",
+          "code": "GEHA1117",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "古希腊悲剧导读",
+          "code": "GEHA1183",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《红楼梦》导读",
+          "code": "GEHA1198",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《尼各马可伦理学》导读",
+          "code": "GEHA1199",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "鲁迅《故事新编》导读",
+          "code": "GEHA1217",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《孟子》精读",
+          "code": "GEHA1218",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "波伏娃《第二性》导读",
+          "code": "GEHA1219",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《传习录》解读——现代视野下的王阳明思想",
+          "code": "GEHA1230",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《聊斋志异》导读",
+          "code": "GEHA1252",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《想象的共同体》导读",
+          "code": "GEHA1262",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《论语》导读",
+          "code": "GEHA1268",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "西方政治哲学经典导读",
+          "code": "GEHA1282",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《论人类不平等的起源和基础》精读",
+          "code": "GEHA1290",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        },
+        {
+          "title": "《老子》与中国哲学",
+          "code": "GEHA1296",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "人文科学研究院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "创意与艺术课程群"
+      ],
+      "courses": [
+        {
+          "title": "剧本分析",
+          "code": "ARTS1102",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "影像艺术语言",
+          "code": "ARTS1107",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "素描写生",
+          "code": "ARTS1202",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "雕塑基础",
+          "code": "ARTS1205",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "色彩实验与艺术表现",
+          "code": "ARTS1210",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "游戏媒介批评",
+          "code": "ARTS1307",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "像素着色艺术",
+          "code": "ARTS1308",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "西方艺术史",
+          "code": "ARTS1401",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "当代艺术欣赏与解析",
+          "code": "ARTS1404",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "现代艺术导论",
+          "code": "ARTS1405",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "用户体验与创新设计",
+          "code": "ARTS1407",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "交互设计概论",
+          "code": "ARTS1421",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "交互产品设计",
+          "code": "ARTS1423",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "混合现实设计",
+          "code": "ARTS1426",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "设计项目实践",
+          "code": "ARTS1427",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "游戏化创意机制设计",
+          "code": "ARTS1429",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "可穿戴科技艺术与互动演出",
+          "code": "ARTS1430",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "走进现当代艺术",
+          "code": "ARTS1432",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "物理空间互动设计",
+          "code": "ARTS1433",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "经典艺术鉴赏——从文艺复兴到现代",
+          "code": "ARTS1434",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "三维视觉概念设计",
+          "code": "ARTS1436",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "线下社交游戏机制与实践",
+          "code": "ARTS1437",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "定格动画艺术",
+          "code": "ARTS1439",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "数字化科普设计",
+          "code": "ARTS1440",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "综合材料雕塑",
+          "code": "ARTS1441",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "好玩的设计",
+          "code": "ARTS1442",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "健康产品设计",
+          "code": "ARTS1443",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "科幻漫画与动画鉴赏",
+          "code": "ARTS1444",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "物性的叙事：当代首饰的痕迹与秩序",
+          "code": "ARTS1452",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "跨物种交互设计",
+          "code": "ARTS1453",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "油画与综合材料",
+          "code": "ARTS1507",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "游戏与动画叙事",
+          "code": "ARTS1509",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "动画基础",
+          "code": "ARTS1511",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "创意提案与表达",
+          "code": "ARTS1512",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "VR动画表现分析与研究",
+          "code": "ARTS1514",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "动画速写",
+          "code": "ARTS1515",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "生成视觉艺术",
+          "code": "ARTS1516",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "喜剧电影赏析",
+          "code": "ARTS1518",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "造物悟道——创意趣味设计",
+          "code": "ARTS1519",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "古典音乐赏析",
+          "code": "ARTS1609",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "设计思维：产品与交互设计的创新方案",
+          "code": "ARTS1701",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "无障碍创新和设计",
+          "code": "ARTS1803",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        },
+        {
+          "title": "中外歌剧赏析",
+          "code": "CLGE1007",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "科道书院",
+          "note": ""
+        },
+        {
+          "title": "世界电影大师作品导赏",
+          "code": "CLGE1106",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "上道书院",
+          "note": ""
+        },
+        {
+          "title": "人智交互",
+          "code": "MECH2006",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "创意与艺术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "人文社科通识课程",
+        "创新创业课程群"
+      ],
+      "courses": [
+        {
+          "title": "领导力与团队合作",
+          "code": "BHSC1301",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "谈判",
+          "code": "BHSC1302",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "消费者心理学",
+          "code": "BHSC1303",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "决策心理学",
+          "code": "BHSC1304",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "数据与社会",
+          "code": "ECON1013",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创业导论——机会：识别、评估和扩张（市场范围评估模块）",
+          "code": "ENTR1003",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "商业决策和技术创新",
+          "code": "ENTR1006",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创业企业融资",
+          "code": "ENTR1009",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "商业计划",
+          "code": "ENTR1305",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创业管理",
+          "code": "ENTR2001",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "高科技创业：理论与决策",
+          "code": "ENTR2002",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创新创业工具及人工智能的运用",
+          "code": "ENTR2004",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创业营销",
+          "code": "MGMT1002",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "科技法学概论",
+          "code": "MGMT1005",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "管理沟通",
+          "code": "MGMT2002",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创新管理",
+          "code": "SEMI1016",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "设计思维：创业与管理中的创新方案",
+          "code": "SEMI1101",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        },
+        {
+          "title": "创新科学：认知原理与市场应用",
+          "code": "SEMI1301",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "创业与管理学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "数学课程群"
+      ],
+      "courses": [
+        {
+          "title": "高等数学I",
+          "code": "GEMA1001",
+          "credits": 4,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "数学科学研究所",
+          "note": "二选一"
+        },
+        {
+          "title": "数学分析I",
+          "code": "GEMA1009",
+          "credits": 5,
+          "required": false,
+          "terms": [
+            1
+          ],
+          "department": "数学科学研究所",
+          "note": "二选一"
+        },
+        {
+          "title": "高等数学II",
+          "code": "GEMA1003",
+          "credits": 4,
+          "required": false,
+          "terms": [
+            2
+          ],
+          "department": "数学科学研究所",
+          "note": "二选一"
+        },
+        {
+          "title": "数学分析II",
+          "code": "GEMA1010",
+          "credits": 5,
+          "required": false,
+          "terms": [
+            2
+          ],
+          "department": "数学科学研究所",
+          "note": "二选一"
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "物理课程群"
+      ],
+      "courses": [
+        {
+          "title": "普通物理I",
+          "code": "PHYS1181",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            2
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "普通物理I实验",
+          "code": "PHYS1111",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            2
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "化学课程群"
+      ],
+      "courses": [
+        {
+          "title": "普通化学I",
+          "code": "CHEM1103",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "大学化学",
+          "code": "CHEM1120",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "普通化学I实验",
+          "code": "CHEM1100",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            4
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "生物课程群"
+      ],
+      "courses": [
+        {
+          "title": "生命科学导论A",
+          "code": "BIO1012",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "生命科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "生命科学导论B",
+          "code": "BIO1013",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "生命科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "现代生命科学导论D",
+          "code": "BIO1015",
+          "credits": 2,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "生命科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "现代生命科学导论B",
+          "code": "BIO1002",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "生命科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "现代生命科学导论C",
+          "code": "BIO1011",
+          "credits": 3,
+          "required": false,
+          "terms": [
+            5
+          ],
+          "department": "生命科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "信息课程群"
+      ],
+      "courses": [
+        {
+          "title": "信息科学技术导论",
+          "code": "SI100B",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            1
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "自然科学通识课程",
+        "自然科学基础选修课"
+      ],
+      "courses": [
+        {
+          "title": "线性代数I",
+          "code": "MATH1112",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            1
+          ],
+          "department": "数学科学研究所",
+          "note": ""
+        },
+        {
+          "title": "普通物理II",
+          "code": "PHYS1183",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            4
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "面向信息科学的概率论与数理统计",
+          "code": "SI140A",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            4
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "普通物理II实验",
+          "code": "PHYS1113",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            4
+          ],
+          "department": "物质科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "专业课程",
+        "专业必修"
+      ],
+      "courses": [
+        {
+          "title": "模拟电路",
+          "code": "EE115A",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字电路",
+          "code": "EE115B",
+          "credits": 3,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电路基础",
+          "code": "EE111",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            2
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电路基础实验",
+          "code": "EE111L",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            2
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机编程",
+          "code": "CS100",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            5
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信号与系统",
+          "code": "EE150",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信号与系统实验",
+          "code": "EE150L",
+          "credits": 1,
+          "required": true,
+          "terms": [
+            4,
+            5
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电磁学",
+          "code": "EE130",
+          "credits": 4,
+          "required": true,
+          "terms": [
+            5,
+            7
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电磁学课程设计",
+          "code": "EE130P",
+          "credits": 2,
+          "required": true,
+          "terms": [
+            5,
+            7
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "毕业论文",
+          "code": "SI199",
+          "credits": 6,
+          "required": true,
+          "terms": [
+            11
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "专业课程",
+        "专业选修",
+        "本学科选修"
+      ],
+      "courses": [
+        {
+          "title": "通信原理",
+          "code": "EE140",
+          "credits": 4,
+          "required": false,
+          "terms": [
+            7
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "控制原理",
+          "code": "EE160",
+          "credits": 4,
+          "required": false,
+          "terms": [
+            7
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "半导体器件基础",
+          "code": "EE120",
+          "credits": 4,
+          "required": false,
+          "terms": [
+            8
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机械设计导论",
+          "code": "SI102H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "高阶机器人设计与集成",
+          "code": "SI160",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机控制系统",
+          "code": "SI170",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器人综合实践",
+          "code": "SI190C",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "雾计算技术与应用",
+          "code": "SI261",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机电一体化",
+          "code": "SI262",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信息科学技术发展伦理与道德",
+          "code": "SI290D",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字图像处理应用进阶实践",
+          "code": "SI290E",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "一生一芯和开源处理器芯片",
+          "code": "SI290F",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数学物理方法I",
+          "code": "MATH1213",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "数学科学研究所",
+          "note": ""
+        },
+        {
+          "title": "高级几何学",
+          "code": "SI112",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算科学与工程",
+          "code": "SI114H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "离散数学",
+          "code": "SI120",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "线性代数在信息科学中的应用",
+          "code": "SI132",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信息科学中的线性代数",
+          "code": "SI132C",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "优化与机器学习",
+          "code": "SI151",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "凸优化及其在信息科学中的应用",
+          "code": "SI151A",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数值最优化",
+          "code": "SI152",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "应用代数几何",
+          "code": "SI192",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数值分析",
+          "code": "SI211",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "有限元分析",
+          "code": "SI212",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "偏微分方程数值解",
+          "code": "SI214",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "应用数值计算",
+          "code": "SI214C",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "偏微分方程数值解",
+          "code": "SI214H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "图论",
+          "code": "SI221",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "矩阵计算",
+          "code": "SI231B",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "矩阵分析",
+          "code": "SI231H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "子空间学习",
+          "code": "SI232",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "凸优化",
+          "code": "SI251",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "强化学习",
+          "code": "SI252",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "分布式优化与智能",
+          "code": "SI253",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数学控制理论",
+          "code": "SI270",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "医学影像学",
+          "code": "EE101",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电路基础课程设计",
+          "code": "EE111P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "模拟集成电路I",
+          "code": "EE112",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字集成电路I",
+          "code": "EE113",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字集成电路I实验",
+          "code": "EE113L",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字集成电路I课程设计",
+          "code": "EE113P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "嵌入式系统",
+          "code": "EE114",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "嵌入式系统课程设计",
+          "code": "EE114P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "基于FPGA的硬件系统设计",
+          "code": "EE116",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微电子器件",
+          "code": "EE123",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微电子器件",
+          "code": "EE123H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳加工与微机电系统基础",
+          "code": "EE124",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "激光原理",
+          "code": "EE125",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "物理光学",
+          "code": "EE131",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "物理光学",
+          "code": "EE131H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "基础信息论",
+          "code": "EE142",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字信号处理",
+          "code": "EE152",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "控制原理课程设计",
+          "code": "EE160P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "线性系统I",
+          "code": "EE161",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电力电子",
+          "code": "EE171",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信息技术的生物医学应用与实践",
+          "code": "EE180",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "模拟集成电路II",
+          "code": "EE212",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字集成电路II",
+          "code": "EE213",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "集成电路设计自动化",
+          "code": "EE215A",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "可重构计算",
+          "code": "EE216",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "射频集成电路",
+          "code": "EE217",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字VLSI设计",
+          "code": "EE218",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字VLSI设计课程设计",
+          "code": "EE218P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "智能计算系统",
+          "code": "EE219",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "半导体器件物理",
+          "code": "EE220",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "固体物理学",
+          "code": "EE221",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字集成电路可测性设计",
+          "code": "EE2210",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微电子器件",
+          "code": "EE2211",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "纳米光子学及器件",
+          "code": "EE2212",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "光电器件II",
+          "code": "EE222",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微机电系统原理与设计",
+          "code": "EE224",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳器件工艺基础",
+          "code": "EE224A",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳机电系统基础",
+          "code": "EE224B",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳机电系统实验",
+          "code": "EE224J",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳加工工艺实验",
+          "code": "EE224L",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "传感技术及接口电路",
+          "code": "EE225",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "纳米电子学",
+          "code": "EE227",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "激光器与激光动力学",
+          "code": "EE228",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "柔性电子学",
+          "code": "EE229",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微波工程I",
+          "code": "EE230",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "天线理论和设计",
+          "code": "EE234",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "天线理论与设计",
+          "code": "EE234B",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "射频电子学",
+          "code": "EE235",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电磁传感与检测",
+          "code": "EE236",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "无损检测与传感器技术选论",
+          "code": "EE236H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "自旋电子学",
+          "code": "EE237",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "微纳光学与器件",
+          "code": "EE238",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "非线性光学及其器件",
+          "code": "EE239",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "非线性光学及其器件",
+          "code": "EE239B",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字通信",
+          "code": "EE240",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "无线通信",
+          "code": "EE241",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "网络信息论",
+          "code": "EE242",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "光通信系统",
+          "code": "EE244",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字信号处理II",
+          "code": "EE250H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "信号检测和估计",
+          "code": "EE251",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字信号处理的VLSI实现",
+          "code": "EE252",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "压缩感知",
+          "code": "EE253B",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "高阶数字信号处理",
+          "code": "EE254",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "线性系统II",
+          "code": "EE261",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "非线性系统",
+          "code": "EE262",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "自适应控制",
+          "code": "EE264",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电力电子变换器建模与控制",
+          "code": "EE270",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电力系统",
+          "code": "EE271",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "可再生能源系统",
+          "code": "EE272",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "高级电能变换技术",
+          "code": "EE273",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "储能器件与系统",
+          "code": "EE274",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电机与运动控制",
+          "code": "EE275",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "生物医学光子学及成像",
+          "code": "EE280",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "网络编码理论",
+          "code": "EE290A",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "导波光学",
+          "code": "EE290C",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "太赫兹光电子学",
+          "code": "EE290D",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "硅射频集成电路设计",
+          "code": "EE290S",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "网络理论与分析",
+          "code": "EE290U",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "集成电路设计流程",
+          "code": "EE290V",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "电力电子产品的电磁兼容",
+          "code": "EE290Z",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "芯片测试入门与实践",
+          "code": "EE291B",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "量子信息导论",
+          "code": "EE291C",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "板级电路设计实践",
+          "code": "EE291D",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "低功耗物联网",
+          "code": "EE291E",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字VLSI设计流程",
+          "code": "EE291F",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "红外探测器引论",
+          "code": "EE291G",
+          "credits": 1,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "模拟集成电路工程设计",
+          "code": "EE291I",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "芯片测试入门与实践",
+          "code": "EE291J",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "path": [
+        "专业课程",
+        "专业选修",
+        "跨学科选修"
+      ],
+      "courses": [
+        {
+          "title": "算法与数据结构",
+          "code": "CS101",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机体系结构I",
+          "code": "CS110",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机体系结构I课程设计",
+          "code": "CS110P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机网络",
+          "code": "CS120",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "并行计算",
+          "code": "CS121",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "操作系统I",
+          "code": "CS130",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "操作系统I课程设计",
+          "code": "CS130P",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "编译原理",
+          "code": "CS131",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "软件工程",
+          "code": "CS132",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "Python进阶编程",
+          "code": "CS133C",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "C++进阶编程",
+          "code": "CS133H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数据库与数据挖掘",
+          "code": "CS150",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数据库",
+          "code": "CS150A",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机安全I",
+          "code": "CS151",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "应用密码学",
+          "code": "CS152",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人机交互",
+          "code": "CS160",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机图形学I",
+          "code": "CS171",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机视觉I",
+          "code": "CS172",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数据挖掘",
+          "code": "CS173",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "生物信息学：软件开发与应用",
+          "code": "CS177",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人工智能I",
+          "code": "CS181",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器学习引论",
+          "code": "CS182",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器人学导论",
+          "code": "CS183",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "音频内容分析导论",
+          "code": "CS190A",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "网络和文本挖掘",
+          "code": "CS190B",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人工智能应用实践",
+          "code": "CS190D",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机体系结构III",
+          "code": "CS210",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机体系结构II",
+          "code": "CS211",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机网络II",
+          "code": "CS220",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "无线与移动系统",
+          "code": "CS222",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "程序分析",
+          "code": "CS224",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "高阶分布式系统",
+          "code": "CS225",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "操作系统II",
+          "code": "CS230",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "智能医疗仪器软件的设计与验证",
+          "code": "CS233",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "算法设计与分析",
+          "code": "CS240",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "算法博弈导论",
+          "code": "CS243",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算理论",
+          "code": "CS244",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "在线优化与学习",
+          "code": "CS245",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "可信机器学习",
+          "code": "CS246",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机辅助验证",
+          "code": "CS247",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机安全II",
+          "code": "CS251",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "密码学",
+          "code": "CS252",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "网络与信息安全",
+          "code": "CS253",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数字图像处理",
+          "code": "CS270",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "高阶数字图像处理",
+          "code": "CS270B",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机图形学II",
+          "code": "CS271",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机视觉II",
+          "code": "CS272",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "自然语言处理",
+          "code": "CS274A",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机动画与物理仿真",
+          "code": "CS275",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算机动画与物理仿真",
+          "code": "CS275H",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "计算影像学",
+          "code": "CS276",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "数据科学与金融科技概论",
+          "code": "CS277",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人工智能与投资",
+          "code": "CS278",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "深度学习",
+          "code": "CS280",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "具身智能",
+          "code": "CS2810",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器学习",
+          "code": "CS282",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器人",
+          "code": "CS283",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "即时定位与地图构建",
+          "code": "CS284",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机电一体化",
+          "code": "CS285",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人工智能在科学与工程学的应用",
+          "code": "CS286",
+          "credits": 4,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "智能网络",
+          "code": "CS287",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "几何计算机视觉",
+          "code": "CS288",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "机器人操作原理与实践",
+          "code": "CS289",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "交互式计算机图形学",
+          "code": "CS290A",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "符号人工智能",
+          "code": "CS290L",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "深度学习工程实践",
+          "code": "CS290S",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "强化学习应用实践",
+          "code": "CS290T",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "深度学习工程实践",
+          "code": "CS290U",
+          "credits": 3,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "人工智能蛋白质设计",
+          "code": "CS291B",
+          "credits": 2,
+          "required": false,
+          "terms": [],
+          "department": "信息科学与技术学院",
+          "note": ""
+        },
+        {
+          "title": "天基计算导论",
+          "code": "CS291A",
+          "credits": 1,
+          "required": false,
+          "terms": [
+            6,
+            9
+          ],
+          "department": "信息科学与技术学院",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}
