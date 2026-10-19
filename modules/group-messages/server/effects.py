@@ -82,6 +82,7 @@ class Effects:
                         raise HTTPException(409, '群通知与已有日程时间重叠，请核对后手动确认。')
 
     async def apply(self, owner, item_id, expected_revision, *, automatic=False):
+        await self.service.refresh_course_scope(owner)
         if automatic:
             with self.service.lock:
                 candidate = self.service.current_item(owner, item_id)

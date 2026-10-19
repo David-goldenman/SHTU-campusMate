@@ -8,7 +8,7 @@ const phases = {working:'处理中',copying:'读取本机副本',decrypting:'校
 export async function mount(container, context) {
   const e = context.ui.escape, signal = context.signal;
   const removeStyle = context.ui.useStyle(new URL('./styles.css', import.meta.url), signal);
-  let timer, stopped=false, serial=0, state, courses=[], items=[], itemSignature='', filter='pending';
+  let timer, stopped=false, serial=0, state, courses=[], courseMatches={}, catalogSignature='', courseMessage='', items=[], itemSignature='', filter='pending';
   let qqAddress;
   const drafts = new Map(), dirty = new Set(), rendered = new Map(), coverageRendered = new Map();
   const dialog = document.createElement('dialog');
@@ -16,7 +16,7 @@ export async function mount(container, context) {
   const cleanup=()=>{stopped=true;serial++;clearTimeout(timer);dialog.close();dialog.remove();removeStyle();container.classList.remove('group-messages');};
   signal.addEventListener('abort',cleanup,{once:true});
   container.classList.add('group-messages');
-  container.innerHTML=`<header class="gm-header"><div><h2>来源与选群</h2><p>选定群聊，把通知、作业和安排变化带入校园助手。</p></div><div class="gm-header-actions"><button type="button" class="button button-secondary" data-refresh>刷新</button><button type="button" class="button button-secondary" data-stop hidden>停止当前处理</button></div></header>
+  container.innerHTML=`<header class="gm-header"><div><h2>来源与选群</h2><p>只同步本学期课程群。自动匹配课程名称，关联结果可自行修正。</p></div><div class="gm-header-actions"><button type="button" class="button button-secondary" data-refresh>刷新</button><button type="button" class="button button-secondary" data-stop hidden>停止当前处理</button></div></header>
     <p class="gm-feedback" role="status" aria-live="polite" data-feedback></p>
     <div class="gm-overview" data-overview></div>
     <div class="gm-sources"><section class="gm-source panel" data-source="wechat"></section><section class="gm-source panel" data-source="qq"></section></div>
@@ -36,21 +36,28 @@ export async function mount(container, context) {
     return drafts.get(source);
   }
   function groupOptions(value) {
-    return `<option value="">暂不关联课程</option>${courses.map(row=>`<option value="${e(row.id)}" ${row.id===value?'selected':''}>${e(row.title)} · ${e(row.term||'学期待确认')}</option>`).join('')}`;
+    const missing=value&&!courses.some(row=>row.id===value);
+    return `<option value="">请选择本学期课程</option>${missing?`<option value="${e(value)}" selected disabled>原关联失效，请重新选择</option>`:''}${courses.map(row=>`<option value="${e(row.id)}" ${row.id===value?'selected':''}>${e(row.title)}${row.code?' · '+e(row.code):''}</option>`).join('')}`;
   }
   function renderGroups(source) {
     const root=card(source), config=state.sources[source], draftsForSource=draftFor(source);
     const query=(root.querySelector('[data-group-search]')?.value||'').trim().toLowerCase();
-    const groups=(config.groups||[]).filter(row=>!query||row.name.toLowerCase().includes(query)||row.id.toLowerCase().includes(query));
+    const showAll=root.querySelector('[data-show-all]')?.checked;
+    const groups=(config.groups||[]).filter(row=>{
+      const match=courseMatches[source]?.[row.id];
+      return (showAll||draftsForSource.has(row.id)||['automatic','ambiguous'].includes(match?.status))&&(!query||row.name.toLowerCase().includes(query)||row.id.toLowerCase().includes(query));
+    });
     groups.sort((a,b)=>Number(draftsForSource.has(b.id))-Number(draftsForSource.has(a.id)));
     root.querySelector('[data-groups]').innerHTML=groups.slice(0,100).map(row=>{
-      const selected=draftsForSource.get(row.id), value=selected||{};
+      const selected=draftsForSource.get(row.id), match=courseMatches[source]?.[row.id];
+      const value=selected||{course_id:match?.course_id||''};
       const coverage=config.coverage?.[row.id];
-      return `<article class="gm-group" data-gid="${e(row.id)}"><label class="gm-check gm-group-title"><input type="checkbox" data-selected ${selected?'checked':''}><span><strong>${e(row.name)}</strong><small>${row.message_count==null?'可选择同步':`${row.message_count} 条近期消息`}</small></span></label>
+      return `<article class="gm-group" data-gid="${e(row.id)}"><label class="gm-check gm-group-title"><input type="checkbox" data-selected ${selected?'checked':''}><span><strong>${e(row.name)}</strong><small data-match-hint>${e(match?.reason||'可手动关联本学期课程')}</small></span></label>
         <fieldset ${selected?'':'disabled'}><label>关联课程<select data-course>${groupOptions(value.course_id)}</select></label><div class="gm-policy"><label class="gm-check"><input type="checkbox" data-auto-extract ${value.auto_extract?'checked':''}>自动提取相关信息</label><label class="gm-check"><input type="checkbox" data-auto-apply ${value.auto_apply?'checked':''}>符合规则时自动更新</label></div><div class="gm-group-actions"><button type="button" class="button button-secondary" data-senders>可信发送者 (${value.trusted_senders?.length||0})</button><button type="button" class="button button-secondary" data-messages>查看已同步消息</button><button type="button" class="button button-secondary" data-extract>整理一次</button></div></fieldset>
+        ${match?.status==='ambiguous'?`<p class="gm-hint">可能对应：${e(match.candidates.map(item=>item.title).join('、'))}</p>`:''}
         ${coverage?`<p class="gm-coverage ${coverage.possible_gap||coverage.error?'gm-warning':''}">${e(coverage.error|| (source==='qq'?(coverage.possible_gap?'历史可能有缺口；每轮补抓最近最多 100 条。':'已读取最近窗口，每轮最多 100 条；不代表完整历史。'):`范围为近 ${config.history_days} 天已落到本机的消息。`))}</p>`:''}</article>`;
     }).join('')||'<p class="gm-empty">没有匹配的群。</p>';
-    root.querySelector('[data-group-count]').textContent=`已选 ${draftsForSource.size} 个群 · 找到 ${groups.length} 个${groups.length>100?'，请搜索缩小范围':''}`;
+    root.querySelector('[data-group-count]').textContent=courseMessage||`本学期 ${courses.length} 门课程 · 已选 ${draftsForSource.size} 个群 · 显示 ${groups.length} 个${groups.length>100?'，请搜索缩小范围':''}`;
     coverageRendered.set(source,JSON.stringify(config.coverage));
   }
   function renderSource(source) {
@@ -58,9 +65,9 @@ export async function mount(container, context) {
     drafts.delete(source);
     const connection=source==='wechat'?`<form data-connect="wechat"><button type="button" class="button button-secondary" data-discover>检测本机微信</button><p class="gm-hint">Windows 本机实验读取，首次仅扫描你选定的本人微信实例；密钥由系统加密保存。</p><label>微信数据目录<input name="database_dir" autocomplete="off" placeholder="选择本人账号的 db_storage 文件夹" value="${e(config.database_dir||'')}"></label><div data-folders></div><label>微信主实例<select name="pid" required><option value="">先检测本机微信</option></select></label><label class="gm-check"><input name="consent" type="checkbox" required>我授权只读访问本人微信，用于整理随后选择的群聊；了解本机非官方读取可能受版本变化影响。</label><button class="button button-primary" type="submit">授权并读取群列表</button></form><details class="gm-snapshot"><summary>导入已有可读快照</summary><form data-snapshot><label>快照目录<input name="path" autocomplete="off" placeholder="包含 message/message_*.db 的目录" required></label><p class="gm-hint">接受已完成导出的微信 4 可读快照。选择后仅同步快照内的数据。</p><button class="button button-secondary" type="submit">检查并读取群列表</button></form></details>`:
       qqConnection({...config,base_url:qqAddress??config.base_url},e);
-    root.innerHTML=`<div class="gm-source-heading"><h3>${names[source]}</h3><span class="gm-badge" data-source-state></span></div><p class="gm-hint" data-source-status></p><p class="gm-error" data-source-error></p>
+    root.innerHTML=`<div class="gm-source-heading"><h3>${names[source]}</h3><span class="gm-badge" data-source-state></span></div><p class="gm-hint" data-source-status></p><p class="gm-error" data-source-error></p><p class="gm-warning" data-course-warning hidden></p>
       <details class="gm-connect" ${config.connected?'':'open'}><summary>${config.connected?'重新连接 / 更换账号':'连接消息来源'}</summary>${connection}</details>
-      ${config.connected?`<form data-selection="${source}"><label class="gm-search">选择课程群<input type="search" data-group-search placeholder="搜索群名称" autocomplete="off"></label><p class="gm-hint" data-group-count></p><div class="gm-group-list" data-groups></div>
+      ${config.connected?`<form data-selection="${source}"><label class="gm-search">选择本学期课程群<input type="search" data-group-search placeholder="搜索群名称" autocomplete="off"></label><p class="gm-hint">根据课程代码、中文名及各平台别名匹配；勾选并保存后才读取消息。已保存的课程关联优先保留。</p><button type="button" class="button button-secondary" data-select-matched>勾选已匹配课程群</button><label class="gm-check"><input type="checkbox" data-show-all>显示未匹配及其他学期群，手动修正关联</label><p class="gm-hint" data-group-count></p><div class="gm-group-list" data-groups></div>
         <div class="gm-settings"><label>同步间隔<select name="interval_seconds">${(source==='wechat'?[300,900,1800]:[20,60,300,900]).map(value=>`<option value="${value}" ${value==config.interval_seconds?'selected':''}>${value<60?value+' 秒':value/60+' 分钟'}</option>`).join('')}</select></label><label>近期消息范围<select name="history_days"><option value="7" ${config.history_days===7?'selected':''}>7 天</option><option value="30" ${config.history_days===30?'selected':''}>30 天</option></select></label></div>
         <label class="gm-check"><input name="allow_ai" type="checkbox" ${config.allow_ai?'checked':''}>允许把所选群中需要整理的正文及相关前文发送至当前 AI 服务。</label><p class="gm-hint">自动更新仅适用于指定可信发送者、时间明确且无冲突的事项。活动需要确认参加，手动修改优先保留。</p>
         ${config.pending_version?`<p class="gm-warning">微信版本 ${e(config.pending_version)}：${config.compatible?'读取检查通过，等待确认恢复。':'尚未通过兼容性检查。'}</p>${config.compatible?'<label class="gm-check"><input name="confirm_compatible" type="checkbox">确认当前版本与所选群，恢复同步</label>':''}<button type="button" class="button button-secondary" data-compatibility>重新检查兼容性</button>`:''}
@@ -71,9 +78,13 @@ export async function mount(container, context) {
   }
   function updateSourceStatus(source) {
     const config=state.sources[source], root=card(source);
-    root.querySelector('[data-source-state]').textContent=!config.connected?'未连接':config.enabled?'自动同步中':'已暂停';
+    const blockedScope=config.course_scope&&!config.course_scope.active_group_ids.length;
+    root.querySelector('[data-source-state]').textContent=!config.connected?'未连接':config.enabled?(blockedScope?'等待课程关联':'自动同步中'):'已暂停';
     root.querySelector('[data-source-status]').textContent=config.connected?`${config.account_label||names[source]} · 最近同步 ${date(config.last_synced_at)}${config.approved_version?' · 微信 '+config.approved_version:''}`:'选择自己的账号与需要整理的群，默认不读取任何群。';
     root.querySelector('[data-source-error]').textContent=config.error||'';
+    const blocked=config.course_scope?.blocked_groups||[],warning=root.querySelector('[data-course-warning]');
+    warning.hidden=!blocked.length;
+    warning.textContent=blocked.length?`${blocked.length} 个已选群未关联可用的本学期课程，已暂停读取。请在下方修正关联或取消勾选。`:'';
     const connectionFeedback=root.querySelector('[data-connection-feedback]');
     if(connectionFeedback){
       const connecting=state.running?.source===source&&state.running?.kind==='connect';
@@ -109,9 +120,14 @@ export async function mount(container, context) {
     if(values[0].account_revision!==values[1].account_revision)return;
     state=values[0];items=values[1].items;
     if(oldOwner&&oldOwner!==state.account_revision){
-      dirty.clear();drafts.clear();rendered.clear();dialog.close();courses=[];qqAddress=undefined;
-      const catalog=await api('/courses');if(stopped||token!==serial)return;courses=catalog.items;
+      dirty.clear();drafts.clear();rendered.clear();dialog.close();courses=[];courseMatches={};catalogSignature='';qqAddress=undefined;
       feedback('账号已变化，请重新核对连接与选群。');
+    }
+    const nextCatalogSignature=JSON.stringify([state.account_revision,...Object.values(state.sources).map(row=>[row.connection,row.revision])]);
+    if(force||catalogSignature!==nextCatalogSignature){
+      const catalog=await api('/courses');if(stopped||token!==serial)return;
+      if(catalog.account_revision!==state.account_revision)return;
+      courses=catalog.items;courseMatches=catalog.matches||{};courseMessage=catalog.message||'';catalogSignature=nextCatalogSignature;
     }
     for(const source of Object.keys(names)){
       if((force||rendered.get(source)!==(state.sources[source].revision||'empty'))&&!dirty.has(source))renderSource(source);
@@ -136,16 +152,19 @@ export async function mount(container, context) {
     if(!source)return;
     if(source==='qq'&&event.target.name==='base_url')qqAddress=event.target.value;
     if(event.target.matches('[data-group-search]')){renderGroups(source);return;}
+    if(event.target.matches('[data-show-all]'))return;
     dirty.add(source);
   });
   on(container,'change',event=>{
     const row=event.target.closest('[data-gid]'), source=event.target.closest('[data-source]')?.dataset.source;
+    if(source&&event.target.matches('[data-show-all]')){renderGroups(source);return;}
     if(!row||!source)return;
     const values=draftFor(source), gid=row.dataset.gid;
     if(row.querySelector('[data-selected]').checked){
       values.set(gid,{id:gid,course_id:row.querySelector('[data-course]').value,trusted_senders:values.get(gid)?.trusted_senders||[],auto_extract:row.querySelector('[data-auto-extract]').checked,auto_apply:row.querySelector('[data-auto-apply]').checked});
     }else values.delete(gid);
     row.querySelector('fieldset').disabled=!values.has(gid);
+    if(event.target.matches('[data-course]'))row.querySelector('[data-match-hint]').textContent='已手动修改，保存后生效';
     card(source).querySelector('[data-group-count]').textContent=`已选 ${values.size} 个群`;
     dirty.add(source);
   });
@@ -186,6 +205,14 @@ export async function mount(container, context) {
         input.type=visible?'text':'password';button.textContent=visible?'隐藏口令':'显示口令';button.setAttribute('aria-pressed',String(visible));return;
       }
       if(button.hasAttribute('data-refresh')){await refresh(true);return;}
+      if(button.hasAttribute('data-select-matched')){
+        const values=draftFor(source);
+        for(const row of state.sources[source].groups||[]){
+          const match=courseMatches[source]?.[row.id];
+          if(!values.has(row.id)&&match?.status==='automatic')values.set(row.id,{id:row.id,course_id:match.course_id,trusted_senders:[],auto_extract:false,auto_apply:false});
+        }
+        dirty.add(source);renderGroups(source);feedback('已勾选明确匹配的课程群。可修改关联，保存后开始同步。');return;
+      }
       if(button.hasAttribute('data-stop')){await api('/stop',{method:'POST'});feedback('已请求停止，正在结束当前处理。');await refresh();return;}
       if(button.dataset.filter){filter=button.dataset.filter;for(const node of container.querySelectorAll('[data-filter]'))node.setAttribute('aria-pressed',String(node.dataset.filter===filter));renderItems();return;}
       if(button.hasAttribute('data-discover')){
@@ -227,7 +254,6 @@ export async function mount(container, context) {
       }
     });
   });
-  const catalog=await api('/courses');if(stopped)return cleanup;courses=catalog.items;
   await refresh(true);
   if(!stopped)timer=setTimeout(poll,5000);
   return cleanup;

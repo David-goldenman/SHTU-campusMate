@@ -29,6 +29,18 @@ class Groups(BaseModel):
 def create_router(context):
     router = APIRouter()
 
+    @router.get("/identities")
+    async def identities(current: bool = True):
+        """Course identity only; never reads group facts or calls back into group messages."""
+        owner = account_revision(context)
+        values, unavailable = await snapshots(context, {name: provider for name, provider in SOURCES.items() if name != 'mail'})
+        data = combine(values, context.store.read('groups', []), current_semester(values))
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已更新，请刷新课程列表。')
+        fields = ('id', 'title', 'title_source', 'title_source_id', 'aliases', 'code', 'term', 'current', 'course_ids')
+        return {'items': [{key: row[key] for key in fields if key in row} for row in data['courses'] if not current or row['current']],
+                'account_revision': owner, 'current_semester': data['metadata']['current_semester'], 'unavailable': unavailable}
+
     @router.get("/snapshot")
     async def snapshot():
         owner = account_revision(context)

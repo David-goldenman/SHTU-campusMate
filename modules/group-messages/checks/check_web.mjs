@@ -13,7 +13,8 @@ function browser(action){
 }
 function fixture(){
   const original=fetch.bind(window),json=value=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
-  const groups=[{id:'g1',name:'合成计算机课程群',message_count:28},{id:'g2',name:'合成数学群',message_count:5}];
+  const groups=[{id:'g1',name:'2026秋-电磁学',message_count:28},{id:'g2',name:'EE130P 2026秋',message_count:5},
+    {id:'old',name:'2025秋-电磁学'},{id:'unmatched',name:'合成未匹配群'}];
   const selected={id:'g1',name:groups[0].name,course_id:'c1',trusted_senders:[],auto_extract:false,auto_apply:false};
   const state=window.groupCheck={calls:[],owner:'owner1',items:[],sources:{wechat:{connected:true,connection:'conn',revision:'r1',enabled:false,groups,selected:[selected],interval_seconds:300,history_days:7,allow_ai:false,coverage:{},account_label:'合成微信'},qq:{connected:false}}};
   window.fetch=async(url,options={})=>{
@@ -23,7 +24,14 @@ function fixture(){
       const route=path.replace('/api/v1/modules/group-messages','');state.calls.push({route,method,body});
       if(route==='/status')return json({sources:state.sources,account_revision:state.owner,ai:{enabled:true,model:'合成模型'},running:null,queued:false});
       if(route==='/items')return json({items:state.items,account_revision:state.owner});
-      if(route==='/courses')return json({items:[{id:'c1',title:'合成计算机',term:'2026-fall'}]});
+      if(route==='/courses'){
+        const matches={};
+        for(const [source,config] of Object.entries(state.sources))matches[source]=Object.fromEntries((config.groups||[]).map(group=>{
+          const saved=(config.selected||[]).find(row=>row.id===group.id),status=saved?'saved':group.id==='old'?'other_term':group.id==='unmatched'?'unmatched':'automatic';
+          return [group.id,{status,course_id:saved?.course_id||(status==='automatic'?(group.id==='g2'?'c2':'c1'):''),reason:saved?'沿用已保存的关联，可自行修改':status==='automatic'?'课程名称或代码一致':'需手动核对',candidates:[]}];
+        }));
+        return json({items:[{id:'c1',title:'电磁学',code:'EE130',term:'2026-fall',current:true},{id:'c2',title:'电磁学课程设计',code:'EE130P',term:'2026-fall',current:true}],matches,account_revision:state.owner,current_semester:'2026-fall'});
+      }
       if(route==='/senders')return json({items:[{id:'teacher',name:'合成老师'},{id:'student',name:'合成同学'}]});
       if(route==='/messages')return json({items:[{sender_id:'teacher',sender_name:'合成老师',text:'作业1延期到2026年10月22日23:59截止',sent_at:'2026-10-18T12:00:00+08:00'}],total:1});
       if(route==='/sources/wechat'&&method==='PUT'){Object.assign(state.sources.wechat,body,{selected:body.groups.map(row=>({...row,name:groups.find(g=>g.id===row.id).name})),revision:'r'+state.calls.length});return json({saved:true});}
@@ -62,6 +70,12 @@ try{
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
   await command('Page.navigate',{url:base+'/#group-messages'});await ready();
   assert.equal(await evaluate("document.querySelectorAll('[data-gid]').length"),2);
+  assert.equal(await evaluate("document.querySelector('[data-gid=g2] [data-course]').value"),'c2');
+  assert(await evaluate("!document.querySelector('[data-gid=old]') && !document.querySelector('[data-gid=unmatched]')"));
+  await evaluate("document.querySelector('[data-source=wechat] [data-show-all]').click()");
+  assert.equal(await evaluate("document.querySelectorAll('[data-gid]').length"),4);
+  await evaluate("document.querySelector('[data-source=wechat] [data-show-all]').click();document.querySelector('[data-select-matched]').click();var changed=document.querySelector('[data-gid=g2] [data-course]');changed.value='c1';changed.dispatchEvent(new Event('change',{bubbles:true}))");
+  assert(await evaluate("document.querySelector('[data-gid=g2] [data-selected]').checked"));
   await evaluate("document.querySelector('[data-gid=g1] [data-messages]').click()");await wait("document.querySelector('dialog[open] .gm-message-list')");
   assert(await evaluate("document.querySelector('dialog').textContent.includes('作业1延期')"));
   await evaluate("document.querySelector('[data-close]').click();document.querySelector('[data-gid=g1] [data-senders]').click()");await wait("document.querySelector('[data-trust-form]')");
@@ -70,6 +84,8 @@ try{
   await wait("groupCheck.sources.wechat.enabled && groupCheck.sources.wechat.selected[0].auto_apply");
   assert.deepEqual(await evaluate('groupCheck.sources.wechat.selected[0].trusted_senders'),['teacher']);
   assert.equal(await evaluate("groupCheck.calls.find(row=>row.method==='PUT').body.expected_revision"),'r1');
+  await evaluate("document.querySelector('[data-refresh]').click()");await wait("document.querySelector('[data-gid=g2] [data-course]').value==='c1'");
+  assert.equal(await evaluate("groupCheck.sources.wechat.selected.find(row=>row.id==='g2').course_id"),'c1','Manual course correction survives refresh');
   await evaluate("document.querySelector('[data-gid=g1] [data-extract]').click()");await wait("document.querySelector('[data-confirm-extract]')");
   assert(await evaluate("document.querySelector('dialog').textContent.includes('发送至当前 AI 服务')"));
   await evaluate("document.querySelector('[data-confirm-extract]').click()");await wait("document.querySelector('[data-item=item1]')");

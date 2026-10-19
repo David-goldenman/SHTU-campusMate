@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 from fastapi import HTTPException
 from backend.services.campus.analysis import account_revision
-from . import extraction, qq, wechat
+from . import extraction, matching, qq, wechat
 from .effects import Effects
 from .messages import Messages, identity, stamp
 from .native.crypto import NativeError
@@ -81,14 +81,75 @@ class Service:
         group = next((row for row in config.get('selected', []) if row['id'] == gid), None)
         if group is None:
             raise HTTPException(404, '这个群未被选择。')
+        scope = config.get('course_scope')
+        if scope is not None and gid not in scope['active_group_ids']:
+            raise HTTPException(409, '这个群未关联可用的本学期课程，请核对课程关联后再读取。')
         return config, group
+
+    async def course_catalog(self, owner):
+        response = await self.context.api('courses', '/identities')
+        self.check(owner)
+        if response.status_code != 200:
+            raise HTTPException(409, '课程中心不可用，已暂停群消息读取；请先恢复课程来源。')
+        try:
+            value = response.json()
+            if not isinstance(value, dict) or not isinstance(value.get('items'), list) or not value.get('current_semester'):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise HTTPException(409, '课程目录暂时不可用，未继续读取群消息，请刷新课程来源。') from None
+        if value.get('account_revision') != owner:
+            raise HTTPException(409, '课程账号已变化，请刷新后重新关联。')
+        return {**value, 'items': [row for row in value['items'] if row.get('current') is True]}
+
+    def save_course_scope(self, owner, catalog):
+        """Retain selections and old results; only current, available bindings may read."""
+        known = {row['id'] for row in catalog['items']} if catalog else set()
+        with self.lock:
+            self.check(owner)
+            for source, config in self.sources(owner).items():
+                active = [row['id'] for row in config['selected'] if row.get('course_id') in known]
+                scope = {'available': catalog is not None, 'current_semester': catalog['current_semester'] if catalog else '',
+                         'active_group_ids': active,
+                         'blocked_groups': [{'id': row['id'], 'name': row['name']} for row in config['selected'] if row['id'] not in active]}
+                if config.get('course_scope') != scope:
+                    if config.get('course_scope', {}).get('active_group_ids') != active:
+                        config['source_state'] = None
+                    config['course_scope'] = scope
+                    self.save_source(owner, source, config)
+
+    async def refresh_course_scope(self, owner):
+        try:
+            catalog = await self.course_catalog(owner)
+        except HTTPException:
+            self.save_course_scope(owner, None)
+            raise
+        self.save_course_scope(owner, catalog)
+        return catalog
+
+    async def course_options(self):
+        owner = self.owner()
+        try:
+            catalog = await self.refresh_course_scope(owner)
+        except HTTPException as error:
+            self.check(owner)
+            return {'items': [], 'matches': {}, 'account_revision': owner, 'message': error.detail}
+        with self.lock:
+            self.check(owner)
+            matches = {}
+            for source, config in self.sources(owner).items():
+                saved = {row['id']: row for row in config['selected']}
+                matches[source] = {row['id']: matching.suggest(row, catalog['items'], catalog['current_semester'], saved.get(row['id'])) for row in config['groups']}
+        return {**catalog, 'matches': matches}
 
     def all_items(self, owner):
         return self.context.store.read('items:' + owner, {})
 
     def visible(self, item, sources):
         config = sources.get(item['source'], {})
-        return config.get('connection') == item['connection'] and any(group['id'] == item['group_id'] for group in config.get('selected', []))
+        scope = config.get('course_scope')
+        return (config.get('connection') == item['connection'] and
+                (scope is None or item['group_id'] in scope['active_group_ids']) and
+                any(group['id'] == item['group_id'] and group.get('course_id') == item.get('course', {}).get('id') for group in config.get('selected', [])))
 
     def current_item(self, owner, item_id):
         self.check(owner)
@@ -117,7 +178,7 @@ class Service:
             for source in SOURCES:
                 config = values.get(source, {})
                 public[source] = {key: config.get(key) for key in ('connection', 'mode', 'account_label', 'base_url', 'database_dir', 'enabled', 'selected', 'groups',
-                    'history_days', 'interval_seconds', 'allow_ai', 'last_synced_at', 'last_extracted_at', 'error', 'coverage', 'approved_version', 'pending_version', 'compatible', 'revision')}
+                    'history_days', 'interval_seconds', 'allow_ai', 'last_synced_at', 'last_extracted_at', 'error', 'coverage', 'approved_version', 'pending_version', 'compatible', 'revision', 'course_scope')}
                 public[source]['connected'] = bool(config)
                 if not config:
                     public[source]['error'] = self.context.store.read('connection-error:' + owner + ':' + source)
@@ -125,7 +186,7 @@ class Service:
             return {'sources': public, 'running': copy.deepcopy(self.running) if self.running and self.running['owner'] == owner else None,
                     'queued': bool(self.queued and self.queued['owner'] == owner), 'account_revision': owner,
                     'ai': {key: ai.get(key) for key in ('enabled', 'provider', 'model', 'key_saved')},
-                    'notice': '只处理所选群。每次同步更新近 7/30 天的聊天窗口；提取事项及引用保留至清除模块数据。图片、语音和附件正文暂未读取。'}
+                    'notice': '只处理已关联本学期课程的所选群。每次同步更新近 7/30 天的聊天窗口；提取事项及引用保留至清除模块数据。图片、语音和附件正文暂未读取。'}
 
     def queue(self, kind, source, body=None):
         if source not in SOURCES:
@@ -159,17 +220,13 @@ class Service:
             raise HTTPException(422, '微信同步间隔为 5、15 或 30 分钟。')
         if any(row.auto_extract for row in body.groups) and not body.allow_ai:
             raise HTTPException(422, '开启自动整理前，请确认将所选群的相关正文发送至当前 AI 服务。')
-        catalog = {}
-        if any(row.course_id for row in body.groups):
-            response = await self.context.api('courses', '/snapshot')
-            if response.status_code != 200:
-                raise HTTPException(409, '课程中心不可用，请先启用后关联课程。')
-            catalog = {row['id']: row for row in response.json()['data']['courses']}
+        catalog = await self.course_catalog(owner) if body.groups else {'items': [], 'current_semester': ''}
+        known_courses = {row['id']: row for row in catalog['items']}
         selected = []
         for row in body.groups:
-            course = catalog.get(row.course_id)
-            if row.course_id and course is None:
-                raise HTTPException(409, '所选课程已更新，请刷新课程列表。')
+            course = known_courses.get(row.course_id)
+            if course is None:
+                raise HTTPException(409, '每个所选群都需关联本学期课程，请刷新或手动修正关联。')
             value = row.model_dump()
             value.update(name=known[row.id]['name'], course={key: course[key] for key in ('id', 'title', 'term', 'course_ids') if key in course} if course else {})
             selected.append(value)
@@ -190,6 +247,8 @@ class Service:
                     self.context.store.delete(self.cursor_key(owner, source, config['connection'], row['id']))
             config.update(selected=selected, enabled=body.enabled, interval_seconds=body.interval_seconds,
                           history_days=body.history_days, allow_ai=body.allow_ai, revision=uuid4().hex, error=None, source_state=None)
+            config['course_scope'] = {'available': True, 'current_semester': catalog['current_semester'],
+                                      'active_group_ids': ids, 'blocked_groups': []}
             self.cancelled.set()
             self.save_source(owner, source, config)
             self.context.store.delete('connection-error:' + owner + ':' + source)
@@ -264,11 +323,13 @@ class Service:
 
     def _sync(self, task):
         owner, source = task['owner'], task['source']
+        asyncio.run(self.refresh_course_scope(owner))
         with self.lock:
-            config = self.configuration(owner, source)
+            config = copy.deepcopy(self.configuration(owner, source))
             revision = config['revision']
+            config['selected'] = [row for row in config['selected'] if row['id'] in config['course_scope']['active_group_ids']]
             if not config.get('selected'):
-                raise HTTPException(409, '请先选择需要同步的群。')
+                raise HTTPException(409, '没有已关联本学期课程的群，本轮未读取聊天。')
             secret = self.context.secrets.get(self.secret_key(owner, source, config['connection']))
         storage = self.storage(owner, config['connection'])
         report = None
@@ -281,9 +342,12 @@ class Service:
                     self.save_source(owner, source, current)
             report = (wechat.synchronize(config, secret, storage, self.cancelled, self.progress, compatibility=task['kind'] == 'compatibility', pause_for_version=pause_for_version) if source == 'wechat'
                       else qq.synchronize(config, secret, self.cancelled))
+            asyncio.run(self.refresh_course_scope(owner))
             with self.lock:
                 self.check(owner, job=True, source=source, revision=revision)
                 current = self.configuration(owner, source)
+                if any(row['id'] not in current['course_scope']['active_group_ids'] for row in config['selected']):
+                    raise HTTPException(409, '本学期课程范围已变化，本轮消息未保存，请重新核对选群。')
                 if report.get('unchanged'):
                     current.update(last_synced_at=stamp(), error=None)
                     self.save_source(owner, source, current)
@@ -291,6 +355,8 @@ class Service:
                 since = (datetime.now(timezone.utc) - timedelta(days=config['history_days'])).isoformat()
                 changed = 0
                 for gid, rows in report.get('messages', {}).items():
+                    if gid not in current['course_scope']['active_group_ids']:
+                        continue
                     changed += self.messages.ingest(owner, source, config['connection'], gid, rows, since)
                 current.update(last_synced_at=stamp(), error=None, last_changed=changed)
                 for key in ('source_state', 'next_expiry', 'snapshot', 'coverage', 'wal_commits'):
@@ -318,8 +384,12 @@ class Service:
 
     def _extract(self, task):
         owner, source, gid = task['owner'], task['source'], task['group_id']
+        catalog = asyncio.run(self.refresh_course_scope(owner))
         with self.lock:
             config, group = self.selected_group(owner, source, gid)
+            group = copy.deepcopy(group)
+            course = next(row for row in catalog['items'] if row['id'] == group['course_id'])
+            group['course'] = {key: course[key] for key in ('id', 'title', 'term', 'course_ids')}
             revision = config['revision']
             if not task.get('manual') and not (config['enabled'] and config['allow_ai'] and group['auto_extract']):
                 return
@@ -330,13 +400,16 @@ class Service:
             batch = self.messages.batch(owner, source, config['connection'], gid, cursor)
             if batch is None:
                 return
-            existing = [item for item in self.all_items(owner).values() if item['source'] == source and item['connection'] == config['connection'] and item['group_id'] == gid]
+            existing = [item for item in self.all_items(owner).values() if item['source'] == source and item['connection'] == config['connection']
+                        and item['group_id'] == gid and item.get('course', {}).get('id') == group['course_id']]
             if any(self.context.store.read('operation:' + owner + ':' + item['id']) for item in existing):
                 raise HTTPException(409, '上次更新的结果尚未确认，请先在事项卡片重试原操作；新增消息仍保留。')
             self.check(owner, job=True)
         results = extraction.run(self.context, batch, group, existing, self.cancelled)
+        asyncio.run(self.refresh_course_scope(owner))
         with self.lock:
             self.check(owner, job=True, source=source, revision=revision)
+            self.selected_group(owner, source, gid)
             if not self.messages.versions_match(owner, batch['versions']):
                 raise HTTPException(409, '原消息已更新，请重新整理。')
             values = self.all_items(owner)
@@ -365,6 +438,10 @@ class Service:
             self.save_source(owner, source, current)
 
     async def deliver(self, owner):
+        try:
+            await self.refresh_course_scope(owner)
+        except HTTPException:
+            self.check(owner, job=True)
         for item in self.all_items(owner).values():
             self.check(owner, job=True)
             if not self.visible(item, self.sources(owner)):
@@ -417,6 +494,8 @@ class Service:
             if not config.get('allow_ai') or not self.context.ai.settings().get('enabled'):
                 continue
             for group in config['selected']:
+                if group['id'] not in config.get('course_scope', {}).get('active_group_ids', []):
+                    continue
                 key = self.cursor_key(owner, source, config['connection'], group['id'])
                 if group['auto_extract'] and now >= self.next_extract.get(key, 0) and self.messages.batch(owner, source, config['connection'], group['id'], self.context.store.read(key, 0)):
                     return {'kind': 'extract', 'source': source, 'group_id': group['id'], 'owner': owner}

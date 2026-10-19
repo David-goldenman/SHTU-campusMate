@@ -18,7 +18,7 @@ export async function mount(container, context) {
   dispose = await sourcePanel(container,context,async (body,snapshot,context,refresh) => {
     const entries = courseSummaries(snapshot.data), courses = snapshot.data.courses;
     body.innerHTML = `<div class="course-toolbar"><div><span class="course-eyebrow">我的课程</span><p>${e(termLabel(snapshot.data.metadata.current_semester))}</p></div><div class="course-toolbar-actions"><label class="checkbox-label"><input data-current type="checkbox" ${current?'checked':''}>仅本学期</label><button type="button" class="button button-secondary" data-group>关联课程</button></div></div><div class="course-columns"><aside class="course-browser" aria-label="查找课程"><label class="course-search">搜索课程<input data-search type="search" placeholder="课程名称或代码" value="${e(query)}"></label><div class="course-filters" role="group" aria-label="按录播筛选" data-filters></div><p class="course-list-count" data-list-count role="status"></p><nav data-courses aria-label="课程列表"></nav></aside><section class="course-detail" data-detail aria-label="课程内容"></section></div>`;
-    const scoped = () => entries.filter(({course}) => (!current || course.current) && `${course.title} ${course.code}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const scoped = () => entries.filter(({course}) => (!current || course.current) && `${course.title} ${course.code} ${(course.aliases||[]).join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()));
     function draw() {
       const scope = scoped(), counts = {all:scope.length,available:0,empty:0,unknown:0};
       scope.forEach(item => counts[item.recording.state]++);
@@ -44,6 +44,13 @@ export async function mount(container, context) {
       if (!available.includes(activeKind)) activeKind = pending?'assignments':data.materials.length?'materials':recording.count?'lessons':available.find(kind=>kind!=='lessons')||'lessons';
       host.innerHTML = `<header class="course-detail-header"><p class="course-eyebrow">${e(course.code||'课程')}<span>·</span>${e(termLabel(course.term))}</p><h3>${e(course.title)}</h3><div class="course-platforms" aria-label="课程原站入口">${course.sources.filter(source=>source.url).map(source=>link(source.url,platforms[source.source]||source.source,e)).join('')}</div></header><div class="course-recording-summary" data-state="${recording.state}"><span class="course-recording-icon">${playIcon}</span><div><strong>${e(recording.label)}</strong><p>${e(recording.hint)}</p></div>${recording.count?'<button type="button" class="button button-secondary" data-view-recordings>查看录播 <span aria-hidden="true">→</span></button>':''}</div><div class="course-content-tabs" role="tablist" aria-label="课程内容">${available.map(kind=>`<button type="button" role="tab" id="course-tab-${kind}" aria-controls="course-content" aria-selected="${activeKind===kind}" tabindex="${activeKind===kind?'0':'-1'}" data-kind="${kind}">${kinds[kind]}<span>${data[kind].length}</span></button>`).join('')}</div><div id="course-content" role="tabpanel" tabindex="0" data-course-content></div>`;
       decorateCourse(host.querySelector('header'),course);
+      if(course.title_source){
+        const origin=document.createElement('p');origin.className='field-hint';
+        origin.textContent='名称来源：'+(course.title_source==='manual'?'手动设置':platforms[course.title_source]||course.title_source);
+        const aliases=(course.aliases||[]).filter(name=>name!==course.title);
+        if(aliases.length)origin.textContent+='；其他平台名称：'+aliases.join('、');
+        host.querySelector('header').append(origin);
+      }
       function content(kind) {
         activeKind = kind;
         host.querySelectorAll('[data-kind]').forEach(button=>{button.setAttribute('aria-selected',String(button.dataset.kind===kind));button.tabIndex=button.dataset.kind===kind?0:-1;});
