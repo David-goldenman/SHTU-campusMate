@@ -43,6 +43,11 @@ def time_supported(value, quote, sent_at, *, clock=True):
         return False
     if not clock:
         return True
+    return clock_supported(value, quote)
+
+
+def clock_supported(value, quote):
+    target = datetime.fromisoformat(value).astimezone(ZONE)
     for match in CLOCK.finditer(quote):
         hour, minute, half, point = match.groups()
         h, m = int(hour), int(minute or point or ('30' if half else '0'))
@@ -98,6 +103,11 @@ def validate(payload, prepared, batch, existing):
             refs.append({**ref.model_dump(), 'sent_at': row['sent_at'], 'sender_id': original[row['id']]['sender_id'],
                          'sender_name': original[row['id']]['sender_name'], 'message_revision': original[row['id']]['revision']})
         fields = [key for key in ('due_at', 'starts_at', 'ends_at') if value[key]]
+        if finding.kind in {'quiz', 'exam'} and value['starts_at']:
+            exam_parts = [part for ref in refs for part in re.split(r'[\n。；;]', ref['quote']) if re.search(r'quiz|小测|测验|考试', part, re.I)]
+            follows_class = any(re.search(r'(?:补课|习题课|上课|课程).*?(?:结束|完)(?:之后|以后|后)', part) for part in exam_parts)
+            if follows_class and not any(clock_supported(value['starts_at'], part) for part in exam_parts):
+                raise HTTPException(502, '原文只说明补课后进行 Quiz／考试，没有明确开始钟点，请重新整理并保留时间待确认。')
         verified = all(any(time_supported(value[key], ref['quote'], ref['sent_at']) for ref in refs) for key in fields)
         if value['date']:
             verified = verified and any(time_supported(value['date'], ref['quote'], ref['sent_at'], clock=False) for ref in refs)

@@ -1,5 +1,19 @@
 # 课程中心
 
+## 课程名称与本学期标识
+
+聚合名称优先采用来源中已有的中文名称，同语言按教务课表、教学社区、E 云课堂、Blackboard、Gradescope、Piazza 的顺序选择，不用 AI 翻译或覆盖原站记录。手动课程组标题始终优先。`title_source/title_source_id` 记录所选名称的来源，`aliases` 保留不同平台原名；页面与搜索同时支持原名和别名。
+
+| 来源 | 适合提供的字段 | 名称使用方式 |
+| --- | --- | --- |
+| 教务课表（timetable） | 正式课程名、代码、本学期选课、上课时间 | 本学期课程主名称与学期依据 |
+| 教学社区（elrc） | 中文课程名、学期、课次与录播 | 名称补充、历史课程与录播资料 |
+| E 云课堂（ecourse） | 中文课程名、课程代码、历年学期 | 名称补充，尤其是教务当前课表未含的历史课程 |
+| Blackboard | 教师设置的课程名、课程代码、教学资料与作业 | 保留班号／年份／英文等别名，资料仍按原课程 ID 关联 |
+| Gradescope／Piazza | 作业与讨论平台的课程名称 | 保留英文别名，辅助搜索和群名匹配 |
+
+只读 `GET /identities?current=true` 返回 `{items,account_revision,current_semester,unavailable}`；items 含 `id/title/title_source/title_source_id/aliases/code/term/current/course_ids`。默认只返回本学期，`current=false` 返回全部学期。此接口只读取学校来源的公开快照，不读取群消息、邮件或培养方案，供群消息匹配使用，避免课程聚合与群消息互相调用。课程身份仍按课程代码、学期及已有手动分组确定，名称选择不改变课程 ID。
+
 课程卡片和详情按开课院系显示颜色与文字标签：创管紫、创艺橙红、生命棕黄、物质绿、数学所深蓝、信息浅蓝，体育与书院红。院系优先取课程来源明确字段，缺失时按唯一课程代码匹配教务培养方案；冲突或未知保留中性色。`PE/CLPE` 课程代码标记体育课并显示 Font Awesome 跑步图标。
 
 `GET /appearance` 返回 `{courses:[{id,course_ids,code,term,department,department_source,appearance}],palette}`，`appearance` 包含 `key/label/accent/tint/ink` 和可选 `icon`。时间表通过该公开接口匹配课程；课程模块不调用时间表的 `/schedule`，不会形成聚合循环。缺少教务模块仍可使用来源院系。所有院系判断位于课程模块；共享 UI 仅提供校验六位十六进制颜色的 `applyAccent(element, appearance)`。

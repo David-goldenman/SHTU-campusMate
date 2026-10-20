@@ -40,12 +40,26 @@ def create_router(context):
     global _source, _calendar
 
     def read_schedule(remote, previous):
-        data = fetch(remote, previous)
+        def term_starts():
+            year = datetime.now(ZONE).year
+            return {key: value for start in (year - 1, year)
+                    for key, value in context.store.read('school-calendar:' + str(start), {}).get('terms', {}).items()}
+
+        data = fetch(remote, previous, term_starts=term_starts())
         if school.due(data['metadata']):
             try:
                 school.refresh(data['metadata'])
             except HTTPException:
                 pass  # A calendar failure leaves course synchronization usable.
+            else:
+                # The first successful calendar read may refine a month-based
+                # fallback around the start of spring or summer teaching.
+                starts = term_starts()
+                today = datetime.now(ZONE).date()
+                begun = {key: value['week_one'] for key, value in starts.items()
+                         if value.get('week_one') and value['week_one'] <= today.isoformat()}
+                if begun and max(begun, key=begun.get) != term_key(data['metadata']):
+                    data = fetch(remote, previous, term_starts=starts)
         return data
 
     source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable", network_target="timetable")

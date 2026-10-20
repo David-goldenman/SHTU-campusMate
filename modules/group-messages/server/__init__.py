@@ -70,24 +70,23 @@ def create_router(context):
 
     @router.get('/courses', include_in_schema=False)
     async def courses():
-        owner = service.owner()
-        response = await context.api('courses', '/snapshot')
-        service.check(owner)
-        if response.status_code != 200:
-            return {'items': [], 'message': '课程中心不可用，可先同步群消息，稍后再关联课程。'}
-        return {'items': [{key: row[key] for key in ('id', 'title', 'term', 'current') if key in row} for row in response.json()['data']['courses']]}
+        return await service.course_options()
 
     @router.get('/messages', include_in_schema=False)
-    def messages(source: SourceName, group_id: str = Query(min_length=1, max_length=200), offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=100)):
+    async def messages(source: SourceName, group_id: str = Query(min_length=1, max_length=200), offset: int = Query(default=0, ge=0), limit: int = Query(default=50, ge=1, le=100)):
+        owner = service.owner()
+        await service.refresh_course_scope(owner)
         with service.lock:
-            owner = service.owner()
+            service.check(owner)
             config, _group = service.selected_group(owner, source, group_id)
             return service.messages.rows(owner, source, config['connection'], group_id, limit=limit, offset=offset)
 
     @router.get('/senders', include_in_schema=False)
-    def senders(source: SourceName, group_id: str = Query(min_length=1, max_length=200)):
+    async def senders(source: SourceName, group_id: str = Query(min_length=1, max_length=200)):
+        owner = service.owner()
+        await service.refresh_course_scope(owner)
         with service.lock:
-            owner = service.owner()
+            service.check(owner)
             config, _group = service.selected_group(owner, source, group_id)
             rows = service.messages.rows(owner, source, config['connection'], group_id, limit=20000)['items']
             values = {row['sender_id']: {'id': row['sender_id'], 'name': row['sender_name']} for row in reversed(rows) if row['sender_id']}

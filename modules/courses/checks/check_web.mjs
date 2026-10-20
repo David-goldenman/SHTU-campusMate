@@ -16,7 +16,7 @@ function fixture(){
   const source=(id,kind,title,extra={})=>({id,source:kind,title,code:'CS100',term:'2026-fall',url:'https://example.invalid/'+id,...extra});
   const sources=[source('bb:1','blackboard','合成计算机课程',{grades:[{title:'合成考试',score:88,max_score:100}]}),
     source('elrc:1','elrc','合成计算机课程'),source('ecourse:1','ecourse','合成计算机课程')];
-  const courses=[{id:'merged',title:'合成计算机课程',code:'CS100',term:'2026-fall',current:true,
+  const courses=[{id:'merged',title:'合成计算机课程',aliases:['Synthetic Computer Science'],title_source:'timetable',code:'CS100',term:'2026-fall',current:true,
     course_ids:sources.map(item=>item.id),sources,department:'信息学院',
     appearance:{key:'sist',label:'信息',accent:'#5e81ac',tint:'#eaf3fb',ink:'#264b73'}},
     {id:'empty',title:'合成数学课程',code:'MATH100',term:'2026-fall',current:true,course_ids:['elrc:2'],sources:[source('elrc:2','elrc','合成数学课程')]},
@@ -75,6 +75,10 @@ try{
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
   await command('Page.navigate',{url:base+'/#courses'});await ready();
   assert.equal(await evaluate("document.querySelectorAll('[data-course]').length"),3);
+  assert(await evaluate("document.querySelector('.course-detail-header').textContent.includes('名称来源：教务课表')"));
+  await evaluate("var aliasSearch=document.querySelector('[data-search]');aliasSearch.value='Synthetic Computer Science';aliasSearch.dispatchEvent(new Event('input',{bubbles:true}))");
+  assert.equal(await evaluate("document.querySelectorAll('[data-course]').length"),1);
+  await evaluate("aliasSearch.value='';aliasSearch.dispatchEvent(new Event('input',{bubbles:true}))");
   assert.equal(await evaluate("document.querySelector('[data-course=merged] .course-pending').textContent"),'1 项待办');
   assert(await evaluate("document.querySelector('[data-kind=assignments]').getAttribute('aria-selected')==='true' && document.querySelector('.course-department').textContent==='信息'"));
   await evaluate("document.querySelector('[data-view-recordings]').click()");

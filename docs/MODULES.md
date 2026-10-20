@@ -180,6 +180,8 @@ ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们�
 
 模块之间只能经 `context.api(module_id, path, method="GET", body=None)` 调用公开接口。课程资料选择接口属于课程中心，见 [课程中心](../modules/courses/README.md)。框架可在 modules 目录为空时启动设置页；独立启用允许依赖功能暂时不可用，模块自身生命周期必须正常。
 
+课程中心 `GET /identities?current=true` 提供本学期课程身份、中文显示名称、名称来源和各平台别名，返回 `items/account_revision/current_semester/unavailable`。它只读取学校来源，不读取群消息事实或邮件；群消息模块用该接口预填课程关联并在采集、整理、应用前核对本学期范围。聚合名称优先采用已有中文名称，同语言按教务课表、教学社区、E 云课堂、Blackboard、Gradescope、Piazza 排序，手动标题优先；来源记录与课程 ID 保持不变。
+
 
 ## 可选页面提示音
 
