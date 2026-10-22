@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import threading
 import unicodedata
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from zoneinfo import ZoneInfo
@@ -23,7 +23,6 @@ INDEX = BASE + '/1024/list.htm'
 SEASONS = {'秋': 'fall', '春': 'spring', '暑': 'summer', '夏': 'summer'}
 ZONE = ZoneInfo('Asia/Shanghai')
 PDF_SCALE = 2.2
-BOUNDARY_DAYS = 3
 
 
 def term_key(metadata):
@@ -73,32 +72,13 @@ class SchoolCalendar:
         return self.context.store.read('school-calendar:' + key[:4], {}) if key else {}
 
     def due(self, metadata):
-        saved = self.saved(metadata)
-        checked = saved.get('checked_at')
-        if saved.get('error') or not checked:
-            return True
-        try:
-            checked_at = datetime.fromisoformat(checked)
-        except ValueError:
-            return True
-        if datetime.now(timezone.utc) - checked_at > timedelta(days=7):
-            return True
-        # Refresh once more around the first and last teaching week so a
-        # calendar published just before the semester boundary is picked up.
         key = term_key(metadata)
-        term = saved.get('terms', {}).get(key) if key else None
-        if not term or not term.get('week_one'):
+        if not key:
             return False
-        try:
-            start = date.fromisoformat(term['week_one'])
-            weeks = int(metadata.get('week_count') or 18)
-            end = start + timedelta(weeks=weeks) - timedelta(days=1)
-            last = checked_at.astimezone(ZONE).date()
-        except (TypeError, ValueError):
-            return True
-        today = datetime.now(ZONE).date()
-        return any(abs((today - boundary).days) <= BOUNDARY_DAYS and last < boundary
-                   for boundary in (start, end))
+        saved = self.saved(metadata)
+        if saved.get('terms', {}).get(key, {}).get('week_one'):
+            return False
+        return saved.get('attempted_term') != key
 
     def directory(self, key):
         return self.context.data_dir / 'calendar' / key
@@ -166,7 +146,7 @@ class SchoolCalendar:
                 'version': saved.get('fingerprint') or saved.get('checked_at'),
                 'due': bool(key) and self.due(metadata)}
 
-    def refresh(self, metadata):
+    def refresh(self, metadata, *, force=True):
         from pypdf import PdfReader
         from pypdf.errors import PyPdfError
 
@@ -174,6 +154,8 @@ class SchoolCalendar:
         if key is None:
             raise HTTPException(409, '请先同步教务课表，再读取本学年校历。')
         with self.lock:
+            if not force and not self.due(metadata):
+                return self.saved(metadata)
             previous = self.saved(metadata)
             checked = datetime.now(timezone.utc).isoformat()
             try:
@@ -240,9 +222,10 @@ class SchoolCalendar:
                     if key not in terms:
                         raise ValueError('校历与当前学期不匹配，请手动核对。')
                     saved = {'terms': terms, 'url': url, 'pdf_url': pdf_url, 'fingerprint': fingerprint, 'checked_at': checked, 'error': None}
+                saved['attempted_term'] = key
                 self.context.store.write('school-calendar:' + key[:4], saved)
                 return saved
             except (httpx.HTTPError, ValueError, OSError, RuntimeError, PyPdfError, subprocess.SubprocessError):
                 error = '学校校历暂时无法自动识别，已保留当前日期；可在学期设置中手动填写。'
-                self.context.store.write('school-calendar:' + key[:4], {**previous, 'checked_at': checked, 'error': error})
+                self.context.store.write('school-calendar:' + key[:4], {**previous, 'checked_at': checked, 'error': error, 'attempted_term': key})
                 raise HTTPException(502, error) from None

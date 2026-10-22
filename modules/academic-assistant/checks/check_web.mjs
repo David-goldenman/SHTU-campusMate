@@ -12,6 +12,8 @@ function fixture(modules,categories, themeCatalog){
  const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],chats:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
  Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{state.clipboard=text;}}});
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
+ state.files={mode:'workspace',workspace:'C:/学习/workspace',revision:'v1',account_revision:'synthetic-owner'};
+ state.decisions=[];
  const text='## 本周学习计划\n\n先复习 **向量叠加**，再安排作业。[1]\n\n- 阅读课件\n- 完成自检\n\n| 日期 | 内容 | 建议时长 | 说明 |\n| --- | --- | --- | --- |\n| 周一 | 向量复习 | 30 分钟 | 估计时长 |\n| 周二 | 练习 | 40 分钟 | 自行调整 |\n\n```python\nprint("review")\n```\n\n<script>bad()</script> [危险](javascript:alert(1)) ![外部图片](https://example.edu/tracker.png)\n\n'+Array.from({length:12},(_,i)=>'第 '+(i+1)+' 步：阅读课件后用自己的话解释这个概念，标出还需要补充的问题。').join('\n\n');
  window.fetch=async(url,options={})=>{
   const target=new URL(url,location.origin);if(!target.pathname.startsWith('/api/v1/'))return original(url,options);
@@ -23,7 +25,14 @@ function fixture(modules,categories, themeCatalog){
   if(path==='/data/backups')return json({backups:[]});
   if(path==='/auth/providers')return json({providers:[]});
   if(path==='/ai/settings')return json({enabled:true,key_saved:true,model:'deepseek-flash'});
-  if(path==='/modules/dashboard/snapshot')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
+  if(path==='/modules/academic-assistant/files/settings'){
+   if(method==='PUT')state.files={...state.files,...JSON.parse(options.body),revision:'v2'};
+   return json(state.files);
+  }
+  if(path.startsWith('/modules/academic-assistant/files/approvals/')){
+   const decision=JSON.parse(options.body);state.decisions.push(decision);state.fileResolve?.(decision.allow);return json({decided:true});
+  }
+  if(path==='/modules/dashboard/snapshot'||path==='/modules/dashboard/summary')return json({status:'ready',updated_at:'2026-10-17T00:00:00+08:00',stats:{courses:6,pending:3,materials:24,ready_sources:1},upcoming:[],notifications:[],agenda:[],data:{issues:[],metadata:{source_metadata:{blackboard:{status:"ready"}}}}});
   if(path==='/modules/academic-assistant/presets')return json({items:[{label:'安排作业',prompt:'安排合成作业'},{label:'准备复习',prompt:'准备合成复习'}]});
   if(path==='/modules/academic-assistant/profile'){if(method==='PUT')state.profile=JSON.parse(options.body);return json({profile:state.profile,academic:{}});}
   if(path==='/modules/academic-assistant/chat')return json({messages:state.messages,conversation_id:state.active_id,owner:'synthetic-owner'});
@@ -45,6 +54,12 @@ function fixture(modules,categories, themeCatalog){
     (async()=>{
      emit({type:'activity',steps:[{name:'document',label:'读取作业或课件页码',status:'running'}]});await new Promise(r=>setTimeout(r,200));
      if(mode==='error'){emit({type:'error',status:409,detail:'合成来源暂未连接，请重新连接。'});closed=true;controller.close();return;}
+     if(mode==='approval'){
+      emit({type:'file-approval',approval:{id:'synthetic-file',action:'write',path:'C:/外部资料/复习计划.md',content:'<script>合成计划</script>',account_revision:'synthetic-owner'}});
+      const allowed=await new Promise(resolve=>{state.fileResolve=resolve;});
+      emit({type:'file-approval-closed',id:'synthetic-file'});
+      if(allowed)emit({type:'change',change:{applied:true,domain:'files',action:'write',after:{title:'复习计划.md',path:'C:/外部资料/复习计划.md'}}});
+     }
      emit({type:'reset'});emit({type:'delta',text});
      await new Promise(r=>setTimeout(r,mode==='hold'?4000:1200));if(closed)return;
      if(mode==='truncated'){closed=true;controller.close();return;}
@@ -72,13 +87,18 @@ try{
  await evaluate(`window.waitFor=async condition=>{for(let i=0;i<160;i++){if(condition())return;await new Promise(r=>setTimeout(r,50));}throw new Error('UI condition timed out');};waitFor(()=>document.querySelector('[data-chat-form]'))`);
  await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`!document.querySelector('.module-zone').classList.contains('module-focus')`),'Homepage starts with deadlines visible');
+ await evaluate(`document.querySelector('[data-open-assistant]').focus()`);
+ await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
+ await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+ assert(await evaluate(`document.activeElement===document.querySelector('#study-message') && document.querySelector('.study-chat-card').classList.contains('module-focused')`),'Keyboard entry opens chat and focuses the composer');
  assert(await evaluate(`document.querySelector('[data-history-toggle]>span').textContent==='历史对话' && getComputedStyle(document.querySelector('[data-history-toggle]>span')).display!=='none'`),'History has a visible text label');
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelector('[data-history-toggle]').getAttribute('aria-expanded')==='true')`);
  assert(await evaluate(`document.activeElement.matches('[data-history-search]')`),'History opens at search');
  await evaluate(`document.querySelector('[data-history-close]').click()`);
  assert(await evaluate(`document.activeElement.matches('[data-history-toggle]')`),'Closing history returns focus to its entry');
  await evaluate(`document.querySelector('[data-home]').click()`);
- await evaluate(`document.querySelector('[data-home]').click();true`);
+ assert(await evaluate(`document.activeElement===document.querySelector('[data-open-assistant]') && !document.querySelector('.module-zone').classList.contains('module-focus')`),'Returning to priorities restores launcher focus');
+ await evaluate(`document.querySelector('[data-open-assistant]').click();true`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'desktop input visible');
  await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.study-prompts').open=true;document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
  await evaluate(`waitFor(()=>document.querySelector('.study-streaming h2'))`);
@@ -136,5 +156,23 @@ try{
  await evaluate(`waitFor(()=>document.querySelector('#study-message').disabled).then(()=>waitFor(()=>!document.querySelector('#study-message').disabled))`);
  assert.equal(await evaluate(`document.querySelectorAll('.study-message').length`),6,'Enter sends once after returning to the homepage');
  assert.deepEqual(await evaluate(`chatCheck.unexpected`),[]);assert.deepEqual(errors,[]);
- console.log('PASS chat UI: real progressive rendering, Markdown security, grouped pages, copy, reading position, desktop/mobile input visibility, stop, retry, truncated stream, AI settings and cleanup');
+ await evaluate(`document.querySelector('[data-file-settings]').click();waitFor(()=>document.querySelector('.study-files-settings'))`);
+ assert.equal(await evaluate(`document.querySelector('.study-files-settings [name=mode]').value`),'workspace');
+ await evaluate(`document.querySelector('.study-files-settings [name=mode]').value='full';document.querySelector('.study-files-settings [name=mode]').dispatchEvent(new Event('change'));document.querySelector('.study-files-settings').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
+ assert.equal(await evaluate(`chatCheck.files.mode`),'full');
+ await evaluate(`document.querySelector('[data-file-settings]').click();waitFor(()=>document.querySelector('.study-files-settings'))`);
+ assert.equal(await evaluate(`document.querySelector('.study-files-settings [name=mode]').value`),'full');
+ await evaluate(`document.querySelector('.study-files-settings [name=mode]').value='workspace';document.querySelector('.study-files-settings').requestSubmit();waitFor(()=>!document.querySelector('dialog[open]'))`);
+ for(const allow of [false,true]){
+  await evaluate(`chatCheck.mode='approval';document.querySelector('#study-message').value='把计划保存到外部文件';document.querySelector('[data-chat-form]').requestSubmit();waitFor(()=>document.querySelector('[data-file-approval]'))`);
+  assert(await evaluate(`document.querySelector('[data-file-approval] code').textContent.includes('外部资料') && !document.querySelector('[data-file-approval] script') && document.querySelector('[data-file-approval] pre').textContent.includes('<script>')`),'Approval shows escaped exact path and content');
+  await command('Emulation.setDeviceMetricsOverride',{width:375,height:812,deviceScaleFactor:1,mobile:true});
+  assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Approval fits mobile width');
+  await writeFile(resolve('.codex/tmp/chat-file-approval.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  await evaluate(`document.querySelector('[data-${allow?'allow':'deny'}]').click();waitFor(()=>!document.querySelector('#study-message').disabled)`);
+  assert.equal(await evaluate(`chatCheck.decisions.at(-1).allow`),allow);
+  assert(await evaluate(`!document.querySelector('[data-file-approval]')`));
+ }
+ assert.deepEqual(await evaluate(`chatCheck.unexpected`),[]);assert.deepEqual(errors,[]);
+ console.log('PASS chat UI: file settings/full access, approval previews/approve/deny, page restoration, progressive rendering, Markdown security, mobile, stop, retry and cleanup');
 }finally{socket?.close();browser('close');}

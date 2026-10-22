@@ -5,9 +5,12 @@ import {sendOnEnter, fitComposer} from './composer.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
 import {showReaderSettings} from './reader-settings.js';
+import {showFileSettings, renderApprovals} from './files.js';
 import {copyTopic, studyCopyText} from './copy-context.js';
 
 const icons = {
+  sparkle:'<path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z"/>',
+  arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
   history:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16m4-10h4m-4 4h4"/>',
   new:'<path d="M12 5v14M5 12h14"/>',
   send:'<path d="m6 12 6-6 6 6M12 6v13"/>',
@@ -39,12 +42,17 @@ export async function mount(container, context) {
   context.ui.bindMenus(container,context.signal);
   card.classList.add('study-chat-card');
   title.hidden = true;
+  const launcherMarkup = `<button class="study-launcher" data-open-assistant data-enter-study type="button" aria-label="开始 AI 对话，学习助手">
+    <span class="study-launcher-icon">${icon('sparkle')}</span>
+    <span class="study-launcher-copy"><span class="study-launcher-title">学习助手 <span class="study-launcher-badge">AI</span></span><span class="study-launcher-description">解答学习问题 · 查找课程资料 · 规划待办</span></span>
+    <span class="study-launcher-cta">开始 AI 对话 ${icon('arrow')}</span>
+  </button>`;
   container.innerHTML = `
     <header class="study-header"><div class="study-heading"><button class="text-button study-history-toggle" data-history-toggle type="button" aria-controls="study-history" aria-expanded="false">${icon('history')}<span>历史对话</span></button><div><h2 data-chat-title>学习助手</h2><a class="study-model" href="#settings?tab=ai" aria-label="AI 设置，当前模型 ${e(ai.model)}">${e(ai.model)} <span aria-hidden="true">⌄</span></a></div></div>
       <div class="study-actions"><button class="text-button study-home" data-home type="button">校园概览</button><button class="study-new-button" data-new-chat type="button">${icon('new')}<span>新对话</span></button><details class="study-menu" data-action-menu><summary class="study-icon-button" aria-label="对话操作" title="对话操作">${icon('more')}</summary><div><button class="text-button" data-profile-toggle type="button" aria-expanded="false">学习档案</button><button class="text-button danger-text" data-clear-chat type="button">删除当前对话</button></div></details></div>
     </header>
     <p class="study-opening-line" role="note" aria-label="开场白">${e(openingLine())}</p>
-    ${theme.renderSlot('assistant.home',{presets:presets.items},'')}
+    ${theme.renderSlot('assistant.home',{presets:presets.items},launcherMarkup)}
     <div class="study-layout"><aside id="study-history" class="study-history" aria-label="历史对话" hidden><div class="study-profile-heading"><h3>历史对话</h3><button class="study-icon-button" data-history-close type="button" aria-label="关闭历史对话">${icon('close')}</button></div><input type="search" data-history-search aria-label="搜索对话" placeholder="搜索对话"><div class="study-history-tabs"><button class="text-button" data-history-filter="active" type="button">进行中</button><button class="text-button" data-history-filter="archived" type="button">已归档</button></div><div data-conversations></div></aside><section class="study-conversation" aria-label="与学习助手对话">
       <div class="study-scroll"><div class="study-messages" data-messages role="log" aria-label="聊天记录" aria-live="off" tabindex="0"></div><button class="button button-secondary study-latest" data-latest type="button" hidden>回到最新回复 ↓</button></div>
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
@@ -87,6 +95,9 @@ export async function mount(container, context) {
   const readerButton=document.createElement('button');readerButton.type='button';readerButton.className='text-button';readerButton.textContent='资料读取';
   container.querySelector('.study-menu>div').append(readerButton);
   readerButton.onclick=context.ui.safeAction(readerButton,()=>showReaderSettings(context));
+  const filesButton=document.createElement('button');filesButton.type='button';filesButton.className='text-button';filesButton.textContent='本地文件访问';filesButton.dataset.fileSettings='';
+  container.querySelector('.study-menu>div').append(filesButton);
+  filesButton.onclick=context.ui.safeAction(filesButton,()=>showFileSettings(context));
   input.value = drafts.get(activeId || '') || '';
   saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
   const retry = container.querySelector('[data-retry]');
@@ -103,10 +114,14 @@ export async function mount(container, context) {
   search.addEventListener('input',drawConversations,{signal:context.signal});
   retry.onclick = () => form.requestSubmit();
   function focusChat(active) {context.focus(active);const home=container.querySelector('[data-home]');home.setAttribute('aria-pressed',String(!active));home.textContent=active?'查看今日待办':'进入对话';}
-  container.querySelector('[data-home]').onclick = event => focusChat(event.currentTarget.getAttribute('aria-pressed') === 'true');
+  container.querySelector('[data-home]').onclick = event => {
+    const active = event.currentTarget.getAttribute('aria-pressed') === 'true';
+    focusChat(active);
+    (active ? (busy || archived ? messages : input) : container.querySelector('[data-enter-study]'))?.focus({preventScroll:true});
+  };
   container.querySelectorAll('[data-enter-study]').forEach(button => button.addEventListener('click',() => {
     if (context.signal.aborted) return;
-    focusChat(true);input.focus({preventScroll:true});
+    focusChat(true);(busy || archived ? messages : input).focus({preventScroll:true});
   },{signal:context.signal}));
   function showHistory(open) {historyPanel.hidden=!open;historyScrim.hidden=!open;historyToggle.setAttribute('aria-expanded',String(open));updateDrawer();if(open) {focusChat(true);showProfile(false);search.focus({preventScroll:true});}}
   historyToggle.onclick = context.ui.safeAction(historyToggle,async () => {showHistory(historyPanel.hidden);if(!historyPanel.hidden) await refreshConversations();});
@@ -238,6 +253,7 @@ export async function mount(container, context) {
     if (displayedTurn !== value) {
       displayedTurn=value;drawStudyCopy(value.message);messages.replaceChildren();value.messages.forEach(append);
       pending=append({role:'user',text:value.message});draft=append({role:'assistant',text:''});
+      const approvals=document.createElement('div');approvals.dataset.fileApprovals='';draft.prepend(approvals);
       draft.querySelector('.study-text').before(progress);draft.classList.add('study-streaming');
       input.value=value.message;retry.hidden=true;errorNode.textContent='';showProfile(false);
       container.querySelector('[data-announcement]').textContent='';
@@ -246,8 +262,9 @@ export async function mount(container, context) {
     busy=value.status==='running';
     stop.disabled=value.controller.signal.aborted;syncControls();
     if (busy) {
+      renderApprovals(draft.querySelector('[data-file-approvals]'),value.approvals || [],context);
       const steps=value.steps;
-      progressText.textContent=value.text ? '正在撰写回答…' : steps.length ? steps.at(-1).label+(steps.at(-1).status==='running'?'…':' · 已完成') : '正在准备学习工具…';
+      progressText.textContent=value.approvals?.length ? '等待文件访问审批…' : value.text ? '正在撰写回答…' : steps.length ? steps.at(-1).label+(steps.at(-1).status==='running'?'…':' · 已完成') : '正在准备学习工具…';
       container.querySelector('[data-steps]').innerHTML=steps.map(step=>'<li>'+e(step.label)+'<span>'+({running:'处理中',done:'完成',error:'需补充资料'})[step.status]+'</span></li>').join('');
       if (!frame) frame=requestAnimationFrame(()=>{
         frame=null;if(context.signal.aborted)return;

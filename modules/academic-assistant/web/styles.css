@@ -9,6 +9,18 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .module-focused .academic-chat { min-height:0; }
 .study-chat-card:not(.module-focused) .academic-chat { height:auto; min-height:0; }
 .study-chat-card:not(.module-focused) .study-layout { display:none; }
+.study-chat-card:not(.module-focused):has(.study-launcher) .study-header { display:none; }
+.study-chat-card.module-focused .study-launcher { display:none; }
+.academic-chat .study-launcher { display:flex; align-items:center; gap:18px; width:100%; min-height:108px; padding:22px 24px; border:1px solid color-mix(in srgb,var(--link) 35%,var(--border)); border-radius:12px; background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 20%,var(--paper)),var(--paper)); color:var(--text); text-align:left; cursor:pointer; transition:border-color .16s,box-shadow .16s; }
+.academic-chat .study-launcher:hover { border-color:var(--link); box-shadow:0 4px 18px color-mix(in srgb,var(--link) 14%,transparent); }
+.academic-chat .study-launcher:focus-visible { outline:3px solid var(--link); outline-offset:3px; }
+.academic-chat .study-launcher-icon { display:grid; place-items:center; flex:none; width:52px; height:52px; border:1px solid color-mix(in srgb,var(--link) 22%,transparent); border-radius:16px; background:var(--paper); color:var(--link); }
+.academic-chat .study-launcher-icon svg { width:28px; height:28px; }
+.academic-chat .study-launcher-copy { display:grid; gap:5px; min-width:0; flex:1; }
+.academic-chat .study-launcher-title { display:flex; align-items:center; gap:9px; font-size:20px; font-weight:700; line-height:1.4; }
+.academic-chat .study-launcher-badge { padding:2px 6px; border:1px solid color-mix(in srgb,var(--link) 25%,transparent); border-radius:5px; color:var(--link); font-size:11px; letter-spacing:.06em; }
+.academic-chat .study-launcher-description { color:var(--muted); font-size:13px; line-height:1.6; }
+.academic-chat .study-launcher-cta { display:inline-flex; align-items:center; justify-content:center; gap:12px; flex:none; min-height:46px; padding:10px 18px; border-radius:9px; background:var(--link); color:var(--nord6); font-size:14px; font-weight:600; }
 .academic-chat button,.academic-chat summary { -webkit-tap-highlight-color:transparent; }
 .academic-chat svg { width:20px; height:20px; flex:none; }
 .academic-chat .text-button { min-height:44px; font-weight:400; }
@@ -148,6 +160,12 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
   .academic-chat .study-header { min-height:64px; padding:8px 16px; }
 }
 @media (max-width:600px) {
+  .academic-chat .study-launcher { display:grid; grid-template-columns:40px minmax(0,1fr); gap:10px 12px; min-height:0; padding:14px; }
+  .academic-chat .study-launcher-icon { width:40px; height:40px; border-radius:12px; }
+  .academic-chat .study-launcher-icon svg { width:24px; height:24px; }
+  .academic-chat .study-launcher-title { font-size:17px; }
+  .academic-chat .study-launcher-description { font-size:12px; }
+  .academic-chat .study-launcher-cta { grid-column:1/-1; min-height:44px; padding:8px 14px; }
   .academic-chat { min-height:480px; }.module-focused .academic-chat { min-height:0; }
   .academic-chat .study-header { gap:4px; padding:6px 10px; }
   .academic-chat .study-heading { gap:4px; }.academic-chat .study-header h2 { max-width:140px; font-size:14px; }
@@ -182,3 +200,9 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
  .academic-chat .study-new-button { width:auto; min-height:36px; padding:0 10px; border:1px solid var(--border); }.academic-chat .study-new-button span { position:static; width:auto; height:auto; overflow:visible; clip-path:none; }.academic-chat .study-icon-button { width:36px; height:36px; }
 }
 @media(pointer:coarse) { .academic-chat .study-new-button,.academic-chat .text-button { min-height:44px; }.academic-chat .study-icon-button { width:44px; height:44px; } }
+
+.study-file-approval { margin:12px 0; padding:16px; border:1px solid var(--link); border-radius:12px; background:var(--paper); overflow-wrap:anywhere; }
+.study-file-approval code { display:block; white-space:pre-wrap; overflow-wrap:anywhere; }
+.study-file-approval pre { max-height:200px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.study-file-approval p,.study-files-settings p { font-size:13px; line-height:1.7; }
+.study-files-settings input { min-width:0; width:100%; }

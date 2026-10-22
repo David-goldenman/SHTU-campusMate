@@ -45,7 +45,15 @@ async def check(root):
             ids = [item["id"] for item in installed]
 
             async def toggle(module_id, enabled):
-                response = await client.put("/api/v1/modules/" + module_id, json={"enabled": enabled})
+                # Real module pollers may read a peer during this lifecycle sweep.
+                # Preserve the busy contract; give that request a bounded time to finish.
+                deadline = asyncio.get_running_loop().time() + 3
+                while True:
+                    response = await client.put("/api/v1/modules/" + module_id, json={"enabled": enabled})
+                    busy = response.status_code == 409 and response.json().get('detail') == '模块仍有请求正在执行，请完成后重试。'
+                    if not busy or asyncio.get_running_loop().time() >= deadline:
+                        break
+                    await asyncio.sleep(.02)
                 assert response.status_code == 200, (module_id, response.text)
                 result = next(item for item in response.json()["modules"] if item["id"] == module_id)
                 assert result["status"] == ("ready" if enabled else "disabled"), result

@@ -83,3 +83,4 @@
   .campus-overview .deadline-stamp { display:grid; grid-template-columns:auto 1fr; align-items:baseline; gap:2px 12px; padding-left:0; border-left:0; min-width:0; }
   .campus-overview .deadline-stamp .deadline-date { grid-column:1/-1; }
 }
+.campus-overview .overview-data-note { margin:0 0 16px; padding:10px 12px; border-left:3px solid var(--nord13); background:var(--surface-low,var(--bg)); color:var(--text); font-size:13px; line-height:1.6; }

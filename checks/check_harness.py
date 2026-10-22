@@ -52,12 +52,16 @@ async def check(directory):
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            if self.path in {'/tools/schedule-edit', '/tools/work-edit', '/tools/capabilities'}:
+            if self.path in {'/tools/schedule-edit', '/tools/work-edit', '/tools/capabilities', '/tools/assignment-handling', '/tools/file-operation'}:
                 assert self.headers.get('Authorization') == 'Bearer synthetic-tool-token'
                 if self.path.endswith('schedule-edit'):
                     assert body['action'] == 'create' and body['event']['event_type'] == 'tutorial' and body['event']['period_start'] == 3
                 if self.path.endswith('work-edit'):
                     assert body['item']['kind'] == 'reminder' and body['item']['due_at'].endswith('+08:00')
+                if self.path.endswith('assignment-handling'):
+                    assert body['record_id']=='synthetic:assignment' and body['reason']=='team_submitted'
+                if self.path.endswith('file-operation'):
+                    assert body=={'action':'write','path':'notes/plan.md','content':'合成学习计划'}
                 self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
                 self.wfile.write(b'{"applied":true,"items":[]}')
                 return
@@ -93,6 +97,8 @@ async def check(directory):
                         ('study_schedule_edit', {'action':'create','quote':'添加合成习题课','event':{'title':'合成习题课','event_type':'tutorial','date':'2026-10-20','period_start':3,'period_end':4}}),
                         ('study_work_edit', {'action':'create','quote':'提醒我合成复习','item':{'kind':'reminder','title':'合成复习','due_at':'2026-10-20T19:00:00+08:00'}}),
                         ('study_capabilities', {}),
+                        ('study_assignment_handling', {'record_id':'synthetic:assignment','status':'waived','reason':'team_submitted','quote':'合成作业队友已提交，标记无需我提交'}),
+                        ('study_files', {'action':'write','path':'notes/plan.md','content':'合成学习计划'}),
                     ]:
                         calls.append({'index':len(calls),'id':name,'type':'function','function':{'name':name,'arguments':json.dumps(arguments)}})
                 if extension:
@@ -203,7 +209,7 @@ async def check(directory):
                     assert result['content'] == '已读取合成作业' and result['tools'][0]['is_error'] is False
                     assert any(tool['name'] == 'skill' and not tool['is_error'] for tool in result['tools'])
                     assert all(not tool['is_error'] for tool in result['tools']), result
-                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish', 'study_capabilities', 'study_schedule_edit', 'study_work_edit'}
+                    assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == {'skill', 'study_query', 'study_search', 'study_document', 'study_course_search', 'study_remember', 'study_navigate', 'study_attend', 'study_finish', 'study_capabilities', 'study_schedule_edit', 'study_work_edit', 'study_assignment_handling', 'study_files'}
                     finish_schema = next(tool['function']['parameters'] for tool in requests[-1][0]['tools'] if tool['function']['name'] == 'study_finish')
                     assert 'text' not in finish_schema['properties'], 'The model must write its body in the final assistant message'
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])

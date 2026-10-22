@@ -7,6 +7,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 from fastapi import FastAPI
@@ -199,7 +200,7 @@ async def check_schedule():
         disabled = False
 
         async def api(name, path="/snapshot", **options):
-            if name == "courses":
+            if name in {"courses", "elrc", "assignments"}:
                 return httpx.Response(404)
             if changed:
                 context.auth.revision = "synthetic-account-two"
@@ -279,7 +280,10 @@ async def check_schedule():
                 assert anchor['source'] == 'manual' and anchor['week_one'] == '2026-10-19'
                 saved = context.store.read('snapshot')
                 context.store.write('snapshot', {**saved, 'data': {**saved['data'], 'metadata': {**saved['data']['metadata'], 'semester': '2026-2027学年春季', 'semester_id': '92'}}})
-                spring = (await client.get('/calendar-settings')).json()
+                # This fixture moves to spring to check semester-specific settings.
+                # Move the semester clock with it, rather than triggering a rollover refresh.
+                with patch.object(sys.modules[module.__name__ + '.persistence'], 'expected_semester', return_value='2026-spring'):
+                    spring = (await client.get('/calendar-settings')).json()
                 assert spring['source'] == 'school' and spring['week_one'] == '2027-02-15'
                 context.store.write('snapshot', saved)
                 assert (await client.get('/calendar-settings')).json()['week_one'] == '2026-10-19'
@@ -301,7 +305,7 @@ async def check_schedule():
                 assert (await client.delete('/calendar-settings')).json()['week_one'] == '2026-09-14'
                 disabled = True
                 schedule = (await client.get("/schedule")).json()
-                assert len([item for item in schedule['data']['events'] if item['source'] != 'calendar']) == 2 and "教务系统" in schedule["data"]["issues"][0]
+                assert len([item for item in schedule['data']['events'] if item['source'] != 'calendar']) == 2 and any("教务系统" in issue for issue in schedule["data"]["issues"])
                 synced = await client.post("/schedule/sync")
                 assert synced.status_code == 202 and set(synced.json()["sources"]) == {"timetable", "blackboard", "gradescope", "ecourse", "eams"}
                 assert synced.json()["sources"]["eams"]["status"] == "unavailable"

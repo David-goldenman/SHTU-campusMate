@@ -16,10 +16,13 @@ function browser(action) {
 }
 function fixture(modules,categories, themeCatalog) {
   const original=window.fetch.bind(window);
-  const state=window.themeCheck={modules,categories,empty:false,tabs:false,unexpected:[]};
+  const state=window.themeCheck={modules,categories,empty:false,tabs:false,unexpected:[],coverage:'ready',dues:{},deadlineWrites:[],handling:{},handlingWrites:[]};
   const due=hours=>new Date(Date.now()+hours*3600000).toISOString();
   const assignment=(id,title,hours,course)=>({id,title,course_title:course,group_id:course,source:'blackboard',category:hours<0?'late':'pending',submission_status:'not_submitted',availability:'open',actionable:true,submitted:false,current:true,due_at:hours==null?null:due(hours),url:'https://example.invalid/assignment'});
   const pending=[assignment('overdue','概率论习题 03',-27,'概率论与数理统计'),assignment('urgent','线性代数作业 04',2,'线性代数'),assignment('long','数据科学与金融科技概论：案例分析报告与课堂展示材料',20,'数据科学与金融科技概论'),assignment('later','程序设计 Project 2',96,'程序设计'),assignment('undated','实验报告：测量误差分析',null,'大学物理实验')];
+  pending.push(...[2,-2].map((hours,index)=>({...assignment('estimate-'+index,'只有估计时间的作业 '+index,hours,'合成课程'),category:'pending',due_default:true,due_source:'default'})));
+  const items=()=>pending.map(item=>state.dues[item.id] ? {...item,due_at:state.dues[item.id],due_source:'manual',due_default:false} : {...item,needs_review:state.coverage==='partial'}).map(item=>({...item,handling:state.handling[item.id]||{},reminder_suppressed:state.handling[item.id]?.status==='waived',category:state.handling[item.id]?.status==='waived'?'waived':item.category}));
+  const coverage=()=>({status:state.coverage,sources:[{id:'blackboard',status:state.coverage==='partial'?'cached':'ready',updated_at:'2026-10-20T00:00:00Z'},{id:'gradescope',status:'not_connected',updated_at:null},{id:'ecourse',status:'disabled',updated_at:null}]});
   const submitted={...assignment('submitted','已提交的历史作业',-96,'线性代数'),submitted:true,category:'completed',submission_status:'submitted'};
   const response=value=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
   window.fetch=async(url,options={})=>{
@@ -40,15 +43,26 @@ function fixture(modules,categories, themeCatalog) {
     if(path==='/modules/academic-assistant/profile')return response({profile:{},academic:{}});
     if(path==='/modules/academic-assistant/presets')return response({items:[{label:'本周作业',message:'合成问题'}]});
     if(path==='/modules/dashboard/sync')return response({status:'ready'});
-    if(path==='/modules/assignments/snapshot')return response({status:'ready',data:{assignments:[...pending,submitted],issues:[]},pending});
+    if(path==='/modules/assignments/sync')return response({status:'ready'});
+    if(path==='/modules/assignments/deadline') {
+      const body=JSON.parse(options.body);state.deadlineWrites.push(body);
+      if(body.due_at===null)delete state.dues[body.assignment_id];else state.dues[body.assignment_id]=body.due_at;
+      return response({account_revision:'synthetic-account',due_overrides:state.dues});
+    }
+    if(path==='/modules/assignments/handling') {
+      const body=JSON.parse(options.body);state.handlingWrites.push(body);
+      state.handling[body.assignment_id]={status:body.status,reason:body.reason,note:body.note,revision:String(state.handlingWrites.length)};
+      return response({handling:state.handling[body.assignment_id],account_revision:'synthetic-account'});
+    }
+    if(path==='/modules/assignments/snapshot')return response({status:'ready',data:{assignments:[...items(),submitted],issues:[]},pending:items().filter(item=>!item.reminder_suppressed),account_revision:'synthetic-account',coverage:coverage()});
     if(path==='/modules/assignments/detail')return response({assignment:{title:'合成作业题目',body_text:'这是一份用于检查详情入口的合成题干。'},materials:[]});
-    if(path==='/modules/dashboard/snapshot') {
+    if(path==='/modules/dashboard/snapshot'||path==='/modules/dashboard/summary') {
       const today=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
       const source_metadata=Object.fromEntries(['timetable','blackboard','gradescope','piazza','elrc','mail'].map(id=>[id,{status:state.empty?'not_connected':'ready'}]));
       return response({status:'ready',updated_at:null,message:state.empty?'应保留的独立服务提示':'',
-        stats:{courses:12,pending:5,materials:27,ready_sources:6},
+        stats:{courses:12,pending:state.coverage==='unavailable'?null:pending.length,materials:27,ready_sources:6},assignment_coverage:coverage(),
         data:{courses:[],metadata:{source_metadata},issues:state.empty?['piazza：未连接','blackboard: 未连接','独立模块故障必须保留']:[]},
-        pending:state.empty?[]:pending,upcoming:state.empty?[]:pending.filter(item=>item.due_at),
+        pending:state.empty||state.coverage==='unavailable'?[]:items(),upcoming:state.empty?[]:items().filter(item=>item.due_at&&!item.due_default),
         notifications:[],agenda:state.empty?[]:[{date:today,events:[{title:'合成课程日程',event_type:'class',at:today+'T17:00:00+08:00',location:'教学中心 201'},{title:'已取消课程不应占据今日安排',event_type:'class',status:'cancel',at:today+'T18:00:00+08:00'}]}]});
     }
     state.unexpected.push(path);return new Response(JSON.stringify({detail:'Unexpected synthetic API: '+path}),{status:400,headers:{'Content-Type':'application/json'}});
@@ -103,6 +117,7 @@ try {
   assert(await evaluate("!document.querySelector('.overview-card').closest('.module-zone').classList.contains('module-focus')"),'Homepage defaults to visible priorities');
   assert(await evaluate("!document.querySelector('.overview-task').closest('details')"),'Deadlines never start collapsed');
   assert(await evaluate("!document.querySelector('.overview-agenda').textContent.includes('已取消课程不应')"),'Inactive lessons stay out of the actionable agenda');
+  assert(await evaluate("document.querySelector('.overview-undated').textContent.includes('3 项') && !document.querySelector('.overview-task-list').textContent.includes('只有估计时间')"),'Estimated dates remain undated on the homepage');
   await capture('ui-local-populated',1440,1060);
   assert(await evaluate("document.querySelector('.overview-task').getBoundingClientRect().bottom<innerHeight"),'First deadline is visible without scrolling on desktop');
   await capture('ui-priorities-mobile',375,812);
@@ -120,7 +135,33 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),1);
   assert(await evaluate("!document.querySelector('[data-pending]').textContent.includes('已提交的历史作业')"),'Submitted work never becomes urgent or overdue');
   await evaluate("document.querySelector('.assignment-board [data-view=undated]').click()");
-  assert(await evaluate("document.querySelector('[data-pending] time').textContent==='待定'"),'Unknown deadlines stay explicit');
+  assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),3,'Unknown and estimated deadlines share the undated filter');
+  assert(await evaluate("document.querySelector('[data-assignment=undated] time').textContent==='待定'"),'Unknown deadlines stay explicit');
+  await evaluate("document.querySelector('[data-assignment=undated] [data-due-toggle]').click();document.querySelector('[data-assignment=undated] [data-due-input]').value='2030-10-21T20:15';document.querySelector('[data-assignment=undated] [data-due-save]').click()");
+  await wait("themeCheck.deadlineWrites.length===1 && !document.querySelector('[data-assignment=undated]')");
+  assert.deepEqual(await evaluate("themeCheck.deadlineWrites[0]"),{assignment_id:'undated',due_at:'2030-10-21T20:15:00+08:00',account_revision:'synthetic-account'});
+  await evaluate("document.querySelector('.assignment-board [data-view=all]').click();document.querySelector('[data-assignment=undated] [data-due-toggle]').click();document.querySelector('[data-assignment=undated] [data-due-reset]').click()");
+  await wait("themeCheck.deadlineWrites.length===2 && document.querySelector('[data-assignment=undated] time')?.textContent==='待定'");
+  await evaluate("document.querySelector('[data-assignment=urgent] [data-handling-open]').click()");
+  await wait("document.querySelector('.assignment-handling-form')");
+  await evaluate("document.querySelector('[data-handling-cancel]').click()");
+  assert.equal(await evaluate('themeCheck.handlingWrites.length'),0,'Cancelling makes no change');
+  await evaluate("document.querySelector('[data-assignment=urgent] [data-handling-open]').click();document.querySelector('.assignment-handling-form [name=note]').value='<script>合成队友已交</script>'");
+  await capture('ui-handling-dialog-mobile',375,812);
+  await evaluate("document.querySelector('[data-handling-save]').click()");
+  await wait("themeCheck.handlingWrites.length===1 && document.querySelector('[data-section=waived] [data-handling-restore]')");
+  assert.deepEqual(await evaluate('themeCheck.handlingWrites[0]'),{assignment_id:'urgent',status:'waived',reason:'team_submitted',note:'<script>合成队友已交</script>',expected_revision:'',account_revision:'synthetic-account'});
+  assert(await evaluate("document.querySelector('[data-section=waived]').textContent.includes('原站：未提交') && document.querySelector('.assignment-handling-note').textContent.includes('<script>') && !document.querySelector('.assignment-handling-note script')"),'Local reasons are escaped and never change source submission status');
+  await capture('ui-handling-saved-mobile',375,812);
+  await evaluate("document.querySelector('[data-section-filter=pending]').click()");
+  assert(await evaluate("!document.querySelector('[data-assignment=urgent]')"),'Waived work leaves the pending view');
+  await evaluate("location.hash='dashboard'");await wait("document.querySelector('.overview-stats')");
+  await evaluate("location.hash='assignments'");await wait("document.querySelector('[data-section-filter=waived]')");
+  await evaluate("document.querySelector('[data-section-filter=waived]').click();document.querySelector('[data-handling-restore]').click()");
+  await wait("themeCheck.handlingWrites.length===2 && !document.querySelector('[data-section=waived] [data-assignment]')");
+  assert.equal(await evaluate('themeCheck.handlingWrites[1].expected_revision'),'1');
+  await evaluate("document.querySelector('[data-section-filter=pending]').click()");
+  assert(await evaluate("document.querySelector('[data-assignment=urgent] [data-handling-open]')"),'Restoration returns the original pending card');
   await evaluate("document.querySelector('.assignment-board [data-view=all]').click();const search=document.querySelector('[data-search]');search.value='线性代数';search.dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),1,'Search keeps the pending scope');
   await evaluate("document.querySelector('[data-pending] [data-detail]').click()");
@@ -130,6 +171,16 @@ try {
   assert(await evaluate("!document.querySelector('link[href*=\"/assignments/\"]')"),'Assignment styles release on navigation');
   await capture('ui-priorities-return',1440,1060);
   assert(await evaluate("document.querySelectorAll('.overview-stats a').length===4 && !document.querySelector('.overview-sources').open"),'Secondary statistics stay available in a disclosure');
+  await evaluate("themeCheck.coverage='unavailable';document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("document.querySelector('.overview-data-note')?.textContent.includes('暂不可用')");
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('.overview-attention strong')].map(item=>item.firstChild.textContent)"),['—','—','—'],'Unavailable assignments never look like zero work');
+  await capture('ui-assignments-unavailable',375,812);
+  await evaluate("themeCheck.coverage='partial';document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("document.querySelector('.overview-data-note')?.textContent.includes('已知待办')");
+  assert(await evaluate("document.querySelector('.overview-task').textContent.includes('状态待核实')"),'Cached work remains visible with its uncertainty');
+  await capture('ui-assignments-cached',1440,1060);
+  await evaluate("themeCheck.coverage='ready';document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+  await wait("!document.querySelector('.overview-data-note')");
   await evaluate("document.documentElement.removeAttribute('data-ui-theme');document.documentElement.removeAttribute('data-art-theme')");
   assert.equal(await evaluate("getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width').trim()"),'216px','Team style is available without theme override');
   await evaluate("document.documentElement.dataset.uiTheme='nord-refined'");
@@ -163,7 +214,7 @@ try {
   assert.deepEqual(await evaluate('themeCheck.unexpected'),[]);
   await evaluate("location.hash='settings?tab=appearance'");
   await wait("document.querySelectorAll('[name=art-theme]').length>=3");
-  for(const id of ['observatory','star-notes','default']) {
+  for(const id of ['observatory','star-notes','arknights','default']) {
     await evaluate(`document.querySelector('[name="art-theme"][value="${id}"]').click()`);
     await wait(`document.documentElement?.dataset.theme==='${id}' && document.querySelector('[name="art-theme"][value="${id}"]')?.checked`);
     await command('Page.reload');
@@ -174,7 +225,24 @@ try {
     await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1060,deviceScaleFactor:1,mobile:false});
     await evaluate("location.hash='dashboard'");
     await wait("document.querySelector('.study-welcome')");
-    assert.equal(await evaluate("!!document.querySelector('.study-welcome-illustration')"),id!=='default','Theme owns the welcome presentation');
+    assert.equal(await evaluate("!!document.querySelector('.study-welcome-illustration')"),['observatory','star-notes'].includes(id),'Theme owns the welcome presentation');
+    await evaluate("themeCheck.coverage='unavailable';document.querySelector('[data-module-id=dashboard] [data-sync]').click()");
+    await wait("document.querySelector('.overview-data-note')?.textContent.includes('暂不可用')");
+    assert.equal(await evaluate("document.querySelector('.overview-attention a:last-child strong').firstChild.textContent"),'—','Every theme preserves unknown counts');
+    if(id==='arknights')assert.equal(await evaluate("document.querySelector('[data-ark-metric=pending]').textContent"),'—','PRTS summary preserves unknown counts');
+    await capture('ui-reliability-'+id,375,812);
+    await evaluate("themeCheck.coverage='partial';location.hash='assignments'");
+    await wait("document.querySelector('.assignment-coverage[data-coverage=partial]')");
+    assert(await evaluate("document.querySelector('[data-assignment=undated] [data-due-toggle]') && document.querySelector('[data-assignment=urgent] .assignment-review')"),'Every theme retains missing-date editing and stale status');
+    await capture('ui-reliability-'+id+'-assignments',375,812);
+    await evaluate("document.querySelector('[data-assignment=urgent] [data-handling-open]').click()");
+    await capture('ui-handling-'+id,375,812);
+    await evaluate("document.querySelector('[data-handling-save]').click()");
+    await wait("document.querySelector('[data-section=waived] [data-handling-restore]')");
+    assert(await evaluate("document.querySelector('.assignment-handling-note').textContent.includes('队友已提交') && document.querySelector('[data-section=waived]').textContent.includes('原站：未提交')"),'Every theme retains independent team handling and source truth');
+    await capture('ui-handling-'+id+'-saved',375,812);
+    await evaluate("document.querySelector('[data-handling-restore]').click()");
+    await wait("!document.querySelector('[data-section=waived] [data-assignment]')");
     await evaluate("location.hash='settings?tab=appearance'");
     await wait("document.querySelector('[name=art-theme]')");
   }
@@ -194,5 +262,5 @@ try {
   assert.deepEqual(await evaluate('themeContractUnmounts'),['assignments'],'Theme wrappers release the original view on navigation');
   await evaluate("document.querySelector('[name=art-theme][value=default]').click()");
   await wait("document.documentElement?.dataset.theme==='default' && document.querySelector('[name=art-theme][value=default]')?.checked");
-  console.log('PASS: dashboards, agenda, four viewports, three remembered themes, module/settings view overrides, API reuse, cleanup, scrollbars, settings tabs and keyboard actions');
+  console.log('PASS: local team submission handling/restoration, source truth, escaped notes, dashboards, source coverage, estimated/unknown/manual deadlines, four viewports, four remembered themes, module/settings view overrides, API reuse, cleanup, scrollbars, settings tabs and keyboard actions');
 } finally {socket?.close();browser('close');}

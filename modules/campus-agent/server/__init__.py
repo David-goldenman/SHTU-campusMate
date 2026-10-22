@@ -84,8 +84,19 @@ def create_router(context):
             origin(request)
         value = service.status()
         response = await context.api('notifications', '/snapshot')
+        if value['owner'] != account_revision(context):
+            raise HTTPException(409, '账号已切换，请刷新通知。')
         value['notices'] = response.json().get('items', []) if response.status_code == 200 else []
         return value
+
+    @router.get('/widget')
+    async def widget(request: Request):
+        value = await status(request)
+        notices = [{**{key: item.get(key) for key in ('id', 'source_revision', 'read', 'importance', 'title')},
+                    'summary': item.get('summary', '')[:160],
+                    'citations': [{'source': citation.get('source')} for citation in item.get('citations', [])]}
+                   for item in value['notices']]
+        return {**{key: value[key] for key in ('available', 'owner', 'enabled', 'running', 'error')}, 'notices': notices}
 
     @router.put('/settings')
     def settings(body: Settings):

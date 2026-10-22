@@ -28,7 +28,7 @@ function fixture(initial, categories, themeCatalog) {
     const path = new URL(url,location.origin).pathname.replace('/api/v1','');
     if (!new URL(url,location.origin).pathname.startsWith('/api/v1/')) return savedFetch(url,options);
     const method = options.method || 'GET', body = options.body ? JSON.parse(options.body) : {};
-    state.calls.push({path,method,target:body.target,body});
+    state.calls.push({path,method,target:body.target,body,query:new URL(url,location.origin).search});
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/themes') return json(themeCatalog);
     if (path === '/settings') return json({port:16666,active_port:16666,storage:{directory:'.codex/synthetic',encryption:'synthetic'}});
@@ -114,8 +114,9 @@ function fixture(initial, categories, themeCatalog) {
         return {offset,week_start:weekDays[0].date,week_end:weekDays[6].date,week_one:currentWeek,teaching_week:5 + offset,periods:[],days:weekDays,conflicts:{items:[],complete:true,message:''}};
       });
       const overview = {week_start:homework.week_start,start:homework.start,end:homework.end,weeks:overviewWeeks,pending:homework.pending,late:homework.late};
-      return json({status:'ready',account_revision:'synthetic-revision',updated_at:at,sources:{},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview,school_calendar:{available:true,pages:1,url:'https://www.shanghaitech.edu.cn/1024/list.htm',pdf_url:null,checked_at:at,error:null,due:false,version:'synthetic'}});
+      return json({status:'ready',account_revision:'synthetic-revision',updated_at:at,sources:{},saved_timetable:{updated_at:at,verification:{status:'verified',confirmed:1,total:1}},data:{metadata:{week_count:18,semester:'合成学期'},issues:[],timetable:[course],events},calendar:{week_start:days[0].date,week_end:days[6].date,week_one:days[0].date,teaching_week:1,days},homework,overview,school_calendar:{available:true,pages:1,url:'https://www.shanghaitech.edu.cn/1024/list.htm',pdf_url:null,checked_at:at,error:null,due:false,version:'synthetic'}});
     }
+    if (['/modules/timetable/sync','/modules/timetable/schedule/sync'].includes(path) && method==='POST') return json({status:'ready'});
     if (path === '/modules/timetable/calendar/refresh' && method === 'POST') return json({week_one:'2026-09-14',source:'school'});
     if (path === '/modules/assignments/snapshot') {
       const today = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
@@ -300,6 +301,15 @@ try {
   assert.equal(await evaluate(`!!document.querySelector('[data-ai-editor][open]')`),false,'Leaving settings closes the editor');
   assert(await evaluate(`!document.querySelector('.planner-overview').open && document.querySelector('.planner-week-detail').open`),'The weekly timetable starts visible and the four-week overview expands on demand');
   assert(await evaluate(`Boolean(document.querySelector('.planner-week-detail .planner-school-calendar'))`),'The school calendar panel is nested under the weekly details');
+  assert(await evaluate(`document.querySelector('.planner-saved').textContent.includes('1 门课程')`),'Saved timetable verification is visible');
+  const initialWeek = await evaluate(`document.querySelector('[data-date]').value`);
+  const tableUpdates = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/sync').length`);
+  await evaluate(`document.querySelector('[data-shift="7"]').click();waitFor(()=>document.querySelector('[data-calendar]'))`);
+  assert.equal(await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/sync').length`),tableUpdates,'Changing weeks only reads the saved schedule');
+  await evaluate(`document.querySelector('[data-today]').click();waitFor(()=>document.querySelector('[data-date]').value===${JSON.stringify(initialWeek)})`);
+  await evaluate(`document.querySelector('[data-update-timetable]').click();waitFor(()=>webCheck.calls.some(c=>c.path==='/modules/timetable/sync'&&c.query==='?force=true'))`);
+  await evaluate(`document.querySelector('[data-sync]').click();waitFor(()=>webCheck.calls.some(c=>c.path==='/modules/timetable/schedule/sync'))`);
+  assert(await evaluate(`webCheck.calls.some(c=>c.path==='/modules/timetable/schedule/sync'&&c.query==='')`),'Routine study updates do not force a timetable pull');
   const calendarRefreshes = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/calendar/refresh').length`);
   const calendarSchedules = await evaluate(`webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length`);
   await evaluate(`document.querySelector('[data-calendar-refresh]').click();waitFor(()=>webCheck.calls.filter(c=>c.path==='/modules/timetable/calendar/refresh').length>${calendarRefreshes}&&webCheck.calls.filter(c=>c.path==='/modules/timetable/schedule').length>${calendarSchedules})`);
@@ -346,8 +356,12 @@ try {
   assert.match(await evaluate(`document.querySelector('#toast').textContent`),/已删除安排/);
   await writeFile(resolve('.codex/tmp/timetable-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await evaluate(`waitFor(()=>document.querySelector('.sidebar').getBoundingClientRect().right<=0)`);
   assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`),'Mobile planner fits the viewport');
   await writeFile(resolve('.codex/tmp/timetable-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
+  await evaluate(`document.querySelector('.planner-footer').scrollIntoView({block:'center'});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+  assert(await evaluate(`[...document.querySelectorAll('.planner-footer button')].every(button=>{const r=button.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})`),'Separate study and timetable update buttons fit on mobile');
+  await writeFile(resolve('.codex/tmp/timetable-saved-mobile.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
   for (const theme of ['observatory','star-notes','arknights','default']) {
     await evaluate(`location.hash='settings?tab=appearance';waitFor(()=>document.querySelector('[name="art-theme"][value="${theme}"]'))`);
     await evaluate(`document.querySelector('[name="art-theme"][value="${theme}"]').click()`);

@@ -154,7 +154,7 @@ text = result["content"]
 
 邮件语义复核使用 `mail` 原生插件的 `mail_submit`，分类 schema、完整个人偏好与本次邮件文字由后端提供，结果校验真实原文与资料指纹。`campus-agent` 使用独立原生插件处理变更合并后的后台检查；每轮最多四封邮件、24 次工具调用。可按已启用模块的 OpenAPI 发现只读接口，业务写入限于提交分类、带来源的通知、活动建议及同步失败后的单次重试。邮件通知和活动由程序根据分类结果生成，避免重复发布。
 
-后台任务使用一次性令牌和 `cancel_event`；停用、账号变化或设置关闭后停止保存。全部待复核缓存邮件按每轮四封排队，分类输入版本变化后重新复核；资料未变化时读取本地状态。应用常驻入口提供当前本机回调地址。形策、心理活动和其他活动均在通知中提出参加建议，用户确认后加入时间表；当前分类与已拒绝选择同时约束提醒。首页 `study_attend` 只接受本次明确参加意愿和已读通知中的建议标识。工具没有通用命令或任意写入能力；插件代码仍是本机受信任代码，见运行时安全边界。
+后台任务使用一次性令牌和 `cancel_event`；停用、账号变化或设置关闭后停止保存。全部待复核缓存邮件按每轮四封排队，分类输入版本变化后重新复核；资料未变化时读取本地状态。应用常驻入口提供当前本机回调地址。形策、心理活动和其他活动均在通知中提出参加建议，用户确认后加入时间表；当前分类与已拒绝选择同时约束提醒。首页 `study_attend` 只接受本次明确参加意愿和已读通知中的建议标识。后台插件没有通用命令或任意写入能力；首页学习助手另有 workspace 审批／用户手动开启完全访问的 study_files 工具。插件代码仍是本机受信任代码，见运行时安全边界。
 
 带前端的插件通过自己的页面与业务后端建立任务，基础 AI 助手为它们提供页面链接；纯工具插件仍在“插件任务”中选择。`/ai/plugins` 保留所有插件及其 `has_frontend`、`category` 元数据，模块启停统一管理。新增工具先声明实际读取资料及外部发送范围，再实现所需 API 调用；个人档案的写入、清除和引用校验由相应业务模块负责。
 
@@ -185,3 +185,5 @@ text = result["content"]
 官方 sandbox-local 按平台选择 Linux bwrap/Landlock、macOS Seatbelt 或 Windows restricted-token/ACL；Windows 的 enforcement 为 partial，涉及硬链接、读取与部分 ACL 边界，不能承诺完整系统隔离。当前学习助手通过固定工具与 API 限制模型的可操作范围；插件源码仍是受信任本地代码。以后开放代码执行时，必须接入官方受限执行器并校验实际 enforcement，不能仅修改提示词或当前目录。
 
 参考：[官方 Python SDK](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/python-sdk.md)、[沙箱机制](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/sandbox.md)、[技能接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/skills.md)。
+
+首页学习助手注册 study_assignment_handling 通过作业管理公开接口设置／恢复无需提交；注册 study_files 提供模块管理的持久本地文本工作目录和文件读写。默认 workspace 外逐次由浏览器用户审批，可在学习助手菜单中开启 full 模式。权限设置与审批不是模型工具，任务令牌不获这些路由权限；共享 Harness 的 Shell/原生文件工具策略保持原样。具体协议见 modules/academic-assistant/README.md。

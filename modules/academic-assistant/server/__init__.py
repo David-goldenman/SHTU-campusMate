@@ -13,16 +13,18 @@ from fastapi.responses import StreamingResponse
 from anyio import CancelScope
 
 from backend.services.campus.analysis import account_revision
-from .models import Answer, Attend, Chat, ConversationUpdate, CourseSearch, Document, Navigate, Profile, Query, Remember, ScheduleEdit, Search
+from .models import Answer, AssignmentHandling, Attend, Chat, ConversationUpdate, CourseSearch, Document, Navigate, Profile, Query, Remember, ScheduleEdit, Search
 from .conversations import Conversations
 from .tools import Task, profile_owner, read_profile
 from .workspace import Workspace, WorkCommand, WorkEdit
 from .reader import Reader, ReaderSettings, settings as reader_settings, save_settings as save_reader_settings
+from .files import FileSettings, FileOperation, FileDecision, settings as file_settings, save_settings as save_file_settings
 
 INSTRUCTION = Path(__file__).with_name('instruction.md').read_text(encoding='utf-8')
 PRESETS = json.loads((Path(__file__).parents[1] / 'harness' / 'prompts.json').read_text(encoding='utf-8'))
 TOOL_NAMES = {'query': '查询学习资料', 'search': '检索课程原文', 'document': '读取作业或课件页码', 'course-search': '查询教务课程与大纲', 'remember': '更新学习档案', 'navigate': '打开工作台页面', 'attend': '确认参加并加入时间表', 'finish': '核对原文引用'}
 TOOL_NAMES.update({'schedule-edit': '编辑时间表', 'capabilities': '查看助手能力', 'work-edit': '管理学习事务'})
+TOOL_NAMES.update({'assignment-handling': '设置作业提醒选择', 'file-operation': '读写本地文件'})
 _agent = None
 
 
@@ -60,6 +62,22 @@ def create_router(context):
     global _agent
     agent = _agent = Agent(context)
     router = APIRouter()
+
+    @router.get('/files/settings')
+    def files_settings():
+        return file_settings(context)
+
+    @router.put('/files/settings')
+    def update_files_settings(body: FileSettings):
+        return save_file_settings(context, body)
+
+    @router.post('/files/approvals/{identity}')
+    def decide_file_access(identity: str, body: FileDecision):
+        # Browser CSRF protection applies; the task bearer token cannot authorize this route.
+        for task in list(agent.tasks.values()):
+            if identity in task.files.pending:
+                return task.files.decide(identity, body)
+        raise HTTPException(409, '文件审批已失效，请重新发起操作。')
 
     @router.get('/reader/settings')
     def reading_settings():
@@ -310,6 +328,14 @@ def create_router(context):
     @router.post('/tools/work-edit')
     async def work_edit(body: WorkEdit, request: Request):
         return await perform('work-edit', body, request)
+
+    @router.post('/tools/assignment-handling')
+    async def assignment_handling(body: AssignmentHandling, request: Request):
+        return await perform('assignment-handling', body, request)
+
+    @router.post('/tools/file-operation')
+    async def file_operation(body: FileOperation, request: Request):
+        return await perform('file-operation', body, request)
 
     return router
 

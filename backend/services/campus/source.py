@@ -144,7 +144,9 @@ class Source:
 
 async def snapshots(context, modules):
     import asyncio
-    values = await asyncio.gather(*(context.api(module) for module in modules))
+    from .analysis import account_revision
+    owner = account_revision(context)
+    values = await asyncio.gather(*(context.api(module, reuse_key=owner) for module in modules))
     result, unavailable = {}, []
     for name, response in zip(modules, values):
         if response.status_code == 200:

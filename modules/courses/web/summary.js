@@ -27,7 +27,7 @@ export function courseSummaries(data) {
         : !linked ? '尚未关联教学社区课程，关联或同步后可确认录播。'
         : '录播来源尚未完成读取或暂时不可用，同步后再确认。'};
     const pending = contents.assignments.filter(item => ['blackboard','gradescope','ecourse'].includes(item.source)
-      && item.actionable === true && item.submitted === false && item.exempt !== true
+      && item.actionable === true && item.submitted === false && item.exempt !== true && !item.reminder_suppressed
       && [undefined,null,'not_submitted','draft'].includes(item.submission_status)).length;
     return {course, contents, recording, pending};
   });

@@ -1,5 +1,4 @@
 import {api, setToken, moduleApi, ui, escape, toast, safeAction, empty} from './shared.js';
-import * as settings from './settings.js';
 import {icon as navIcon} from './icons.js';
 import {cleanupAll, withTimeout} from './lifecycle.js';
 import {navigationChanged} from './navigation.js';
@@ -218,13 +217,18 @@ async function render(refreshMetadata = false) {
       reload:reloadModules, setEnabled, refresh, beforeClear:async()=>{await dispose();await stopBackground();},
       api:(path,options={})=>api(path,{...options,signal:scope.controller.signal}), ui, navigate, services:services(scope.controller.signal), theme:themeContext(),
     };
-    settingsContext.defaultView = host => settings.mount(host,settingsContext);
+    const loadSettings=()=>withTimeout(import('./settings.js'),30000,()=>scope.controller.abort());
+    settingsContext.defaultView = async host => {
+      const settings=await loadSettings();
+      if(scope.controller.signal.aborted)return;
+      return settings.mount(host,settingsContext);
+    };
     const area=main.querySelector('#settings-area');
     work.push((async()=>{
       let mounting;
       const abort=()=>scope.controller.abort();
       try {
-        const url=viewURL('settings'), entry=url ? await withTimeout(import(url),30000,abort) : settings;
+        const url=viewURL('settings'), entry=url ? await withTimeout(import(url),30000,abort) : await loadSettings();
         if(scope.controller.signal.aborted)return;
         if(typeof entry.mount!=='function')throw new Error('主题设置入口需要导出 mount(container, context)。');
         mounting=Promise.resolve().then(()=>entry.mount(area,settingsContext));

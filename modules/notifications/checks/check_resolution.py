@@ -29,7 +29,7 @@ async def check():
         async def api(module, path='/snapshot', **options):
             if module in {'mail', 'campus-agent'}:
                 return httpx.Response(404,json={'detail':'Optional module unavailable'})
-            assert module == 'assignments' and path == '/snapshot' and not options
+            assert module == 'assignments' and path == '/snapshot' and options == {'reuse_key': account_revision(context)}
             if switch:
                 context.auth.revision = 'new-owner'
             return httpx.Response(409 if unavailable else 200, json={'data': {'assignments': list(records.values())}})

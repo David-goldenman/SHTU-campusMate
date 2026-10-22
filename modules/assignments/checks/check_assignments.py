@@ -30,7 +30,7 @@ assert items['gradescope:graded']['category'] == 'graded' and items['gradescope:
 assert items['gradescope:completed']['category'] == 'completed'
 assert items['blackboard:old']['category'] == 'ended' and items['blackboard:old']['pending'] is False
 assert {item['id'] for item in values if item['pending']} == {'gradescope:late','gradescope:future','gradescope:unknown','gradescope:legacy-open'}
-assert package.counts(values) == {'pending':3,'late':1,'graded':1,'completed':1,'ended':3}
+assert package.counts(values) == {'pending':3,'late':1,'graded':1,'completed':1,'ended':3,'waived':0}
 counts = package.summary(values)
 assert (counts['total'], counts['unsubmitted'], counts['pending'], counts['needs_review']) == (9, 6, 4, 1)
 assert {key: counts['by_source']['blackboard'][key] for key in ('total', 'unsubmitted', 'pending')} == {'total': 1, 'unsubmitted': 1, 'pending': 0}

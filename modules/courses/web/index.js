@@ -1,6 +1,7 @@
 import {decorateCourse} from './appearance.js';
 import {sourcePanel, records, link, time, submissionLabel} from '/assets/campus.js';
 import {courseSummaries, termLabel} from './summary.js';
+import {courseDownloader} from './download-panel.js';
 
 const platforms = {timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'教学社区',ecourse:'E 云课堂'};
 const kinds = {assignments:'作业',materials:'资料',lessons:'录播',announcements:'公告',posts:'讨论',timetable:'上课安排',grades:'成绩'};
@@ -9,10 +10,11 @@ const playIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" 
 
 export async function mount(container, context) {
   const e = context.ui.escape;
+  const downloads = courseDownloader(context);
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('course-hub');
   let dispose;
-  const cleanup = () => {dispose?.();removeStyle();container.classList.remove('course-hub');};
+  const cleanup = () => {downloads.dispose();dispose?.();removeStyle();container.classList.remove('course-hub');};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let selected, current = true, query = '', recordingFilter = 'all', activeKind;
   dispose = await sourcePanel(container,context,async (body,snapshot,context,refresh) => {
@@ -58,9 +60,17 @@ export async function mount(container, context) {
         if (kind === 'lessons') {
           panel.innerHTML = recording.count?`<div class="course-section-label">${recording.count} 条录播<span>在教学社区打开观看</span></div><div class="course-recording-list">${data.lessons.map((item,index)=>`<article class="course-recording-row"><span class="course-recording-number">${String(index+1).padStart(2,'0')}</span><div><h4>${link(item.url,item.title,e)}</h4><p>${e(item.body_text?'含课堂转写':'课堂录播')}${item.summary_text?' · 含内容摘要':''}</p></div><span class="course-recording-open">${link(item.url,'打开录播 ↗',e)}</span></article>`).join('')}</div>`:`<div class="course-content-empty"><span class="course-empty-icon">${playIcon}</span><h4>${e(recording.label)}</h4><p>${e(recording.hint)}</p></div>`;
         } else if (kind === 'timetable') panel.innerHTML = data.timetable.map(item=>`<article class="campus-item"><h4>周${'一二三四五六日'[item.weekday-1]} · 第 ${item.period_start}–${item.period_end} 节</h4><p>${e(item.location||'地点待定')}</p><p class="field-hint">第 ${e(item.weeks.join('、'))} 周</p></article>`).join('');
-        else if (kind === 'assignments') panel.innerHTML = data.assignments.map(item=>`<article class="campus-item course-assignment"><h4>${link(item.url,item.title,e)}</h4><p class="course-assignment-due">${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'}</p><p class="field-hint" title="${e(item.submission_reason || '')}">${e(platforms[item.source]||item.source)} · ${e(submissionLabel(item))}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
+        else if (kind === 'assignments') panel.innerHTML = data.assignments.map(item=>`<article class="campus-item course-assignment"><h4>${link(item.url,item.title,e)}</h4><p class="course-assignment-due">${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'}</p><p class="field-hint" title="${e(item.submission_reason || '')}">${e(platforms[item.source]||item.source)} · ${e(submissionLabel(item))}${item.reminder_suppressed?' · 无需我提交（本地）':''}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
         else if (kind === 'grades') panel.innerHTML = data.grades.map(item=>`<article class="campus-item"><h4>${e(item.title)}</h4><p>${e(item.score??'成绩未公布')}${item.max_score!=null?' / '+e(item.max_score):''}</p><p class="field-hint">${e(platforms[item.source]||item.source)}</p></article>`).join('');
-        else panel.innerHTML = records(data[kind],e);
+        else {
+          panel.innerHTML = records(data[kind],e);
+          if (kind === 'materials' && course.sources.some(source=>source.source==='piazza')) {
+            const toolbar = document.createElement('div'); toolbar.className='course-download-toolbar';
+            const count = data.materials.filter(item=>item.source==='piazza' && item.download_url).length;
+            panel.prepend(toolbar);
+            downloads.attach(toolbar,course,count);
+          }
+        }
       }
       host.querySelectorAll('[data-kind]').forEach((button,index)=>{
         button.onclick = ()=>content(button.dataset.kind);
@@ -96,6 +106,7 @@ export async function mount(container, context) {
       context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
     });
     draw();detail();
+    downloads.refresh(courses);
   });
   return cleanup;
 }

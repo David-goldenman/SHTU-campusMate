@@ -21,4 +21,6 @@ Windows 与 WSL 启动器在 `.private/runtime/cache/python/` 保存框架和启
 
 PDF 文字解析和校历图片渲染引擎在首次读取或更新对应资料时加载，打开工作台无需等待这些文档组件。
 
+启动循环在端口尚未监听时使用短连接探测，随后仍以完整 HTTP bootstrap 响应确认模块就绪。首页摘要、静态资源缓存和本地性能验证说明见 [启动与首页读取性能](STARTUP_PERFORMANCE.md)。
+
 界面设计、主题和业务 API 继续遵循 [设计规范](DESIGN.md)、[主题契约](UI_THEME.md) 和 [模块接口](MODULES.md)。

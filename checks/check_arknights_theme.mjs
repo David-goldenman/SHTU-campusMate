@@ -36,7 +36,7 @@ function fixture(modules, categories, catalog) {
     const path = target.pathname.replace('/api/v1', '');
     if (path === '/bootstrap') return json({version:'synthetic',csrf_token:'synthetic',modules:state.modules,categories});
     if (path === '/themes') return json(catalog);
-    if (path === '/modules/campus-agent/status') return json({owner:'synthetic',enabled:true,running:false,notices:state.notices,proposals:[]});
+    if (path === '/modules/campus-agent/status' || path === '/modules/campus-agent/widget') return json({owner:'synthetic',enabled:true,running:false,notices:state.notices,proposals:[]});
     if (path === '/ai/settings') return json({model:'deepseek-flash',enabled:false,key_saved:false});
     if (path === '/modules/academic-assistant/chat') return json({messages:[],owner:'synthetic'});
     if (path === '/modules/academic-assistant/conversations') return json({items:[],active_id:null});
@@ -44,7 +44,7 @@ function fixture(modules, categories, catalog) {
     if (path === '/modules/academic-assistant/presets') return json({items:[{label:'安排本周作业',prompt:'帮我安排本周作业。'},{label:'理解课程知识',prompt:'一起复习今天的课程。'},{label:'制定复习计划',prompt:'制定期中复习计划。'}]});
     if (path === '/modules/dashboard/sync') return json({status:'ready'});
     if (path === '/modules/assignments/snapshot') return json({status:'ready',data:{assignments:pending,issues:[]},pending});
-    if (path === '/modules/dashboard/snapshot') {
+    if (path === '/modules/dashboard/snapshot' || path === '/modules/dashboard/summary') {
       const date = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
       return json({status:'ready',updated_at:null,stats:{courses:state.courses,pending:pending.length,materials:42,ready_sources:6},pending:state.empty?[]:pending,
         data:{metadata:{source_metadata:Object.fromEntries(['timetable','blackboard','gradescope','piazza','elrc','mail'].map(id => [id,{status:state.empty?'not_connected':'ready'}]))},issues:[]},

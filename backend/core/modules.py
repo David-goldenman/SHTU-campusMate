@@ -25,6 +25,7 @@ from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
 from .errors import PublicError, catch_errors, error_response
 from .runtime import RuntimeStatus
+from .reads import current_batch, request_reads
 
 
 class Navigation(BaseModel):
@@ -320,7 +321,7 @@ class ModuleManager:
             for entry in entries:
                 self._end_request(entry)
 
-    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None, timeout=None):
+    async def call_api(self, module_id, path="/snapshot", *, method="GET", body=None, timeout=None, reuse_key=None):
         """Bound the caller's wait without abandoning a running module's resources."""
         parts = unquote(path.split("?", 1)[0]).split("/")
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", module_id) or not path.startswith("/") or path.startswith("//") or any(part in {".", ".."} for part in parts) or "\\" in path or "#" in path:
@@ -338,16 +339,26 @@ class ModuleManager:
                 return unavailable(503, '模块服务正在停止，请稍后重试。')
             if not entry or not entry.app or entry.info['status'] != 'ready':
                 return unavailable(404, '模块未启用或没有后端入口。')
-            if len(entry.calls) >= 8:
-                return unavailable(503, '模块正在处理其他请求，请稍后重试。')
-            pending = asyncio.run_coroutine_threadsafe(request(), self.loop)
-            entry.calls.add(pending)
+            batch = current_batch() if method == 'GET' and body is None and reuse_key is not None else None
+            key = (id(self), id(entry), path, reuse_key)
+            pending = batch.transports.get(key) if batch else None
+            if pending is None:
+                if len(entry.calls) >= 8:
+                    return unavailable(503, '模块正在处理其他请求，请稍后重试。')
+                pending = asyncio.run_coroutine_threadsafe(request(), self.loop)
+                entry.calls.add(pending)
+                if batch:
+                    batch.transports[key] = pending
 
-            def finished(future):
-                with self.lock:
-                    entry.calls.discard(future)
+                def finished(future):
+                    with self.lock:
+                        entry.calls.discard(future)
+                        # Retain only successful HTTP reads; a later caller may retry.
+                        if batch and (future.cancelled() or future.exception() is not None or not future.result().is_success):
+                            if batch.transports.get(key) is future:
+                                batch.transports.pop(key, None)
 
-            pending.add_done_callback(finished)
+                pending.add_done_callback(finished)
         try:
             # Shield keeps the ASGI request counted until its synchronous work ends.
             waiting = asyncio.wrap_future(pending)
@@ -384,7 +395,8 @@ class ModuleManager:
             await send(message)
 
         try:
-            await entry.app(nested, receive, recorded_send)
+            with request_reads(scope.get('method') == 'GET'):
+                await entry.app(nested, receive, recorded_send)
         finally:
             entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'))
             await run_in_threadpool(self._end_request, entry)

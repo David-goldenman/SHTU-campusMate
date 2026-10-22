@@ -33,6 +33,7 @@
 | 接口 | 用途 |
 | --- | --- |
 | `GET /status` | `{available,owner,enabled,running,last_checked,last_run,summary,error,pending_count,proposals,notices}`；last_run 保留已完成综合检查的时间和邮件／工具计数 |
+| `GET /widget` | 通知浮窗的轻量读取，返回 available/owner/enabled/running/error，以及 notices 的 id/source_revision/read/importance/title、160 字预览及引用来源类型；仍执行通知核对并在返回前复核账号 |
 | `PUT /settings` | `{enabled:boolean}`；关闭时取消当前运行 |
 | `POST /check` | 请求检查最近资料，202，不阻塞页面 |
 | `POST /refresh` | 唤醒按当前分类版本排队的检查，202；保持用户的启停设置 |
@@ -47,3 +48,5 @@
 每轮检查固定任务所属账号和状态键。在异步读取返回、AI 工作线程启动及结果返回时重新检查账号和取消状态；任务失效后停止后续写入与 AI 调用，释放任务令牌，不将旧账号结果写到新账号。
 
 `checks/check_agent.py` 使用合成来源和模型，验证变化合并、分类回写、必需与可选安排、否定认定和旧分类保护、参加确认、去重、手动修改、账号隔离与线程清理。`checks/check_account_boundaries.py` 在资料收集、通知读取、复核复用、AI 排队和结果返回时切换账号或取消任务，验证存储、调用及令牌清理。`checks/check_harness.py` 验证真实官方运行时及本插件的工具注册／回调；`checks/check_campus_workspace.mjs` 验证邮件、课程、通知与常驻入口交互。
+
+活动时间与参加资格分别处理：邮件复核的 event_window 可以在 needs_check=true 时仍携带可靠日期，导入通知时保留这个时间。明确已开始的活动不再创建新参加建议，也不因已过去而改说时间待核实；活动过期由通知模块不依赖 AI 的时钟检查负责。原文年月日被换行拆开时先归一化日期，再校验日期与钟点。

@@ -1,5 +1,13 @@
 # 模块开发接口
 
+单次 GET 请求可以通过 `context.api(module, path, reuse_key=账号或资料版本)` 显式复用只读调用。默认不复用；非 GET、有 body、HTTP 错误、不同模块实例或不同版本均不复用。请求结束释放结果，模块启停、并发计数和超时检查仍执行。调用方必须保留请求结束前的账号复核；有状态核对的接口（例如通知 `/snapshot`）不能标记为只读。模块内多个入口共用只读计算时，可使用 `backend.core.reads.read_once(context, key, revision, load)`，结果按调用者复制，版本变化返回 409。框架不声明业务模块名单。
+
+首页使用 `dashboard/summary`，保留全部待办的必要字段、统计、日程、通知引用、来源覆盖与错误提示；完整 `/snapshot` 保持原契约。公共 `sourcePanel` 的第四个参数可设置 `{snapshotPath:'/summary'}`，省略时仍读取 `/snapshot`。通知浮窗使用 `campus-agent/widget`，只返回浮窗需要的状态、通知预览及引用来源类型；通知核对仍执行，同账号并发核对只共享正在运行的任务，结束后释放。
+
+课表模块在自身 `SavedTimetable` 中按学期管理缓存：普通 `/sync` 复用同账号、本学期已保存课表，返回 `queued:false,reused:true`（仍为 HTTP 202）；用户主动更新用 `/sync?force=true`。时间经过不会触发课表重拉，首次同步及换学期仍正常读取。其他动态来源继续采用共享 Source 原有刷新规则。`/schedule.saved_timetable` 提供已保存课表及通过 ELRC/E 云公开快照核对课程代码与学期的记录；校历已有当前学期日期时也直接复用，自动失败只尝试一次，用户可手动重试。
+
+作业管理 `/snapshot` 返回 `coverage:{status:"ready"|"partial"|"unavailable",sources:[{id,status,updated_at}]}`，说明已读取作业来源及新鲜度，不承诺覆盖课堂或群里的全部要求。首页 `/snapshot` 转发为 `assignment_coverage`；不可用时 `stats.pending` 为 null，调用方不得转成零。作业 `due_default=true` 表示估计日期，不能用于正式截止或紧急计数；展示和筛选应保留“时间待定”。`pending` 仍含这些记录及需核实的已知待办。
+
 课程资料可提供 `preview_url` 与 `download_url`，公共 `records` 展示查看、下载和原站入口；来源模块负责文件权限和内容。共享文件下载 helper 支持可选的 `max_bytes`，同时检查声明长度与实际流大小，失败清理临时文件。Piazza 资料使用 30 MB 上限，已有 Blackboard／Gradescope 调用保持兼容。
 
 共享展示 SDK `/assets/campus.js` 的 `submissionLabel(item)` 供作业管理和课程中心显示同一提交状态及缓存提示；它只格式化来源已有字段，不请求来源、不决定待办。状态与依据由来源模块提供，待办规则由业务聚合模块实现。
@@ -188,3 +196,9 @@ ELRC 与 Piazza 保留原有细粒度接口，同时提供共享快照。它们�
 前端可从 `/assets/sounds.js` 导入 `playSound(kind)`；当前支持 `mail`、`deadline`、`announce`、`assistant`。模块只在已确认的新通知或已完成的结果上调用，不以提示音代替可见状态。可选动态导入等待前须登记卸载清理，返回后复核 `context.signal.aborted`，失败不影响正常界面。
 
 应用在用户键盘／指针交互后调用 `unlock()`；未解锁、暂停、浏览器不支持或用户关闭声音时直接跳过，不排队补播。旋律由本地 WebAudio 低音量合成，不请求外部音频，不提供页面关闭后的系统提醒。`setEnabled(bool)`／`isEnabled()` 保留浏览器偏好接口，当前尚无设置页静音或试听按钮。存储被拒绝仍可加载网页；音符结束及关闭声音时释放节点。`checks/check_sounds.mjs` 使用合成音频节点验证，不播放真实音效。
+
+作业管理新增本地无需提交协议：GET /handling 返回 {items:{作业ID:handling},account_revision} 且不读来源；PUT /handling 接收 assignment_id、status(waived/required)、reason(team_submitted/not_required/other)、note、expected_revision、account_revision。首次版本为空，旧版本或换号返回 409。snapshot 的 handling 保存原因及版本，reminder_suppressed=true 的作业 category=waived、pending=false，原站提交状态不变。courses /context 转发上述字段，课程待办和 timetable 日历/ICS 排除，dashboard 与学习助手沿用 assignments.pending；通知以 assignment_not_required 区分本地选择。详见 modules/assignments/README.md。
+
+学习助手新增工具路由 POST /tools/assignment-handling 和 /tools/file-operation，依旧要求当次任务令牌；前者调用 assignments PUT /handling。用户文件权限 GET/PUT /files/settings 和 POST /files/approvals/{id} 使用框架浏览器写令牌，任务令牌不能批准自身请求或切换 full。流增加 file-approval/file-approval-closed，changes 增加 assignment_handling/files 域。详细输入、访问范围及持久化见 modules/academic-assistant/README.md。
+
+mail GET /intelligence 的 classification.event_window 为已由正文验证的活动窗口（starts_at/ends_at/expires_at/basis/source_revision），不可验证时为 null。notifications 消费这一字段补齐旧通知的 expiry，并以 expired 和 auto_read.reason=event_expired 表示自动归入已读；history 原记录保留。needs_check 不再等同于时间未知，event_at 本身不授权过期处理。

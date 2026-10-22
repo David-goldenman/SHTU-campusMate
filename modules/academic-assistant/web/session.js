@@ -36,6 +36,8 @@ export function createChatSession() {
         if (value.type === 'error') throw new Error(value.detail);
         if (value.type === 'activity') current.steps = value.steps;
         if (value.type === 'change') current.changes.push(value.change);
+        if (value.type === 'file-approval') current.approvals.push(value.approval);
+        if (value.type === 'file-approval-closed') current.approvals=current.approvals.filter(item=>item.id!==value.id);
         if (value.type === 'reset') current.text = '';
         if (value.type === 'delta') current.text += value.text;
         if (value.type === 'complete') current.answer = value.message;
@@ -56,7 +58,7 @@ export function createChatSession() {
     if (!context || context.signal.aborted) throw new Error('对话服务尚未就绪，请刷新页面后重试。');
     if (turn?.status === 'running') return;
     drafts.delete(identity || '');
-    turn = {conversationId:identity,message,messages:[...messages],text:'',steps:[],changes:[],status:'running',controller:new AbortController()};
+    turn = {conversationId:identity,message,messages:[...messages],text:'',steps:[],changes:[],approvals:[],status:'running',controller:new AbortController()};
     const current = turn;
     notify();
     current.finished = run(current,context);

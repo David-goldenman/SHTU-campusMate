@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 
-from backend.services.campus import Source, semester, timestamp
+from backend.services.campus import semester, timestamp
 from backend.services.campus.assignments import filter_issues, historical
 from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
@@ -17,6 +17,7 @@ from .commands import Command, adjustments_key, event_record, execute
 from .homework import homework_window, overview_weeks
 from .ical import COURSE_FILENAME, HOMEWORK_FILENAME, build_course_calendar, build_homework_calendar
 from .school_calendar import SchoolCalendar, term_key
+from .persistence import SavedTimetable, term_starts, verify_saved
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂", "eams": "教务系统"}
 _source = None
@@ -40,21 +41,16 @@ def create_router(context):
     global _source, _calendar
 
     def read_schedule(remote, previous):
-        def term_starts():
-            year = datetime.now(ZONE).year
-            return {key: value for start in (year - 1, year)
-                    for key, value in context.store.read('school-calendar:' + str(start), {}).get('terms', {}).items()}
-
-        data = fetch(remote, previous, term_starts=term_starts())
+        data = fetch(remote, previous, term_starts=term_starts(context))
         if school.due(data['metadata']):
             try:
-                school.refresh(data['metadata'])
+                school.refresh(data['metadata'], force=False)
             except HTTPException:
                 pass  # A calendar failure leaves course synchronization usable.
             else:
                 # The first successful calendar read may refine a month-based
                 # fallback around the start of spring or summer teaching.
-                starts = term_starts()
+                starts = term_starts(context)
                 today = datetime.now(ZONE).date()
                 begun = {key: value['week_one'] for key, value in starts.items()
                          if value.get('week_one') and value['week_one'] <= today.isoformat()}
@@ -62,7 +58,7 @@ def create_router(context):
                     data = fetch(remote, previous, term_starts=starts)
         return data
 
-    source = _source = Source(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable", network_target="timetable")
+    source = _source = SavedTimetable(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable", network_target="timetable")
     school = _calendar = SchoolCalendar(context, source)
     router = source.router()
 
@@ -95,8 +91,8 @@ def create_router(context):
         return settings()
 
     @router.post('/calendar/refresh')
-    async def refresh_calendar():
-        await run_in_threadpool(school.refresh, source.snapshot()['data']['metadata'])
+    async def refresh_calendar(force: bool = True):
+        await run_in_threadpool(school.refresh, source.snapshot()['data']['metadata'], force=force)
         return settings()
 
     @router.get('/calendar/image')
@@ -179,10 +175,19 @@ def create_router(context):
     async def schedule(week_start: date | None = None):
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SCHEDULE_SOURCES)
+        local_response = await context.api('assignments', '/handling', reuse_key=owner)
+        local = local_response.json() if local_response.status_code == 200 else {}
+        if owner != account_revision(context) or local.get('account_revision', owner) != owner:
+            raise HTTPException(409, '账号已切换，请刷新时间表。')
+        suppressed = {identity for identity, item in local.get('items', {}).items() if item.get('status') == 'waived'}
+        for name, value in values.items():
+            if name != 'eams':
+                value['data'] = {**value['data'], 'assignments': [item for item in value['data']['assignments'] if item['id'] not in suppressed]}
         appearance_response = await context.api("courses", "/appearance")
         appearance = appearance_response.json() if appearance_response.status_code == 200 else {}
         course_styles = {member: item for item in appearance.get("courses", []) for member in item["course_ids"]}
         values = {"timetable": source.snapshot(), **values}
+        verification = await verify_saved(context, source, values['timetable'])
         metadata = values["timetable"]["data"]["metadata"]
         dates = settings()
         current = semester(metadata.get("semester"))
@@ -194,6 +199,8 @@ def create_router(context):
                            'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})
         if dates.get('error'):
             issues.append(dates['error'])
+        if local_response.status_code != 200:
+            issues.append('作业本地选择暂不可用；截止提醒可能包含已标记无需提交的项目。')
         for name, value in values.items():
             data = value["data"]
             label = SCHEDULE_SOURCES.get(name, "教务课表")
@@ -230,6 +237,7 @@ def create_router(context):
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
                 'calendar': {**plan, 'week_one_source': dates['source']}, 'school_calendar': school.view(metadata),
+                'saved_timetable': {'updated_at': values['timetable'].get('updated_at'), 'verification': verification},
                 'homework': reminders, 'palette': appearance.get('palette', []),
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
                 "sources": {name: {"status": value.get("status"), "updated_at": value.get("updated_at")} for name, value in values.items()}}
@@ -261,7 +269,7 @@ def start(context):
     if term_key(metadata) and context.auth.get_status('ids')['identity_verified'] and _calendar.due(metadata):
         def update():
             try:
-                _calendar.refresh(metadata)
+                _calendar.refresh(metadata, force=False)
             except HTTPException:
                 pass
         pending = _source.executor.submit(update)

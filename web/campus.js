@@ -37,7 +37,7 @@ export function records(items, escape) {
   }).join('') + '</div>' : '<p class="field-hint">当前范围没有内容。</p>';
 }
 
-export async function sourcePanel(container, context, render) {
+export async function sourcePanel(container, context, render, {snapshotPath = '/snapshot'} = {}) {
   let timer;
   container.innerHTML = '<div class="source-toolbar"><details class="source-state"><summary><span class="source-indicator" aria-hidden="true"></span><span data-status role="status"></span></summary><div class="source-state-body"><p data-updated></p><div data-issues role="status"></div><div data-network hidden></div></div></details><div class="source-actions"><a class="text-button" href="#settings?tab=accounts" data-connect hidden>连接账号</a><button class="text-button" data-sync type="button">同步</button></div></div><div data-content></div>';
   const button = container.querySelector('[data-sync]');
@@ -46,7 +46,7 @@ export async function sourcePanel(container, context, render) {
   const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'后台同步中，可离开此页', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
   async function refresh() {
     clearTimeout(timer);
-    const snapshot = await context.api('/snapshot');
+    const snapshot = await context.api(snapshotPath);
     if (context.signal.aborted) return;
     button.disabled = snapshot.status === 'syncing';
     container.querySelector('[data-connect]').hidden = !['not_connected','login_required','verification_required'].includes(snapshot.status);

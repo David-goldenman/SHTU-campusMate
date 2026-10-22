@@ -45,3 +45,5 @@
 `POST /agent/token` 返回新令牌并撤销旧令牌。`GET /agent/pending` 需要专用 Bearer 令牌；该令牌只允许读取待分类邮件及写入本模块 `/labels`，写入时无需框架 CSRF，并强制记为 agent。令牌按账号版本保存在模块 secrets，分类与正文保存在模块 Store。切换账号后旧缓存与令牌不可见。网页普通写请求使用框架令牌。
 
 `stop(context)` 取消原生复核及同步。运行完整项目检查，或模块 `checks/check_mail.py`、`checks/check_intelligence.py`，覆盖正文安全、段落、规则与语义结果、缓存、手动优先、版本失效及账号隔离；均使用合成邮件。
+
+/intelligence 的每条 classification 新增只读 event_window（可为 null），独立于 needs_check 的参加资格判断。窗口仅由当前有效复核的 event 与缓存正文核对日期、钟点和时区后生成，返回 starts_at/ends_at/expires_at/basis/source_revision；不能将截止、问卷或报名日期当活动。碎片换行的年月日会归一化；无结束时间或正文还有同日较晚时段时按北京时间当日结束，多于该日期的其他安排保持未知，不提前清理。没有调用 AI 或刷新学校来源。

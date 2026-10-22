@@ -239,8 +239,15 @@ def saved_port():
     return int(json.loads(row[0])["port"]) if row else 16666
 
 
-def ready(port, launch_id=None):
+def ready(port, launch_id=None, *, connect_timeout=None):
     try:
+        # Windows may spend the full HTTP timeout rejecting an unopened port.
+        # During startup probe that phase briefly, then keep the full HTTP check.
+        if connect_timeout is not None:
+            with socket.socket() as client:
+                client.settimeout(connect_timeout)
+                if client.connect_ex(('127.0.0.1', port)) != 0:
+                    return False
         if launch_id:
             with HTTP.open(f"http://127.0.0.1:{port}/api/v1/health", timeout=1) as response:
                 health = json.loads(response.read(4096))
@@ -254,6 +261,19 @@ def ready(port, launch_id=None):
 
 
 def port_busy(port):
+    if os.name == "nt":
+        # An unused Windows port can take the entire connect timeout to refuse.
+        # Exclusive bind proves it is free without waiting or sending traffic.
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            try:
+                probe.bind(("127.0.0.1", port))
+            except OSError:
+                pass
+            else:
+                return False
+    # A closed server can leave TCP state that prevents exclusive bind. Keep
+    # the connection check so an immediate restart is not mistaken for a clash.
     with socket.socket() as client:
         client.settimeout(0.5)
         return client.connect_ex(("127.0.0.1", port)) == 0
@@ -327,11 +347,11 @@ def start(port, no_browser):
                     STATE.unlink(missing_ok=True)
                 detail = log.read_text(encoding="utf-8", errors="replace")[-5000:]
                 raise RuntimeError("后台启动失败，日志：" + str(log) + "\n" + detail)
-            if ready(port):
+            if ready(port, connect_timeout=0.08):
                 show_browser(port, no_browser)
                 print("日志：" + str(log), flush=True)
                 return
-            time.sleep(0.3)
+            time.sleep(0.1)
         stop_file = CONTROL / ("stop-" + instance)
         stop_file.touch()
         raise RuntimeError("等待网页启动超时，已请求停止本次后台。日志：" + str(log))

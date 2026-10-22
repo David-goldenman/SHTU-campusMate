@@ -80,3 +80,9 @@
 .course-hub .course-detail>header[data-department] { border-left:3px solid var(--record-accent); padding-left:16px; }
 .course-hub .course-detail>header[data-department] h3 { color:var(--record-ink); }
 .course-hub .course-sport-icon { display:inline-block; width:18px; height:20px; margin-right:8px; vertical-align:-2px; opacity:.75; }
+.course-download-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.course-download-toolbar>div{flex:1 1 220px}.course-download-toolbar p{margin:6px 0 0}.course-download-toolbar button{white-space:normal}
+.course-download-toolbar progress{width:100%;accent-color:var(--link)}.course-download-status,.course-download-toolbar li{overflow-wrap:anywhere}
+.course-download-toolbar ul{max-height:180px;overflow:auto;padding-left:22px;font-size:13px}
+.course-download-toolbar .course-download-actions{display:flex;flex-wrap:wrap;gap:10px;flex:1 1 100%;align-items:center}
+.course-download-auto{display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;font-size:14px}
