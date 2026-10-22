@@ -119,8 +119,12 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
         if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf) and not modules.authorize_write(request):
             return error_response(request, 403, '请刷新工作台后重试。')
         response = await catch_errors(request, call_next)
-        response.headers["Cache-Control"] = (
-            "private, max-age=31536000, immutable" if response.status_code == 200 and request.url.path.startswith("/module-assets/") else "no-store")
+        cache = 'no-store'
+        if response.status_code == 200 and request.url.path.startswith('/module-assets/'):
+            cache = 'private, max-age=31536000, immutable'
+        elif response.status_code in {200, 304} and request.url.path.startswith('/assets/'):
+            cache = 'private, no-cache'
+        response.headers['Cache-Control'] = cache
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"

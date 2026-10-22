@@ -7,6 +7,24 @@ from backend.services.campus.assignments import filter_issues, semester_start
 from backend.services.campus.data import digest
 
 SOURCES = {"timetable": "ids", "blackboard": "ids", "gradescope": "gradescope", "piazza": "piazza", "elrc": "ids", "ecourse": "ids", "mail": "coremail"}
+NAME_SOURCES = ('timetable', 'elrc', 'ecourse', 'blackboard', 'gradescope', 'piazza')
+
+
+def name_course(item, manual=False):
+    """Choose an existing source name, keeping every original name as an alias."""
+    names = [row for row in item['sources'] if str(row.get('title') or '').strip()]
+    item['aliases'] = list(dict.fromkeys([item['title']] + [row['title'] for row in names]))
+    if manual:
+        item['title_source'] = 'manual'
+        return
+    if not names:
+        return
+    def rank(row):
+        source = row.get('source')
+        return (not bool(re.search(r'[\u3400-\u9fff]', row['title'])),
+                NAME_SOURCES.index(source) if source in NAME_SOURCES else len(NAME_SOURCES), row['id'])
+    chosen = min(names, key=rank)
+    item.update(title=chosen['title'], title_source=chosen['source'], title_source_id=chosen['id'])
 
 
 def current_semester(snapshots):
@@ -86,6 +104,8 @@ def combine(snapshots, groups, current):
             merged.setdefault('term_matches', []).append(term_matches[item['id']])
         if not merged['code'] and code:
             merged['code'] = code
+    for item in buckets.values():
+        name_course(item, item['id'].startswith('manual:'))
     result["courses"] = sorted(buckets.values(), key=lambda item: (not item["current"], item["term"], item["code"], item["title"]))
     return result
 
@@ -98,8 +118,9 @@ def query(data, collection, *, course_id=None, current=False, pending=False, sou
     else:
         values = [item for item in data[collection] if (not course_id and not current or item.get("course_id") in members) and (not source or item["source"] == source)]
     if pending:
+        values = [item for item in values if not item.get('reminder_suppressed')]
         values = [item for item in values if item["source"] in {"gradescope", "blackboard", "ecourse"} and item.get("actionable") is True and item.get("submitted") is False and item.get('exempt') is not True and item.get('submission_status') in {None, 'not_submitted', 'draft'}]
     if q:
         text = q.casefold()
-        values = [item for item in values if text in " ".join(str(item.get(key) or "") for key in ("title", "code", "body_text", "sender")).casefold()]
+        values = [item for item in values if text in " ".join(str(item.get(key) or "") for key in ("title", "code", "body_text", "sender", "aliases")).casefold()]
     return values

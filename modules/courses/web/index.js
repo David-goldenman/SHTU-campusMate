@@ -1,6 +1,7 @@
 import {decorateCourse} from './appearance.js';
 import {sourcePanel, records, link, time, submissionLabel} from '/assets/campus.js';
 import {courseSummaries, termLabel} from './summary.js';
+import {courseDownloader} from './download-panel.js';
 
 const platforms = {timetable:'教务课表',blackboard:'Blackboard',gradescope:'Gradescope',piazza:'Piazza',elrc:'教学社区',ecourse:'E 云课堂'};
 const kinds = {assignments:'作业',materials:'资料',lessons:'录播',announcements:'公告',posts:'讨论',timetable:'上课安排',grades:'成绩'};
@@ -9,16 +10,17 @@ const playIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" 
 
 export async function mount(container, context) {
   const e = context.ui.escape;
+  const downloads = courseDownloader(context);
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('course-hub');
   let dispose;
-  const cleanup = () => {dispose?.();removeStyle();container.classList.remove('course-hub');};
+  const cleanup = () => {downloads.dispose();dispose?.();removeStyle();container.classList.remove('course-hub');};
   context.signal.addEventListener('abort',cleanup,{once:true});
   let selected, current = true, query = '', recordingFilter = 'all', activeKind;
   dispose = await sourcePanel(container,context,async (body,snapshot,context,refresh) => {
     const entries = courseSummaries(snapshot.data), courses = snapshot.data.courses;
     body.innerHTML = `<div class="course-toolbar"><div><span class="course-eyebrow">我的课程</span><p>${e(termLabel(snapshot.data.metadata.current_semester))}</p></div><div class="course-toolbar-actions"><label class="checkbox-label"><input data-current type="checkbox" ${current?'checked':''}>仅本学期</label><button type="button" class="button button-secondary" data-group>关联课程</button></div></div><div class="course-columns"><aside class="course-browser" aria-label="查找课程"><label class="course-search">搜索课程<input data-search type="search" placeholder="课程名称或代码" value="${e(query)}"></label><div class="course-filters" role="group" aria-label="按录播筛选" data-filters></div><p class="course-list-count" data-list-count role="status"></p><nav data-courses aria-label="课程列表"></nav></aside><section class="course-detail" data-detail aria-label="课程内容"></section></div>`;
-    const scoped = () => entries.filter(({course}) => (!current || course.current) && `${course.title} ${course.code}`.toLowerCase().includes(query.trim().toLowerCase()));
+    const scoped = () => entries.filter(({course}) => (!current || course.current) && `${course.title} ${course.code} ${(course.aliases||[]).join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()));
     function draw() {
       const scope = scoped(), counts = {all:scope.length,available:0,empty:0,unknown:0};
       scope.forEach(item => counts[item.recording.state]++);
@@ -44,6 +46,13 @@ export async function mount(container, context) {
       if (!available.includes(activeKind)) activeKind = pending?'assignments':data.materials.length?'materials':recording.count?'lessons':available.find(kind=>kind!=='lessons')||'lessons';
       host.innerHTML = `<header class="course-detail-header"><p class="course-eyebrow">${e(course.code||'课程')}<span>·</span>${e(termLabel(course.term))}</p><h3>${e(course.title)}</h3><div class="course-platforms" aria-label="课程原站入口">${course.sources.filter(source=>source.url).map(source=>link(source.url,platforms[source.source]||source.source,e)).join('')}</div></header><div class="course-recording-summary" data-state="${recording.state}"><span class="course-recording-icon">${playIcon}</span><div><strong>${e(recording.label)}</strong><p>${e(recording.hint)}</p></div>${recording.count?'<button type="button" class="button button-secondary" data-view-recordings>查看录播 <span aria-hidden="true">→</span></button>':''}</div><div class="course-content-tabs" role="tablist" aria-label="课程内容">${available.map(kind=>`<button type="button" role="tab" id="course-tab-${kind}" aria-controls="course-content" aria-selected="${activeKind===kind}" tabindex="${activeKind===kind?'0':'-1'}" data-kind="${kind}">${kinds[kind]}<span>${data[kind].length}</span></button>`).join('')}</div><div id="course-content" role="tabpanel" tabindex="0" data-course-content></div>`;
       decorateCourse(host.querySelector('header'),course);
+      if(course.title_source){
+        const origin=document.createElement('p');origin.className='field-hint';
+        origin.textContent='名称来源：'+(course.title_source==='manual'?'手动设置':platforms[course.title_source]||course.title_source);
+        const aliases=(course.aliases||[]).filter(name=>name!==course.title);
+        if(aliases.length)origin.textContent+='；其他平台名称：'+aliases.join('、');
+        host.querySelector('header').append(origin);
+      }
       function content(kind) {
         activeKind = kind;
         host.querySelectorAll('[data-kind]').forEach(button=>{button.setAttribute('aria-selected',String(button.dataset.kind===kind));button.tabIndex=button.dataset.kind===kind?0:-1;});
@@ -51,9 +60,17 @@ export async function mount(container, context) {
         if (kind === 'lessons') {
           panel.innerHTML = recording.count?`<div class="course-section-label">${recording.count} 条录播<span>在教学社区打开观看</span></div><div class="course-recording-list">${data.lessons.map((item,index)=>`<article class="course-recording-row"><span class="course-recording-number">${String(index+1).padStart(2,'0')}</span><div><h4>${link(item.url,item.title,e)}</h4><p>${e(item.body_text?'含课堂转写':'课堂录播')}${item.summary_text?' · 含内容摘要':''}</p></div><span class="course-recording-open">${link(item.url,'打开录播 ↗',e)}</span></article>`).join('')}</div>`:`<div class="course-content-empty"><span class="course-empty-icon">${playIcon}</span><h4>${e(recording.label)}</h4><p>${e(recording.hint)}</p></div>`;
         } else if (kind === 'timetable') panel.innerHTML = data.timetable.map(item=>`<article class="campus-item"><h4>周${'一二三四五六日'[item.weekday-1]} · 第 ${item.period_start}–${item.period_end} 节</h4><p>${e(item.location||'地点待定')}</p><p class="field-hint">第 ${e(item.weeks.join('、'))} 周</p></article>`).join('');
-        else if (kind === 'assignments') panel.innerHTML = data.assignments.map(item=>`<article class="campus-item course-assignment"><h4>${link(item.url,item.title,e)}</h4><p class="course-assignment-due">${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'}</p><p class="field-hint" title="${e(item.submission_reason || '')}">${e(platforms[item.source]||item.source)} · ${e(submissionLabel(item))}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
+        else if (kind === 'assignments') panel.innerHTML = data.assignments.map(item=>`<article class="campus-item course-assignment"><h4>${link(item.url,item.title,e)}</h4><p class="course-assignment-due">${item.due_at?'截止 '+e(time(item.due_at)):'截止时间未提供'}</p><p class="field-hint" title="${e(item.submission_reason || '')}">${e(platforms[item.source]||item.source)} · ${e(submissionLabel(item))}${item.reminder_suppressed?' · 无需我提交（本地）':''}${item.score!=null?' · 得分 '+e(item.score)+(item.max_score!=null?' / '+e(item.max_score):''):''}</p></article>`).join('');
         else if (kind === 'grades') panel.innerHTML = data.grades.map(item=>`<article class="campus-item"><h4>${e(item.title)}</h4><p>${e(item.score??'成绩未公布')}${item.max_score!=null?' / '+e(item.max_score):''}</p><p class="field-hint">${e(platforms[item.source]||item.source)}</p></article>`).join('');
-        else panel.innerHTML = records(data[kind],e);
+        else {
+          panel.innerHTML = records(data[kind],e);
+          if (kind === 'materials' && course.sources.some(source=>source.source==='piazza')) {
+            const toolbar = document.createElement('div'); toolbar.className='course-download-toolbar';
+            const count = data.materials.filter(item=>item.source==='piazza' && item.download_url).length;
+            panel.prepend(toolbar);
+            downloads.attach(toolbar,course,count);
+          }
+        }
       }
       host.querySelectorAll('[data-kind]').forEach((button,index)=>{
         button.onclick = ()=>content(button.dataset.kind);
@@ -89,6 +106,7 @@ export async function mount(container, context) {
       context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
     });
     draw();detail();
+    downloads.refresh(courses);
   });
   return cleanup;
 }

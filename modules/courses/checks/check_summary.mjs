@@ -33,6 +33,8 @@ states.assignments = [
   {id:'closed',source:'ecourse',course_id:'bb:1',submitted:false,actionable:false,submission_status:'not_submitted'},
 ];
 assert.equal(courseSummaries(states)[0].pending,2,'Ecourse pending counts match the catalog: unsubmitted/draft only, never exempt, uncertain or completed');
+states.assignments[0].reminder_suppressed=true;
+assert.equal(courseSummaries(states)[0].pending,1,'A local team-submitted choice removes only that assignment from pending');
 for (const status of ['syncing','partial','error','cached','not_connected','login_required']) {
   data.metadata.source_metadata.elrc.status=status;
   result=courseSummaries(data);

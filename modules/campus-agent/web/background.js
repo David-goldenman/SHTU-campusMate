@@ -10,7 +10,7 @@ export async function mount(container,context) {
   container.innerHTML='<aside class="campus-agent-peek" aria-live="polite" hidden></aside><a class="campus-agent-button" href="#notifications" aria-label="打开通知中心"><span data-agent-light aria-hidden="true"></span>'+icon('◌')+'<span data-agent-count hidden></span></a>';
   async function refresh(){
     clearTimeout(timer);
-    const value=await context.api('/status');if(context.signal.aborted)return;
+    const value=await context.api('/widget');if(context.signal.aborted)return;
     if(owner!==value.owner){seen.clear();initialized=false;owner=value.owner;container.querySelector('aside').hidden=true;}
     const unread=value.notices.filter(item=>!item.read && (item.importance!=='normal'||!(item.citations||[]).some(source=>source.source==='mail'))),badge=container.querySelector('[data-agent-count]');badge.hidden=!unread.length;badge.textContent=String(unread.length);
     if(shown&&!unread.some(item=>item.id===shown)){container.querySelector('aside').hidden=true;shown=null;}

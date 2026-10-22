@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.services.campus.data import digest
 from backend.services.campus.analysis import account_revision
+from .event_window import event_window
 
 BUCKETS = {'focus': '重点关注', 'recommend': '兴趣推荐', 'digest': '一般通知', 'filter': '已筛选'}
 INTERESTS = {'research': '科研讲座', 'clubs': '社团活动', 'culture': '文体活动', 'volunteer': '志愿服务',
@@ -208,6 +209,7 @@ class Intelligence:
             if manual.get('by') == 'manual':
                 classification = {**classification, **manual, 'category': manual['label'], 'bucket': manual.get('bucket', classification['bucket'])}
             classification = {**classification, 'input_revision': prepared['fingerprint'], 'review_pending': manual.get('by') != 'manual' and not (review and review['fingerprint'] == prepared['fingerprint'])}
+            classification['event_window'] = event_window(item, classification)
             result.append({**item, 'classification': classification})
         if owner != account_revision(self.context):
             raise HTTPException(409, '学习账号已更新，请重新读取邮件分类。')

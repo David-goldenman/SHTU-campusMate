@@ -50,7 +50,7 @@ async def check():
     with sandbox('group-messages') as context, sandbox('academic-assistant') as study_context, sandbox('timetable') as calendar_context:
         service = Service(context)
         owner = service.owner()
-        group = {'id':'g1', 'name':'合成课程群', 'course_id':'course1', 'course':{'id':'course1','title':'合成计算机','course_ids':['bb:1']},
+        group = {'id':'g1', 'name':'合成课程群', 'course_id':'course1', 'course':{'id':'course1','title':'合成计算机','course_ids':['bb:1'],'term':'2026-fall'},
                  'trusted_senders':['teacher'], 'auto_extract':True, 'auto_apply':True}
         config = {'connection':'conn', 'revision':'r1','enabled':True, 'selected':[group], 'groups':[{'id':'g1','name':'合成课程群'}],
                   'interval_seconds':300, 'history_days':7, 'allow_ai':True, 'coverage':{}}
@@ -64,6 +64,7 @@ async def check():
             app=FastAPI();app.include_router(package.create_router(ctx));apps[name]=app
         async def api(name,path='/snapshot',**kwargs):
             calls.append((name,path,copy.deepcopy(kwargs)))
+            if name=='courses' and path=='/identities':return httpx.Response(200,json={'items':[{**group['course'],'current':True}], 'current_semester':'2026-fall','account_revision':service.owner()})
             if name=='notifications':return httpx.Response(200,json={'saved':True})
             if name not in apps:return await no_sources(name,path,**kwargs)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(apps[name]),base_url='http://fixture') as client:
@@ -87,10 +88,10 @@ async def check():
                     'citations':[{'message_id':message['id'],'quote':message['text']}], **extra}
         output['items']=[finding(first)]
         task={'owner':owner,'source':'qq','group_id':'g1','manual':True}
-        service._extract(task)
+        await asyncio.to_thread(service._extract,task)
         item=service.items()['items'][0]
         assert item['automatic_ready'] and item['time_verified'] and item['status']=='pending'
-        service._extract(task);assert len(ai_calls)==1, 'Unchanged content must not call AI'
+        await asyncio.to_thread(service._extract,task);assert len(ai_calls)==1, 'Unchanged content must not call AI'
         applied=await service.effects.apply(owner,item['id'],item['revision'],automatic=True)
         assert applied['target']['module']=='academic-assistant' and applied['receipt']['value']['after']['kind']=='plan'
         duplicate=await service.effects.apply(owner,item['id'],applied['revision'])
@@ -107,7 +108,7 @@ async def check():
         cache.ingest(owner,'qq','conn','g1',[raw(2,'作业1延期到2026年10月22日23:59截止')],since)
         message=cache.rows(owner,'qq','conn','g1')['items'][0]
         output['items']=[finding(message,target_id=item['id'],action='change',due_at='2026-10-22T23:59:00+08:00')]
-        service._extract(task);changed=service.current_item(owner,item['id'])
+        await asyncio.to_thread(service._extract,task);changed=service.current_item(owner,item['id'])
         changed=await service.effects.apply(owner,item['id'],changed['revision'])
         assert changed['target']['id']==applied['target']['id']
         restored=await service.effects.undo(owner,item['id'],changed['revision'])
@@ -119,7 +120,7 @@ async def check():
         cache.ingest(owner,'qq','conn','g1',[raw('cancel','作业1已取消')],since)
         message=cache.rows(owner,'qq','conn','g1')['items'][0]
         output['items']=[finding(message,target_id=item['id'],action='cancel',due_at=None)]
-        service._extract(task);cancelled=service.current_item(owner,item['id'])
+        await asyncio.to_thread(service._extract,task);cancelled=service.current_item(owner,item['id'])
         assert not cancelled['automatic_ready']
         cancelled=await service.effects.apply(owner,item['id'],cancelled['revision'])
         assert cancelled['receipt']['value']['after']['status']=='cancelled'
@@ -141,8 +142,8 @@ async def check():
         output['items']=[finding(message,object_key='hw2',title='作业2',due_at='2026-10-23T23:59:00+08:00')]
         output['items'][0]['citations'][0]['quote']='捏造依据'
         key=service.cursor_key(owner,'qq','conn','g1');before=context.store.read(key)
-        rejects(lambda:service._extract(task),502);assert context.store.read(key)==before
-        output['items'][0]['citations'][0]['quote']=message['text'];service._extract(task)
+        await rejected(asyncio.to_thread(service._extract,task),502);assert context.store.read(key)==before
+        output['items'][0]['citations'][0]['quote']=message['text'];await asyncio.to_thread(service._extract,task)
         assert not next(row for row in service.items()['items'] if row['object_key']=='hw2')['automatic_ready']
         assert not extraction.time_supported('2026-10-23T23:59:00+08:00','明天截止',None)
         assert not extraction.time_supported('2026-10-23T23:59:00+08:00','2026年10月23日截止',message['sent_at'])
@@ -150,7 +151,7 @@ async def check():
         cache.ingest(owner,'qq','conn','g1',[raw(4,'2026年10月24日19:00社团交流')],since)
         message=cache.rows(owner,'qq','conn','g1')['items'][0]
         output['items']=[finding(message,object_key='activity',kind='activity',title='社团交流',due_at=None,starts_at='2026-10-24T19:00:00+08:00')]
-        service._extract(task);event=next(row for row in service.items()['items'] if row['kind']=='activity')
+        await asyncio.to_thread(service._extract,task);event=next(row for row in service.items()['items'] if row['kind']=='activity')
         assert not event['automatic_ready']
         await rejected(service.effects.apply(owner,event['id'],event['revision'],automatic=True))
         event=await service.effects.apply(owner,event['id'],event['revision']);assert event['target']['module']=='timetable'
@@ -165,7 +166,7 @@ async def check():
             def late(**kwargs):
                 mutate();return {'content':'{"items":[]}','tools':[{'name':'group_submit','is_error':False}]}
             context.ai.run=late;before=context.store.read(key)
-            rejects(lambda:service._extract(task));restore();assert context.store.read(key)==before
+            await rejected(asyncio.to_thread(service._extract,task));restore();assert context.store.read(key)==before
         rejects(lambda:service.queue('extract','qq',models.ExtractRequest(source='qq',group_id='unselected',allow_ai=True)),404)
         assert service.queued is None
         # Unknown timestamps stay unknown; late old messages and long payloads remain bounded.

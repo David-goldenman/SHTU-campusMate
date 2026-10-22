@@ -24,7 +24,7 @@ function fixture(modules,categories, themeCatalog){
   if(path==='/themes')return json(themeCatalog);
   if(path==='/bootstrap')return json({csrf_token:'synthetic',modules,categories});
   if(path==='/modules')return json({modules,categories});
-  if(path==='/modules/campus-agent/status'||path==='/modules/notifications/agent/status')return json(agent());
+  if(path==='/modules/campus-agent/status'||path==='/modules/campus-agent/widget'||path==='/modules/notifications/agent/status')return json(agent());
   if(path==='/modules/mail/sync'){state.syncing=true;state.syncStarts=(state.syncStarts||0)+1;return json({queued:true,status:'syncing'},202);}
   if(path==='/modules/mail/snapshot')return json({status:state.syncing?'syncing':'ready',data:{messages,issues:[]}});
   if(path==='/modules/mail/intelligence')return json({messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
@@ -109,6 +109,9 @@ try{
  await evaluate(`document.querySelector('[data-read]').click();waitFor(()=>!document.querySelector('[data-read]'))`);
  await evaluate(`document.querySelector('[data-notice-filter=read]').click();waitFor(()=>document.querySelector('[data-read]'))`);
  assert.equal(await evaluate(`document.querySelector('[data-read]').textContent`),'标记未读','Read history remains accessible');
+ await evaluate(`workspaceCheck.notices.push({id:'expired:fire',title:'合成过期消防培训',summary:'培训已经结束。',importance:'important',citations:[],read:true,expired:true,auto_read:{reason:'event_expired'},proposal_id:'expired-proposal'});workspaceCheck.proposals.push({id:'expired-proposal',state:'pending',event:{title:'合成过期消防培训',starts_at:'2020-10-19T14:00:00+08:00',ends_at:'2020-10-19T15:00:00+08:00'},quote:'合成活动原文'});document.querySelector('[data-notice-filter=read]').click();waitFor(()=>document.querySelector('[data-notice-id="expired:fire"]'))`);
+ assert(await evaluate(`document.querySelector('[data-notice-id="expired:fire"]').textContent.includes('已自动归入已读') && !document.querySelector('[data-attend="expired-proposal"]')`),'Expired history explains cleanup and no longer offers attendance');
+ await evaluate(`document.querySelector('[data-notice-filter=unread]').click();waitFor(()=>!document.querySelector('[data-notice-id="expired:fire"]'))`);
  await evaluate(`location.hash='mail';waitFor(()=>document.querySelector('[data-bucket=focus]'))`);
  await evaluate(`document.querySelector('[data-sync]').click();waitFor(()=>workspaceCheck.syncing)`);
  await evaluate(`location.hash='courses';waitFor(()=>document.querySelector('.course-platforms'))`);

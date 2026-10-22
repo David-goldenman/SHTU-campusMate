@@ -25,7 +25,10 @@ export async function mount(container, context) {
   context.signal.addEventListener('abort',cleanup,{once:true});
   const networkHost = document.createElement('div');
   networkHost.hidden = true;
-  const diagnose = bindSyncNetwork(networkHost,context,async () => {await context.api('/schedule/sync',{method:'POST'});await refresh();});
+  const diagnose = bindSyncNetwork(networkHost,context,async () => {
+    if (snapshot?.network_failures?.some(item => item.target === 'timetable')) await context.api('/sync?force=true',{method:'POST'});
+    await context.api('/schedule/sync',{method:'POST'});await refresh();
+  });
 
   function when(item) {
     if (item.all_day) return '全天';
@@ -70,7 +73,7 @@ export async function mount(container, context) {
     const labels = periods.map(item => `<div class="lesson-period"><strong>第 ${item.period} 节</strong>${item.start && item.end ? '<span>' + e(item.start) + '<br>' + e(item.end) + '</span>' : ''}</div>`).join('');
     const hasClasses = lessons.some(day => day.items.length);
     const missingClock = lessons.some(day => day.items.some(({item}) => !item.at || !item.ends_at));
-    const courseTable = hasClasses ? `<h3 class="planner-section-title">课程课表</h3>${missingClock ? '<p class="field-hint">部分课程的具体钟点尚未同步，已按教务节次排列；可点击“同步来源”补充钟点。</p>' : ''}<div class="calendar-table-wrap lesson-table-wrap" tabindex="0" aria-label="每周课程课表"><table class="calendar-table lesson-table" data-calendar><caption class="visually-hidden">${title}，课程按节次排列，北京时间</caption><thead><tr><th scope="col">节次</th>${header}</tr></thead><tbody><tr><th scope="row"><div class="lesson-periods" data-period-count="${periods.length}">${labels}</div></th>${cal.days.map((day,i) => `<td class="${dayClass(day)}"><div class="lesson-day" data-period-count="${periods.length}" data-lesson-lanes="${lessons[i].lanes}">${lessons[i].items.map(({item,lane}) => `<div class="lesson-block" data-lesson-start="${item.period_start}" data-lesson-span="${item.period_end-item.period_start+1}" data-lesson-lane="${lane}">${card(item)}</div>`).join('')}</div></td>`).join('')}</tr></tbody></table></div>` : '<p class="planner-empty">' + (!cal.week_one && snapshot.data.timetable.length ? '课程日期待确认，设置教学周后显示课表。' : '本周没有符合筛选条件的课程。') + '</p>';
+    const courseTable = hasClasses ? `<h3 class="planner-section-title">课程课表</h3>${missingClock ? '<p class="field-hint">部分课程的具体钟点尚未同步，已按教务节次排列；可点击“更新课表”补充钟点。</p>' : ''}<div class="calendar-table-wrap lesson-table-wrap" tabindex="0" aria-label="每周课程课表"><table class="calendar-table lesson-table" data-calendar><caption class="visually-hidden">${title}，课程按节次排列，北京时间</caption><thead><tr><th scope="col">节次</th>${header}</tr></thead><tbody><tr><th scope="row"><div class="lesson-periods" data-period-count="${periods.length}">${labels}</div></th>${cal.days.map((day,i) => `<td class="${dayClass(day)}"><div class="lesson-day" data-period-count="${periods.length}" data-lesson-lanes="${lessons[i].lanes}">${lessons[i].items.map(({item,lane}) => `<div class="lesson-block" data-lesson-start="${item.period_start}" data-lesson-span="${item.period_end-item.period_start+1}" data-lesson-lane="${lane}">${card(item)}</div>`).join('')}</div></td>`).join('')}</tr></tbody></table></div>` : '<p class="planner-empty">' + (!cal.week_one && snapshot.data.timetable.length ? '课程日期待确认，设置教学周后显示课表。' : '本周没有符合筛选条件的课程。') + '</p>';
     const otherDays = cal.days.map(day => ({...day,events:day.events.filter(item => selected(item) && !isLesson(item)).sort(compareEvents)})).filter(day => day.events.length);
     const otherCount = otherDays.reduce((count,day) => count + day.events.length,0);
     const otherAgenda = otherCount ? `<details class="planner-issues planner-other-events" ${otherOpen ? 'open' : ''}><summary>其他安排与截止（${otherCount}）</summary>${otherDays.map(day => `<section><h4 class="planner-section-title">${e(day.date.slice(5).replace('-',' / '))}</h4>${day.events.map(card).join('')}</section>`).join('')}</details>` : '';
@@ -102,7 +105,7 @@ export async function mount(container, context) {
     draw();
     if (value.school_calendar?.due && !calendarAutoTried) {
       calendarAutoTried = true;
-      void context.api('/calendar/refresh',{method:'POST'}).then(()=>refresh()).catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);});
+      void context.api('/calendar/refresh?force=false',{method:'POST'}).then(()=>refresh()).catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);});
     }
     if (value.status === 'syncing') timer = setTimeout(() => refresh().catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);}),1500);
   }
@@ -116,6 +119,13 @@ export async function mount(container, context) {
     const header = cal.days.map((day,i) => `<th scope="col" class="${dayClass(day)}"><span>周${'一二三四五六日'[i]}</span><strong>${day.date.slice(5).replace('-',' / ')}</strong>${day.date === today ? '<em>今天</em>' : day.date === tomorrow ? '<em>明天</em>' : ''}</th>`).join('');
     container.innerHTML = `<div class="planner-heading"><div><h2>${title}</h2><p>${e(snapshot.data.metadata.semester || '我的时间表')} · ${week}</p></div><div class="planner-actions"><a class="button button-secondary" data-export="homework" href="${calendarExportUrl('homework')}" download="${HOMEWORK_EXPORT_FILE}" title="下载近四周待交与迟交作业，地点为提交平台的通用 .ics 文件，可导入苹果、安卓与鸿蒙日历">导出作业日历 (.ics)</a><a class="button button-secondary" data-export="courses" href="${calendarExportUrl('courses')}" download="${COURSE_EXPORT_FILE}" title="下载本学期全部课程时间与地点的通用 .ics 文件，可导入苹果、安卓与鸿蒙日历">导出课程日历 (.ics)</a><button class="button button-secondary" data-settings type="button">学期设置</button><button class="button button-primary" data-add type="button">添加安排</button></div></div>${overviewView(snapshot.overview)}<div class="planner-toolbar"><div class="week-switch"><button class="button button-secondary" data-shift="-7" type="button" aria-label="上一周">上一周</button><button class="button button-secondary" data-today type="button">本周</button><button class="button button-secondary" data-shift="7" type="button" aria-label="下一周">下一周</button><label class="visually-hidden" for="planner-date">跳转日期</label><input id="planner-date" data-date type="date" value="${current}"></div><label class="planner-filter">显示<select data-filter><option value="all">全部安排</option><option value="study">课程与学习</option><option value="life">活动与讲座</option></select></label></div>${!cal.week_one && snapshot.data.timetable.length ? '<p class="notice">设置第 1 教学周的周一日期，即可将课程放入日历。<button class="text-button" data-set-anchor type="button">设置日期</button></p>' : ''}<div class="planner-legend">${Object.entries(kinds).map(([id,label]) => `<span class="legend-${id}">${label}</span>`).join('')}</div><details class="planner-week-detail" ${weekOpen ? 'open' : ''}><summary>本周详情 · 节次与冲突</summary>${conflictNotice(cal.conflicts)}${weekView(cal,selected,dayClass,title,header)}${schoolCalendarView(snapshot.school_calendar)}</details><div class="calendar-mobile">${cal.days.map((day,i) => `<section class="${dayClass(day)}"><h3>周${'一二三四五六日'[i]} · ${day.date.slice(5)}${day.date === today ? ' · 今天' : day.date === tomorrow ? ' · 明天' : ''}</h3>${mobileDay(day,selected)}</section>`).join('')}</div><div class="planner-footer"><span data-status role="status">${snapshot.status === 'syncing' ? '正在同步…' : snapshot.updated_at ? '更新于 ' + time(snapshot.updated_at) : '尚未同步课程来源'} · 北京时间</span><button class="text-button" data-sync type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>同步来源</button></div>${snapshot.data.issues.length ? '<details class="planner-issues"><summary>来源提示（' + snapshot.data.issues.length + '）</summary><p>' + e(snapshot.data.issues.join('；')) + '</p></details>' : ''}`;
     applyLessonPositions(container);
+    const saved = snapshot.saved_timetable, review = saved?.verification;
+    if (saved?.updated_at) {
+      const checked = review?.status === 'verified' ? `${review.confirmed} 门课程的代码与学期已核对`
+        : review?.checked_at ? `${review.confirmed || 0}/${review.total || 0} 门课程已核对，其余保留教务记录` : '课程代码与学期待核对';
+      container.querySelector('.planner-footer').insertAdjacentHTML('beforebegin',`<p class="field-hint planner-saved">课表已保存 · ${e(checked)}。节次和教室以教务为准；同一学期复用已存课表。</p>`);
+    }
+    container.querySelector('.planner-footer').insertAdjacentHTML('beforeend',`<button class="text-button" data-update-timetable type="button" ${snapshot.status === 'syncing' ? 'disabled' : ''}>更新课表</button>`);
     const classEvents = new Map(cal.days.flatMap(day=>day.events).map(item=>[item.id,item]));
     container.querySelectorAll('.calendar-event[data-event]').forEach(element=>{
       const appearance = classEvents.get(element.dataset.event)?.appearance;
@@ -162,6 +172,9 @@ export async function mount(container, context) {
       container.querySelector('.planner-toolbar').append(toggle);
     }
     container.querySelector('[data-sync]').onclick = act(container.querySelector('[data-sync]'),async () => {await context.api('/schedule/sync',{method:'POST'});await refresh();});
+    container.querySelector('[data-sync]').textContent = '更新作业与考试';
+    const updateTimetable = container.querySelector('[data-update-timetable]');
+    updateTimetable.onclick = act(updateTimetable,async () => {await context.api('/sync?force=true',{method:'POST'});await refresh();});
     container.querySelector('[data-add]').onclick = () => edit();
     container.querySelector('[data-settings]').onclick = semesterSettings;
     container.querySelector('[data-set-anchor]')?.addEventListener('click',semesterSettings,{signal:context.signal});
@@ -214,7 +227,7 @@ export async function mount(container, context) {
     return '/api/v1/modules/' + encodeURIComponent(context.module.id) + '/calendar/image?' + query;
   }
   function schoolCalendarView(value) {
-    const actions = `<div class="school-calendar-actions"><button class="button button-secondary" data-calendar-refresh type="button">更新校历</button>${value?.pdf_url ? link(value.pdf_url,'打开原 PDF',e) : ''}${value?.url ? link(value.url,'学校校历通知',e) : ''}<span class="field-hint">开学与学期结束自动更新 · 手动更新不会改动课程安排</span></div>`;
+    const actions = `<div class="school-calendar-actions"><button class="button button-secondary" data-calendar-refresh type="button">更新校历</button>${value?.pdf_url ? link(value.pdf_url,'打开原 PDF',e) : ''}${value?.url ? link(value.url,'学校校历通知',e) : ''}<span class="field-hint">校历确认后保存在本地 · 需要重新核对时手动更新</span></div>`;
     if (!value?.available) {
       return `<details class="planner-school-calendar"><summary><span>校历</span><small>${value?.error ? '读取失败，可重试' : '尚未缓存学校校历'}</small></summary><div class="school-calendar-body"><p class="field-hint">${e(value?.error || '尚未读取学校校历。点击“更新校历”读取教务处发布的 PDF 并生成图片。')}</p>${actions}</div></details>`;
     }

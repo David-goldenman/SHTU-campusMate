@@ -77,6 +77,15 @@ class ScheduleEdit(BaseModel):
     adjustment: dict = Field(default_factory=dict)
 
 
+class AssignmentHandling(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    record_id: str = Field(min_length=1, max_length=300)
+    status: Literal['waived', 'required']
+    reason: Literal['team_submitted', 'not_required', 'other'] | None = None
+    note: str = Field(default='', max_length=500)
+    quote: str = Field(min_length=2, max_length=8000)
+
+
 class Citation(BaseModel):
     source_id: str = Field(min_length=1, max_length=500)
     quote: str = Field(min_length=1, max_length=800)

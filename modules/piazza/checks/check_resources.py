@@ -102,10 +102,14 @@ async def check_api():
                 evidence = (await client.post('/courses/context', json={'course_id': catalog[0]['id']})).json()
                 assert any(row['kind'] == 'materials' and row['source'] == 'piazza' for row in evidence['items'])
                 before = len(calls)
+                revision = (await client.get('/piazza/snapshot')).json()['account_revision']
+                assert revision == source.owner()
+                assert (await client.get('/piazza/file', params={'material_id': material['id'], 'account_revision': 'previous-account'})).status_code == 409
+                assert len(calls) == before, 'A stale batch must not fetch files under another account'
                 assert (await client.get('/piazza/file', params={'material_id': 'piazza:resource:other:slides'})).status_code == 404
                 assert len(calls) == before, 'Unknown files must not trigger a remote request'
                 for inline in (False, True):
-                    result = await client.get('/piazza/file', params={'material_id': material['id'], 'inline': inline})
+                    result = await client.get('/piazza/file', params={'material_id': material['id'], 'inline': inline, 'account_revision': revision})
                     assert result.status_code == 200 and result.content == b'%PDF-synthetic-material'
                     assert result.headers['content-disposition'].startswith('inline;' if inline else 'attachment;')
                     assert not list((context.data_dir / 'tmp' / 'downloads').iterdir()), 'Response cleanup removes temporary files'

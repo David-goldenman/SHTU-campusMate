@@ -25,14 +25,18 @@ def create_router(context):
         value = _source.snapshot()
         result = with_watched_courses(current, value)
         accounts.check(current)
+        result['account_revision'] = current.account_owner
         return result
 
     router.add_api_route("/sync", _source.sync, methods=["POST"], status_code=202)
 
     @router.get('/file')
-    def file(material_id: str = Query(min_length=1, max_length=400), inline: bool = False) -> FileResponse:
+    def file(material_id: str = Query(min_length=1, max_length=400), inline: bool = False,
+             account_revision: str | None = Query(default=None, min_length=1, max_length=100)) -> FileResponse:
         """Read a file only from the current account's synchronized resource catalog."""
         owner = _source.owner()
+        if account_revision is not None and account_revision != owner:
+            raise HTTPException(409, 'Piazza 账号已切换，请刷新课程后重新下载。')
         item = next((item for item in _source.snapshot()['data']['materials'] if item['id'] == material_id and item.get('download_url')), None)
         if item is None:
             raise HTTPException(404, '课件不在当前账号的 Piazza 缓存中，请先同步。')

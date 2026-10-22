@@ -1,14 +1,16 @@
 import ast
 import json
 import re
-from datetime import date, time
+from datetime import date, datetime, time
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 
 from backend.services.auth import LoginRequired
 from backend.services.campus import SourceError, course, identity
 from backend.services.campus.data import digest
+from .semesters import select_semester
 
 BASE = "https://eams.shanghaitech.edu.cn"
 
@@ -133,7 +135,7 @@ def parse(html, term):
     return result
 
 
-def fetch(remote, previous):
+def fetch(remote, previous, *, term_starts=None):
     page = remote.request("GET", BASE + "/eams/courseTableForStd.action").text
     student = re.search(r"addInput\(\s*form\s*,\s*['\"]ids['\"]\s*,\s*['\"](\d+)['\"]", page)
     term = re.search(r"semesterCalendar\s*\(\s*\{[^}]*\bvalue\s*:\s*['\"]?(\d+)", page)
@@ -142,13 +144,8 @@ def fetch(remote, previous):
             raise LoginRequired("教务需要重新登录 IDS。")
         raise SourceError("教务未返回当前学生或学期。")
     calendar = remote.request("POST", BASE + "/eams/dataQuery.action", data={"tagId": "semester", "dataType": "semesterCalendar", "value": term[1], "empty": "false"}).text
-    entry = re.search(r"\{\s*id\s*:\s*" + term[1] + r"\s*,[^}]*\}", calendar)
-    year = re.search(r'schoolYear\s*:\s*"([^"]+)"', entry[0]) if entry else None
-    name = re.search(r'name\s*:\s*"([^"]+)"', entry[0]) if entry else None
-    if not year or not name:
-        raise SourceError("教务学期目录没有返回当前学期名称。")
-    term_name = year[1] + "学年" + {"1": "秋季", "2": "春季", "3": "夏季"}.get(name[1], name[1])
-    html = remote.request("POST", BASE + "/eams/courseTableForStd!courseTable.action", data={"ignoreHead": "1", "setting.kind": "std", "startWeek": "", "semester.id": term[1], "ids": student[1], "tutorRedirectstudentId": student[1]}).text
+    term_id, term_name = select_semester(calendar, datetime.now(ZoneInfo('Asia/Shanghai')).date(), term_starts)
+    html = remote.request("POST", BASE + "/eams/courseTableForStd!courseTable.action", data={"ignoreHead": "1", "setting.kind": "std", "startWeek": "", "semester.id": term_id, "ids": student[1], "tutorRedirectstudentId": student[1]}).text
     result = parse(html, term_name)
-    result["metadata"]["semester_id"] = term[1]
+    result["metadata"]["semester_id"] = term_id
     return result

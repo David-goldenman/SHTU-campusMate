@@ -5,6 +5,7 @@ import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
+from unittest.mock import patch
 
 import httpx
 from fastapi import FastAPI
@@ -18,7 +19,11 @@ study, timetable = load('academic-assistant'), load('timetable')
 
 
 async def check():
-    with sandbox('timetable') as context, sandbox('academic-assistant') as study_context:
+    # Each case deliberately selects a different past/future semester. Keep the
+    # semester clock aligned with that fixture; rollover fetching has its own check.
+    with sandbox('timetable') as context, sandbox('academic-assistant') as study_context, patch.object(
+            sys.modules[timetable.__name__ + '.persistence'], 'expected_semester',
+            side_effect=lambda *_: timetable.term_key(snapshot['data']['metadata'])):
         async def sources(name, path='/snapshot', **kwargs):
             return httpx.Response(200, json={'status': 'ready', 'updated_at': datetime.now(timezone.utc).isoformat(), 'data': validate_bundle({})})
         context.api = sources

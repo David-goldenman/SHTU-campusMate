@@ -87,10 +87,10 @@ const openingCSS=await readFile(new URL('../web/opening-lines.css',import.meta.u
 assert.match(html,/<html[^>]+data-opening-lines="hidden"/,'Initial HTML must hide opening lines before themes load');
 assert.ok(openingCSS.includes(':root:not([data-opening-lines="enabled"]) :is(.opening-line,.study-opening-line) { display:none!important; }'),'The opt-out gate covers both responsive placements');
 const brandCatalog={items:['default','observatory','star-notes','arknights'].map(id=>({...minimal(id),entry:new URL('../web/themes/'+(['observatory','star-notes'].includes(id)?'art.js':id+'/index.js'),import.meta.url).href}))};
-for (const [id,icon] of [['default','/assets/brand/campusmate-app-icon.png'],['observatory','/assets/themes/assets/observatory-mark.svg'],['star-notes','/assets/themes/assets/observatory-mark.svg'],['arknights','/assets/themes/arknights/assets/terminal-mark.svg']]) {
+for (const [id,icon] of [['default','/assets/brand/campusmate-icon-96.png'],['observatory','/assets/themes/assets/observatory-mark.svg'],['star-notes','/assets/themes/assets/observatory-mark.svg'],['arknights','/assets/themes/arknights/assets/terminal-mark.svg']]) {
   ui.setAppearance({theme:id});await ui.initializeThemes(brandCatalog);
   assert.equal(document.querySelector('.brand img').src,icon,id+' uses its own brand mark');
-  assert.equal(document.querySelector('link[rel="icon"]').href,id==='default'?icon:'/assets/icon.svg',id+' retains its browser icon');
+  assert.equal(document.querySelector('link[rel="icon"]').href,id==='default'?'/assets/brand/campusmate-favicon-48.png':'/assets/icon.svg',id+' retains its browser icon');
 }
 const terminal=await readFile(new URL('../web/themes/arknights/dashboard.js',import.meta.url),'utf8');
 assert.ok(terminal.includes('PERSONAL LEARNING TERMINAL'),'PRTS retains its terminal identity');

@@ -56,7 +56,8 @@ def review_key(value):
 def grounded(event, text, received_at=None):
     if normalized(event.quote) not in normalized(text):
         raise HTTPException(422, '活动依据必须来自本次读取的原文。')
-    quote = '\n'.join(part for part in re.split(r'[。；;\n]', event.quote)
+    dated = re.sub(r'(?<=\d)\s+(?=[年月日:：/.-]|\d)|(?<=[年月日:：/.-])\s+(?=\d)', '', event.quote)
+    quote = '\n'.join(part for part in re.split(r'[。；;\n]', dated)
                       if not re.search(r'报名|问卷|调查|反馈|申请|提交|截止|deadline|survey|registration', part, re.I))
     start = event.starts_at.astimezone(ZONE)
     dates = list(re.finditer(r'(?:(20\d{2})[年/.-])?(\d{1,2})[月/.-](\d{1,2})日?', quote))
@@ -301,17 +302,21 @@ class CampusAgent:
                 continue
             source = {**item, 'text': '\n'.join(prepared['notification'].values())}
             proposal = None
+            window = review.get('event_window')
             if review.get('event') and review['bucket'] in {'focus', 'recommend'} and not review.get('needs_check'):
                 try:
-                    proposal = await self.propose(owner, 'mail', source, Event.model_validate(review['event']))
+                    event = Event.model_validate(review['event'])
+                    # A known past time is not an uncertain time and needs no new invitation.
+                    if event.starts_at > datetime.now(timezone.utc):
+                        proposal = await self.propose(owner, 'mail', source, event)
                 except (HTTPException, ValueError):
                     review = {**review, 'needs_check': True}
             revision = review_key(item['classification'])
             if review['bucket'] in {'focus', 'recommend'} and (proposal is None or proposal['state'] != 'dismissed'):
                 notice_revision = digest([prepared['notification'], review['bucket'], review.get('needs_check'), review.get('event')])
-                await self.notice('mail:' + digest(identity), item['title'], review['summary'], notice_revision, why=review['reason'] + (' 活动时间需要核对。' if review.get('needs_check') else ' 可选择是否参加并加入时间表。' if proposal and proposal['state'] == 'pending' else ''),
+                await self.notice('mail:' + digest(identity), item['title'], review['summary'], notice_revision, why=review['reason'] + (' 参加要求仍需核对。' if review.get('needs_check') and window else ' 活动时间需要核对。' if review.get('needs_check') else ' 可选择是否参加并加入时间表。' if proposal and proposal['state'] == 'pending' else ''),
                     owner=owner, importance='important' if review['bucket'] == 'focus' else 'normal', citations=[{'id': identity, 'title': item['title'], 'source': 'mail', 'url': item.get('url', '')}],
-                    proposal_id=proposal['id'] if proposal else None, event_at=proposal['event']['starts_at'] if proposal else None)
+                    proposal_id=proposal['id'] if proposal else None, event_at=window['starts_at'] if window else proposal['event']['starts_at'] if proposal else None)
             handled[identity] = revision
         return handled
 

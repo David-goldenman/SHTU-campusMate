@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.campus.source import snapshots
 from backend.services.campus.analysis import account_revision
+from backend.core.reads import read_once
 from .context import build_context
 from .catalog import SOURCES, combine, current_semester, query
 from .appearance import PALETTE, colors, decorate
@@ -29,15 +30,30 @@ class Groups(BaseModel):
 def create_router(context):
     router = APIRouter()
 
+    @router.get("/identities")
+    async def identities(current: bool = True):
+        """Course identity only; never reads group facts or calls back into group messages."""
+        owner = account_revision(context)
+        values, unavailable = await snapshots(context, {name: provider for name, provider in SOURCES.items() if name != 'mail'})
+        data = combine(values, context.store.read('groups', []), current_semester(values))
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已更新，请刷新课程列表。')
+        fields = ('id', 'title', 'title_source', 'title_source_id', 'aliases', 'code', 'term', 'current', 'course_ids')
+        return {'items': [{key: row[key] for key in fields if key in row} for row in data['courses'] if not current or row['current']],
+                'account_revision': owner, 'current_semester': data['metadata']['current_semester'], 'unavailable': unavailable}
+
     @router.get("/snapshot")
     async def snapshot():
+        return await read_once(context, 'snapshot', lambda: account_revision(context), load_snapshot)
+
+    async def load_snapshot():
         owner = account_revision(context)
         values, unavailable = await snapshots(context, SOURCES)
         # Optional local facts have no school login provider and never call back into courses.
-        group_response = await context.api('group-messages', '/snapshot')
+        group_response = await context.api('group-messages', '/snapshot', reuse_key=owner)
         if group_response.status_code == 200:
             values['group-messages'] = group_response.json()
-        response = await context.api("eams")
+        response = await context.api("eams", reuse_key=owner)
         plan = {}
         if response.status_code == 200:
             try:
@@ -48,6 +64,15 @@ def create_router(context):
         if owner != account_revision(context):
             raise HTTPException(409, "账号已更新，请刷新课程资料。")
         data = combine(values, context.store.read("groups", []), current_semester(values))
+        local_response = await context.api('assignments', '/handling', reuse_key=owner)
+        local = local_response.json() if local_response.status_code == 200 else {}
+        if owner != account_revision(context) or local.get('account_revision', owner) != owner:
+            raise HTTPException(409, '账号已更新，请刷新课程资料。')
+        for item in data['assignments']:
+            item['handling'] = local.get('items', {}).get(item['id'], {})
+            item['reminder_suppressed'] = item['handling'].get('status') == 'waived'
+        if local_response.status_code != 200:
+            data['issues'].append('作业本地选择暂不可用；待办可能包含已标记无需提交的项目。')
         decorate(data["courses"], plan)
         if unavailable:
             data["issues"].append("以下来源模块未启用或暂时不可用：" + "、".join(unavailable))

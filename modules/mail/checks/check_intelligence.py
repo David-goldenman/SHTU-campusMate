@@ -89,7 +89,7 @@ with sandbox('mail') as context:
     for row in records:
         assert row['classification']['input_revision'] == expected[row['id']]['fingerprint']
         if row['id'] != item['id']:
-            assert row['classification'] == {**expected[row['id']]['preliminary'], 'input_revision': expected[row['id']]['fingerprint'], 'review_pending': True}
+            assert row['classification'] == {**expected[row['id']]['preliminary'], 'input_revision': expected[row['id']]['fingerprint'], 'review_pending': True, 'event_window': None}
     assert records[0]['classification']['category'] == '我的分类', 'Batching must preserve manual priority'
     with patch.object(context.ai, 'settings', return_value={'provider': 'openai', 'model': 'changed', 'base_url': 'https://example.test'}):
         assert all(row['classification']['input_revision'] != expected[row['id']]['fingerprint'] for row in intelligence.records()), 'New batches must use current AI settings'

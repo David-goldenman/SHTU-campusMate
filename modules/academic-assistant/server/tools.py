@@ -13,6 +13,8 @@ from .documents import extract
 from .reader import Reader, cached_json, save_json
 from .models import Profile
 from .workspace import WorkCommand, Workspace
+from .assignment_actions import change_handling
+from .files import Files, settings as file_settings
 
 
 def profile_owner(context):
@@ -39,6 +41,7 @@ class Task:
         self.reader = reader or Reader(context)
         self.cancel_event = None
         self.finished = False
+        self.files = Files(self)
 
     def check(self):
         if self.finished or self.cancel_event is not None and self.cancel_event.is_set():
@@ -139,11 +142,26 @@ class Task:
         response = await self.context.api('timetable', '/capabilities')
         self.check()
         calendar = response.json() if response.status_code == 200 else {'available': False, 'message': '时间表模块未就绪，请在设置启用。'}
+        handling = await self.context.api('assignments', '/handling')
+        self.check()
         value = {'general': ['知识讲解', '题目分析', '代码与写作辅助', '学习与复习规划'],
+                 'assignment_handling': {'available': handling.status_code == 200, 'tool': 'study_assignment_handling', 'actions': ['无需我提交（队友已提交等）', '恢复作业提醒']},
+                 'files': {**file_settings(self.context), 'tool': 'study_files', 'actions': ['list', 'read', 'write', 'edit', 'mkdir'], 'approval': 'workspace 外按次审批；full 模式按本机账户权限访问；仅用户可更改模式。'},
                  'workspace': ['本地作业进度（不代表原站提交）', '一次性提醒（运行时检查并发送通知中心）', '学习计划的保存、编辑和完成状态'],
                  'read': ['课程、作业、时间表', '课件、录播和讨论', '邮件和通知', '培养方案和历史修读记录'], 'calendar': calendar,
                  'scope': '写操作作用于本地工作台；学校端报名、请假审批、作业提交与选课仍由原系统办理。'}
         return {'items': [self.source('study:capabilities', '当前助手能力', json.dumps(value, ensure_ascii=False))]}
+
+    async def assignment_handling(self, body):
+        return await change_handling(self, body)
+
+    async def file_operation(self, body):
+        value = await self.files.operate(body)
+        if body.action == 'read':
+            value['items'] = [self.source('local-file:' + uuid4().hex, value['path'], value['text'], path=value['path'])]
+        elif value.get('change'):
+            value['items'] = [self.source('file-change:' + uuid4().hex, '本地文件已保存', json.dumps(value['change'], ensure_ascii=False))]
+        return value
 
     def intent(self, quote, verbs):
         if quote.strip() != self.message.strip():

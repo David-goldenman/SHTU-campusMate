@@ -125,7 +125,11 @@ async def check(root):
             assert asset.status_code == 200
             assert asset.headers["cache-control"] == "private, max-age=31536000, immutable"
             assert (await client.get("/api/v1/bootstrap")).headers["cache-control"] == "no-store"
-            assert (await client.get("/assets/styles.css")).headers["cache-control"] == "no-store"
+            shared_asset = await client.get('/assets/styles.css')
+            assert shared_asset.headers['cache-control'] == 'private, no-cache'
+            not_modified = await client.get('/assets/styles.css', headers={'If-None-Match': shared_asset.headers['etag']})
+            assert not_modified.status_code == 304 and not not_modified.content
+            assert not_modified.headers['cache-control'] == 'private, no-cache'
             traversal = first["frontend_url"].split("web/")[0] + "web/%2e%2e/server/__init__.py"
             assert (await client.get(traversal)).status_code == 404
             assert (await client.get("/api/v1/modules/alpha/state")).json()["version"] == "one"

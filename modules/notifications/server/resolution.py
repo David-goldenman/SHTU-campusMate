@@ -25,14 +25,22 @@ def reconcile(items, assignments, now):
             return record.get('source_status') in {'ready', 'partial'} and not any(
                 record.get(key) for key in ('needs_review', 'source_stale', 'submission_stale', 'stale'))
 
-        complete = all(fresh(record) and record.get('submitted') is True and record.get('submission_status') in
-                       {'submitted', 'needs_grading', 'graded'} for record in records)
-        reopened = any(fresh(record) and record.get('submitted') is False and record.get('submission_status') in
-                       {'not_submitted', 'draft'} for record in records)
+        def submitted(record):
+            return fresh(record) and record.get('submitted') is True and record.get('submission_status') in {'submitted', 'needs_grading', 'graded'}
+
+        waived = any(record.get('reminder_suppressed') for record in records)
+        complete = all(record.get('reminder_suppressed') or submitted(record) for record in records)
+        reason = 'assignment_not_required' if waived else 'assignment_submitted'
+        reopened = any(not record.get('reminder_suppressed') and (
+            fresh(record) and record.get('submitted') is False and record.get('submission_status') in {'not_submitted', 'draft'}
+            or item.get('auto_read', {}).get('reason') == 'assignment_not_required' and record.get('pending')) for record in records)
         if complete and not item['read']:
-            item.update(read=True, auto_read={'reason': 'assignment_submitted', 'at': now, 'assignment_ids': sorted(set(identities))})
+            item.update(read=True, auto_read={'reason': reason, 'at': now, 'assignment_ids': sorted(set(identities))})
             changed = True
-        elif reopened and item.get('auto_read', {}).get('reason') == 'assignment_submitted':
+        elif complete and item.get('auto_read') and item['auto_read']['reason'] != reason:
+            item['auto_read']['reason'] = reason
+            changed = True
+        elif reopened and item.get('auto_read', {}).get('reason') in {'assignment_submitted', 'assignment_not_required'}:
             item['read'] = False
             item.pop('auto_read', None)
             changed = True

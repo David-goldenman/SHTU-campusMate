@@ -129,8 +129,10 @@ function apply() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content',entry.themeColor?.(selected.id) || '#2e3440');
   document.querySelectorAll('[data-theme-name]').forEach(node => {node.textContent = selected.name;});
   const logo = document.querySelector('.brand img');
-  if (logo) logo.src = entry.icon || '/assets/icon.svg';
-  document.querySelector('link[rel="icon"]')?.setAttribute('href',entry.favicon || '/assets/icon.svg');
+  const icon=entry.icon || '/assets/icon.svg', favicon=entry.favicon || '/assets/icon.svg';
+  if (logo && (logo.getAttribute?.('src') ?? logo.src)!==icon) logo.src = icon;
+  const faviconNode=document.querySelector('link[rel="icon"]');
+  if(faviconNode && faviconNode.getAttribute?.('href')!==favicon)faviconNode.setAttribute('href',favicon);
 }
 export function setAppearance(patch) {
   const supplied=Object.fromEntries(Object.entries(object(patch)).filter(([name,value])=>['theme','companions','reduceMotion','options'].includes(name) && value!==undefined));

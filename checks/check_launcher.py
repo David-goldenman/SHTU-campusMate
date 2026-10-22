@@ -86,6 +86,17 @@ def check(project):
     assert not state_file.exists()
     command("--stop")
 
+    # Closed connections must not make the port probe block an immediate restart.
+    try:
+        command("--port", port, "--no-browser")
+        restarted = json.loads(state_file.read_text(encoding="utf-8"))
+        assert restarted["instance"] != first["instance"] and restarted["port"] == port
+        with http.open(f"http://127.0.0.1:{port}/api/v1/bootstrap", timeout=3) as response:
+            assert all(item["status"] == "ready" for item in json.loads(response.read())["modules"])
+    finally:
+        command("--stop")
+    assert not state_file.exists()
+
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen()
@@ -100,7 +111,7 @@ def check(project):
         "instance": "a" * 32, "identity": {"created": 0, "image": "wrong"},
     }), encoding="utf-8")
     assert "无需停止" in command("--stop")
-    print("PASS: existing runtime, paths with spaces, ready page/assets, Shanghai time zone, course/dashboard data, installed modules, reuse, graceful stop, busy port and stale PID protection")
+    print("PASS: existing runtime, paths with spaces, ready page/assets, Shanghai time zone, course/dashboard data, installed modules, reuse, graceful stop, immediate restart, busy port and stale PID protection")
 
 
 if __name__ == "__main__":

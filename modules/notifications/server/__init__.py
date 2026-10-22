@@ -22,9 +22,7 @@ def create_router(context):
 
     @router.get("/snapshot")
     async def snapshot():
-        await _service.reconcile_assignments()
-        await _service.reconcile_mail()
-        return _service.snapshot()
+        return await _service.refresh()
 
     @router.post("/generate")
     async def generate(force: bool = False):
