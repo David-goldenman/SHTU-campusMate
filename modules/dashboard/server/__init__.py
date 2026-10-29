@@ -15,7 +15,7 @@ def summarize(data, pending, notices):
 
 def compact(snapshot):
     """Keep every pending item for counts, but omit unrelated course contents."""
-    fields = ('id', 'title', 'course_title', 'url', 'due_at', 'due_default', 'needs_review')
+    fields = ('id', 'title', 'course_title', 'url', 'due_at', 'late_due_at', 'due_default', 'needs_review')
     return {**snapshot,
             'data': {key: snapshot['data'][key] for key in ('metadata', 'issues')},
             'pending': [{key: item[key] for key in fields if key in item} for item in snapshot['pending']],

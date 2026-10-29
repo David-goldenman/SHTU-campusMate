@@ -49,6 +49,7 @@
 .campus-overview .overview-task h4 { margin:2px 0 0; font-size:16px; line-height:1.6; overflow-wrap:anywhere; }
 .campus-overview .overview-task h4 a { color:var(--text); }
 .campus-overview .overview-course { font-size:12px; color:var(--muted); }
+.campus-overview .overview-late { margin:3px 0 0; font-size:11px; line-height:1.5; color:var(--muted); }
 .campus-overview .deadline-stamp { min-width:145px; padding-left:16px; border-left:1px solid var(--border); }
 .campus-overview .overview-overdue { margin-top:20px; }
 .campus-overview .overview-overdue .overview-task { background:color-mix(in srgb,var(--nord11) 4%,var(--paper)); }

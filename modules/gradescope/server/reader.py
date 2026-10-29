@@ -11,6 +11,38 @@ from backend.services.campus.data import digest
 
 BASE = "https://www.gradescope.com"
 HOSTS = ["www.gradescope.com", "production-gradescope-uploads.s3-us-west-2.amazonaws.com"]
+LATE_LABEL = re.compile(r"\blate\b|迟交", re.IGNORECASE)
+
+
+def late_time(node):
+    """Tell the late deadline marker apart from the student's real due date."""
+    for owner in (node, node.parent):
+        if owner is None or not hasattr(owner, "get"):
+            continue
+        if any("late" in str(name).casefold() for name in owner.get("class") or []):
+            return True
+    parent = node.parent
+    return parent is not None and bool(LATE_LABEL.search(" ".join(parent.find_all(string=True, recursive=False))))
+
+
+def due_window(row):
+    """Return the real due date separately from the late-submission deadline.
+
+    Gradescope draws one bar per deadline, so an assignment that accepts late
+    work exposes two due-time elements.  The later one is the late deadline,
+    which must not replace the deadline for an on-time submission.
+    """
+    values = []
+    for node in row.select("time.submissionTimeChart--dueDate[datetime]"):
+        value = timestamp(node["datetime"])
+        if value and value not in [item[0] for item in values]:
+            values.append((value, late_time(node)))
+    if not values:
+        return None, None
+    normal = [value for value, late in values if not late] or [value for value, _ in values]
+    due = min(normal, key=lambda value: datetime.fromisoformat(value))
+    last = max((value for value, _ in values), key=lambda value: datetime.fromisoformat(value))
+    return due, last if datetime.fromisoformat(last) > datetime.fromisoformat(due) else None
 
 
 def courses(html):
@@ -63,7 +95,7 @@ def assignments(html, course_id, issues):
         reasons = {'graded': '来源已显示数值成绩；0 分同样是评分记录。', 'submitted': '来源明确显示已提交。',
                    'draft': '来源显示草稿或进行中，尚未正式提交。', 'not_submitted': '来源明确显示未提交。',
                    'exempt': '来源已标记豁免，不列入需要提交的待办。', 'unknown': '来源未返回可确认的提交状态，请查看原站。'}
-        dates = row.select("time.submissionTimeChart--dueDate[datetime]")
+        due_at, late_due_at = due_window(row)
         release = row.select_one("time.submissionTimeChart--releaseDate[datetime]")
         released_at = timestamp(release["datetime"]) if release else None
         active = button is not None and not button.has_attr("disabled") and button.get("aria-disabled") != "true"
@@ -76,7 +108,7 @@ def assignments(html, course_id, issues):
         result.append({"id": identity("gradescope", f"{course_id}:{value or digest(title + str(released_at))}"), "source": "gradescope", "source_id": value, "source_course_id": str(course_id), "course_id": identity("gradescope", course_id), "title": title, "url": raw_url, "submitted": submitted, "status": status,
             "submission_status": status, "submission_evidence": 'gradebook' if score else 'submission_list' if status != 'unknown' else 'unavailable',
             "submission_reason": reasons[status], "exempt": exempt, "checked_at": datetime.now(timezone.utc).isoformat(),
-            "due_at": timestamp(dates[-1]["datetime"]) if dates else None, "release_at": released_at, "score": float(score[1]) if score else None, "max_score": float(score[2]) if score else None, "availability": availability, "actionable": True if active else False if not reachable or scheduled or button is not None else None, "has_statement": None})
+            "due_at": due_at, "late_due_at": late_due_at, "release_at": released_at, "score": float(score[1]) if score else None, "max_score": float(score[2]) if score else None, "availability": availability, "actionable": True if active else False if not reachable or scheduled or button is not None else None, "has_statement": None})
     return result
 
 

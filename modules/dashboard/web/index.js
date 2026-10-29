@@ -1,4 +1,4 @@
-import {sourcePanel, link} from '/assets/campus.js';
+import {sourcePanel, link, time} from '/assets/campus.js';
 import {mountCampusMoment} from '/assets/themes/campus-moments.js';
 import {deadlineInfo, deadlineMarkup} from '/assets/deadlines.js';
 
@@ -33,7 +33,7 @@ export async function mount(container,context) {
     const upcoming = dated.filter(item => item.deadline.urgency !== 'overdue');
     const urgent = upcoming.filter(item => item.deadline.urgency === 'urgent');
     const unknown = pending.length - dated.length;
-    const task = item => `<article class="overview-task" data-priority="${item.deadline.urgency}"><div><p class="overview-course">${e(item.course_title || '待完成作业')}${item.needs_review ? ' · 状态待核实' : ''}</p><h4>${link(item.url,item.title,e)}</h4></div>${deadlineMarkup(item.due_at,e,{now})}</article>`;
+    const task = item => `<article class="overview-task" data-priority="${item.deadline.urgency}"><div><p class="overview-course">${e(item.course_title || '待完成作业')}${item.needs_review ? ' · 状态待核实' : ''}</p><h4>${link(item.url,item.title,e)}</h4>${item.late_due_at?'<p class="overview-late">迟交截止 '+e(time(item.late_due_at))+'</p>':''}</div>${deadlineMarkup(item.due_at,e,{now})}</article>`;
     const agenda = (snapshot.agenda || []).map(day => {
       const events = day.events.filter(item => !['leave','cancel','moved'].includes(item.status) && item.event_type !== 'deadline' && !(day.date === today && item.ends_at && Date.parse(item.ends_at) < now));
       return `<div class="overview-day"><h4>${day.date === today ? '今天' : day.date === tomorrow ? '明天' : e(day.date)} <span>${e(day.date.slice(5).replace('-',' / '))}</span></h4>${events.slice(0,4).map(item => {

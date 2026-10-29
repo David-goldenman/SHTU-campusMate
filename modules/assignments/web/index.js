@@ -27,13 +27,14 @@ export async function mount(container,context) {
   container.classList.add('assignment-center');
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   const canEditDue = item => item.due_default || !item.due_at || item.due_source === 'manual';
+  const lateDeadline = item => item.late_due_at && ['pending','late'].includes(item.category) ? `<span class="field-hint assignment-late-due">迟交截止 ${e(time(item.late_due_at))}</span>` : '';
   const deadlineCell = item => {
     if (item.reminder_suppressed) return `<div class="assignment-deadline"><span class="field-hint">已停止截止提醒</span>${item.due_at && !item.due_default ? '<span class="field-hint">原截止 '+e(time(item.due_at))+'</span>' : ''}</div>`;
     if (item.due_default) {
       const estimate = deadlineInfo(item.due_at);
       return `<div class="assignment-deadline assignment-deadline-tentative"><strong>待完成 · 时间待定</strong><span>默认第 18 教学周周日 · ${e(estimate.date)} ${e(estimate.clock)}</span><button type="button" class="text-button" data-due-toggle>设置时间</button></div>`;
     }
-    return `<div class="assignment-deadline">${deadlineMarkup(item.due_at,e,{emphasize:['pending','late'].includes(item.category)})}${canEditDue(item) ? '<button type="button" class="text-button" data-due-toggle>'+ (item.due_source === 'manual' ? '调整时间' : '设置时间') +'</button>' : ''}</div>`;
+    return `<div class="assignment-deadline">${deadlineMarkup(item.due_at,e,{emphasize:['pending','late'].includes(item.category)})}${lateDeadline(item)}${canEditDue(item) ? '<button type="button" class="text-button" data-due-toggle>'+ (item.due_source === 'manual' ? '调整时间' : '设置时间') +'</button>' : ''}</div>`;
   };
   const dueEditor = item => {
     if (!canEditDue(item)) return '';
@@ -158,7 +159,7 @@ export async function mount(container,context) {
         const detail = await context.api('/detail?assignment_id=' + encodeURIComponent(button.dataset.detail));
         if(context.signal.aborted)return;
         const content=document.createElement('div');content.className='assignment-detail';
-        content.innerHTML='<p class="field-hint">'+e(detail.assignment.course_title)+' · '+e(statuses[detail.assignment.availability]||'开放状态未知')+'</p>'+(detail.assignment.due_default?'<p class="field-hint assignment-due-note">来源未提供截止时间；当前按第 18 教学周周日（'+e(deadlineInfo(detail.assignment.due_at).date+' '+deadlineInfo(detail.assignment.due_at).clock)+'）估计，可在作业列表中内联修改。</p>':deadlineMarkup(detail.assignment.due_at,e,{emphasize:false}))+'<p>'+e(submissionLabel(detail.assignment))+'</p><details><summary>提交状态依据</summary><p>'+e(detail.assignment.submission_reason||'依据最近同步的原站记录。')+'</p>'+(detail.assignment.checked_at?'<p class="field-hint">检查于 '+e(time(detail.assignment.checked_at))+'</p>':'')+(detail.assignment.submitted_at?'<p class="field-hint">提交于 '+e(time(detail.assignment.submitted_at))+'</p>':'')+'</details><div class="assignment-statement">'+e(detail.assignment.body_text||'可下载题目或在原站查看完整要求。')+'</div>'+records(detail.materials,e)+'<div class="dialog-actions">'+link(detail.assignment.url,'打开原站',e)+'</div>';
+        content.innerHTML='<p class="field-hint">'+e(detail.assignment.course_title)+' · '+e(statuses[detail.assignment.availability]||'开放状态未知')+'</p>'+(detail.assignment.due_default?'<p class="field-hint assignment-due-note">来源未提供截止时间；当前按第 18 教学周周日（'+e(deadlineInfo(detail.assignment.due_at).date+' '+deadlineInfo(detail.assignment.due_at).clock)+'）估计，可在作业列表中内联修改。</p>':deadlineMarkup(detail.assignment.due_at,e,{emphasize:false}))+(detail.assignment.late_due_at&&['pending','late'].includes(detail.assignment.category)?'<p class="field-hint assignment-late-due">迟交截止 '+e(time(detail.assignment.late_due_at))+'</p>':'')+'<p>'+e(submissionLabel(detail.assignment))+'</p><details><summary>提交状态依据</summary><p>'+e(detail.assignment.submission_reason||'依据最近同步的原站记录。')+'</p>'+(detail.assignment.checked_at?'<p class="field-hint">检查于 '+e(time(detail.assignment.checked_at))+'</p>':'')+(detail.assignment.submitted_at?'<p class="field-hint">提交于 '+e(time(detail.assignment.submitted_at))+'</p>':'')+'</details><div class="assignment-statement">'+e(detail.assignment.body_text||'可下载题目或在原站查看完整要求。')+'</div>'+records(detail.materials,e)+'<div class="dialog-actions">'+link(detail.assignment.url,'打开原站',e)+'</div>';
         const dialog=context.ui.dialog(detail.assignment.title,content);context.signal.addEventListener('abort',()=>dialog.close(),{once:true});
         content.insertAdjacentHTML('afterbegin',handlingNote(detail.assignment));
       }));

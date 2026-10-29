@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from backend.services.campus.data import digest
 from backend.services.campus.remote import SourceError
 
-FIELDS = ("source", "title", "url", "code", "term", "course_id", "sender", "received_at", "due_at", "release_at", "updated_at", "submitted", "handling", "reminder_suppressed", "submission_status", "submission_evidence", "submission_reason", "checked_at", "submitted_at", "submission_stale", "exempt", "due_at_evidence", "actionable", "availability", "score", "max_score", "path", "teacher", "location", "weekday", "period_start", "period_end", "weeks", "grades", "stale")
+FIELDS = ("source", "title", "url", "code", "term", "course_id", "sender", "received_at", "due_at", "late_due_at", "release_at", "updated_at", "submitted", "handling", "reminder_suppressed", "submission_status", "submission_evidence", "submission_reason", "checked_at", "submitted_at", "submission_stale", "exempt", "due_at_evidence", "actionable", "availability", "score", "max_score", "path", "teacher", "location", "weekday", "period_start", "period_end", "weeks", "grades", "stale")
 
 
 def build_context(data, epoch, course_id=None, context_ids=None):
