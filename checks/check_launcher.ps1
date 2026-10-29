@@ -12,6 +12,8 @@ $options = Read-LaunchOptions @('--distro', 'My Ubuntu', '--port', '17666', '--n
 Assert ($options.Distro -eq 'My Ubuntu' -and $options.Port -eq 17666 -and $options.NoBrowser) 'CLI values were not preserved.'
 Assert (Read-LaunchOptions @('--help')).Help 'Help flag failed.'
 Assert (Read-LaunchOptions @('--version')).Version 'Version flag failed.'
+Assert ((Read-LaunchOptions @('--share')).Share) 'Share flag failed.'
+Assert (!(Read-LaunchOptions @()).Share) 'Phone access must stay opt-in.'
 foreach ($invalid in @(@('--port'), @('--port', '80'), @('--port', '65536'), @('--port', 'a'), @('--distro'), @('--unknown'))) {
     Rejects { Read-LaunchOptions $invalid }
 }

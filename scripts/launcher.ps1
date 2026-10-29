@@ -9,12 +9,13 @@ function Invoke-Wsl([string]$Executable, [string[]]$Arguments, [switch]$Quiet) {
 }
 
 function Read-LaunchOptions([string[]]$Values) {
-    $result = @{ Distro = $env:CAMPUS_WSL_DISTRO; Port = $null; NoBrowser = $false; Check = $false; Help = $false; Version = $false }
+    $result = @{ Distro = $env:CAMPUS_WSL_DISTRO; Port = $null; NoBrowser = $false; Share = $false; Check = $false; Help = $false; Version = $false }
     for ($i = 0; $i -lt $Values.Count; $i++) {
         switch ($Values[$i]) {
             { $_ -in '--help', '-h', '-?' } { $result.Help = $true }
             '--version' { $result.Version = $true }
             '--no-browser' { $result.NoBrowser = $true }
+            '--share' { $result.Share = $true }
             '--check' { $result.Check = $true }
             { $_ -in '--distro', '--port' } {
                 $flag = $_

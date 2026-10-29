@@ -1,0 +1,40 @@
+name: campusMate
+options:
+  bundleIdPrefix: edu.shanghaitech
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "16.0"
+  groupSortPosition: top
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  campusMate:
+    type: application
+    platform: iOS
+    sources:
+      - path: campusMate
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: campusMate
+        PRODUCT_BUNDLE_IDENTIFIER: edu.shanghaitech.campusmate
+        INFOPLIST_FILE: campusMate/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+schemes:
+  campusMate:
+    build:
+      targets:
+        campusMate: all
+    run:
+      config: Debug
+    archive:
+      config: Release

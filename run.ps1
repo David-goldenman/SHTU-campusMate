@@ -6,10 +6,14 @@ $lock = $null
 $browserJob = $null
 try {
     $options = Read-LaunchOptions $args
+    if ($options.Share -and $options.Distro) {
+        throw '--share needs the native Windows backend. Do not combine it with --distro: WSL2 does not expose the port to the local network.'
+    }
     if ($options.Help) {
         Write-Host 'campusMate launcher'
-        Write-Host 'run.cmd [--distro NAME] [--port PORT] [--no-browser] [--check]'
+        Write-Host 'run.cmd [--distro NAME] [--port PORT] [--share] [--no-browser] [--check]'
         Write-Host 'Start the native Windows service and open Microsoft Edge. --distro selects WSL.'
+        Write-Host '--share accepts the iPhone client: the server window prints the address and pairing code.'
         Write-Host 'Keep this window open. Press Ctrl+C to stop the server.'
         Write-Host '--check validates launch dependencies without starting the server.'
         Write-Host '--version prints the application version.'
@@ -28,6 +32,9 @@ try {
         }
         $url = "http://127.0.0.1:$($running.port)"
         Write-Host "Already running: $url"
+        if ($options.Share -and -not $running.share) {
+            Write-Host 'Phone access is off for this instance. Stop it, then start again with --share.'
+        }
         if ($edge) { Start-Process -FilePath $edge -ArgumentList $url }
         exit 0
     }
@@ -86,11 +93,13 @@ try {
     $launchId = [guid]::NewGuid().ToString('N')
     $serverArgs = @('--launch-id', $launchId)
     if ($options.Port) { $serverArgs += @('--port', [string]$options.Port) }
+    if ($options.Share) { $serverArgs += '--share' }
     if ($edge) {
         $browserJob = Start-Job -FilePath (Join-Path $PSScriptRoot 'scripts/open-workspace.ps1') -ArgumentList $PSScriptRoot, $edge, $launchId
     }
     Write-Host 'Starting campusMate.'
     Write-Host 'Keep this window open; Ctrl+C stops the service.'
+    if ($options.Share) { Write-Host 'Phone access is on. The next line shows the address and pairing code.' }
     if ($edge) { Write-Host 'Edge opens when the service is ready.' }
     if ($options.Distro) {
         Invoke-Wsl $wsl (@('--distribution', $distribution, '--cd', $PSScriptRoot, '--exec', 'bash', './run.sh') + $serverArgs)

@@ -6,7 +6,9 @@
 
 稳定检查名称为 **CI required**。Windows Server 2025 托管 runner 使用 Python 3.12、Node.js 22.23.3、pnpm 11.22.0 和 uv 0.13.0，按 `uv.lock` 安装依赖。Actions 固定到发布提交，工作流只有读取仓库内容的权限，不保存 checkout 凭据，不需要学校账号、AI Key 或仓库自定义 secret。
 
-本地 Windows 的 `./check.ps1`、WSL 的 `bash check.sh` 与 CI 共同调用 `checks/run_checks.py`：自动发现 `checks/check_*.py`、`modules/*/checks/check_*.py`，覆盖框架、模块独立启停、依赖缺失、空框架、账号隔离、真实 Windows DPAPI、官方 Harness 原生插件与各来源合成协议检查；另执行前端清理、设备引导、Windows 启动器检查及 JavaScript 语法检查。任一检查失败即失败，不允许以跳过或忽略错误得到通过结果。
+本地 Windows 的 `./check.ps1`、WSL 的 `bash check.sh` 与 CI 共同调用 `checks/run_checks.py`：自动发现 `checks/check_*.py`、`modules/*/checks/check_*.py`，覆盖框架、模块独立启停、依赖缺失、空框架、账号隔离、真实 Windows DPAPI、官方 Harness 原生插件、手机分享配对、iOS 外壳文件与各来源合成协议检查；另执行前端清理、设备引导、Windows 启动器检查及 JavaScript 语法检查。任一检查失败即失败，不允许以跳过或忽略错误得到通过结果。
+
+`checks/check_ipa.py` 只读校验 `ipa/` 的工程定义、版本同步、图标尺寸与 alpha、Info.plist 的本地网络例外、配对默认值和打包脚本换行，不需要 macOS。`.github/workflows/ios.yml` 另行在 `macos-14` 上执行 `ipa/build_ipa.sh`，真实编译 SwiftUI 外壳并产出未签名 `.ipa`，仅由 `ipa/**` 改动触发，不属于 **CI required**。
 
 CI 的学校 HTTP 与模型响应使用合成夹具；安装依赖及 Harness 插件仍需要联网。依赖缓存只保存 uv 包缓存，不上传 `.private`、浏览器配置、测试临时目录或用户资料。交互式 Edge 登录、真实学校协议与最终网页视觉验收仍由授权成员按功能单独验证。
 

@@ -1,0 +1,40 @@
+name: iOS shell
+
+# The iPhone client is a thin WKWebView shell; this job proves the project still
+# builds on a Mac. Downloading the .ipa itself happens locally with
+# ipa/build_ipa.sh, or by adding an upload step pinned to a commit SHA.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ipa/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'ipa/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unsigned device build
+    runs-on: macos-14
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ipa
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Build the shell and zip an unsigned IPA
+        run: ./build_ipa.sh

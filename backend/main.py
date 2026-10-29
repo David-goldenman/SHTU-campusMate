@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Security
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -27,6 +27,7 @@ from .core.store import Store
 from .core.vault import Vault
 from .core.backups import Backups
 from .core.appearance import AppearanceUpdate, read_appearance, patch_appearance, reset_core
+from .core import share as share_access
 from .core.themes import catalog as theme_catalog
 from .core.errors import PublicError, catch_errors, error_response, file_error, http_error, storage_error
 from .services.ai import AIService, create_router as ai_router
@@ -76,11 +77,12 @@ class DeleteBackup(BaseModel):
     confirmation: Literal['DELETE_BACKUP']
 
 
-def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES, data_dir=DATA):
+def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES, data_dir=DATA, share=False):
     store = store or Store()
     vault = vault or Vault()
     active_port = Settings(port=active_port or store.read("settings", {"port": 16666})["port"]).port
     csrf = secrets.token_urlsafe(32)
+    pair = share_access.code(store) if share else ""
     auth, ai = AuthService(vault, store, runtime_dir=Path(data_dir) / 'runtime'), AIService(vault, store)
     errors = {LoginRequired: login_error, VerificationRequired: login_error, httpx.HTTPError: network_error, RuntimeError: runtime_error, ValueError: argument_error, RequestValidationError: validation_error, StarletteHTTPException: http_error, sqlite3.Error: storage_error, OSError: file_error}
     modules = ModuleManager(store, vault, auth, ai, root=modules_root, data=data_dir, exception_handlers=errors)
@@ -108,14 +110,27 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
     app.state.backups = backups
     app.state.launch_id = secrets.token_hex(16)
 
+    def matches(supplied):
+        return secrets.compare_digest(supplied.encode("utf-8", "ignore"), pair.encode())
+
     @app.middleware("http")
     async def local_only(request: Request, call_next):
-        hosts = {f"127.0.0.1:{active_port}", f"localhost:{active_port}"}
-        origins = {"http://" + host for host in hosts}
-        if request.headers.get("host") not in hosts:
+        host = request.headers.get("host", "")
+        phone = bool(pair) and share_access.address(host, active_port)
+        if host not in share_access.loopback(active_port) and not phone:
             return error_response(request, 403, '仅允许从本机地址访问。')
-        if request.headers.get("origin") and request.headers["origin"] not in origins or request.headers.get("sec-fetch-site") == "cross-site":
+        origin = request.headers.get("origin", "")
+        if origin and origin not in {f"http://{host}", f"https://{host}"} or request.headers.get("sec-fetch-site") == "cross-site":
             return error_response(request, 403, '请求来源不匹配。')
+        if phone:
+            code = request.query_params.get("pair", "")
+            if not matches(request.cookies.get(share_access.COOKIE, "")) and not matches(code):
+                return error_response(request, 403, '需要配对码：请在运行 campusMate 的电脑窗口查看地址与配对码。')
+            if code and request.method in {"GET", "HEAD"}:
+                # Remember the code in a cookie so it leaves the address bar.
+                response = RedirectResponse("/", status_code=303)
+                response.set_cookie(share_access.COOKIE, pair, max_age=share_access.MAX_AGE, httponly=True, samesite="strict", path="/")
+                return response
         if request.method not in {"GET", "HEAD", "OPTIONS"} and not secrets.compare_digest(request.headers.get("x-framework-token", ""), csrf) and not modules.authorize_write(request):
             return error_response(request, 403, '请刷新工作台后重试。')
         response = await catch_errors(request, call_next)
@@ -247,19 +262,31 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 def main():
     parser = argparse.ArgumentParser(description="campusMate 本地网页服务")
     parser.add_argument("--port", type=int)
+    parser.add_argument("--share", action="store_true", help="允许同一网络的手机连接，启动窗口显示配对码")
     parser.add_argument("--launch-id", help=argparse.SUPPRESS)
     args = parser.parse_args()
-    app = create_app(active_port=args.port)
+    app = create_app(active_port=args.port, share=args.share)
     if args.launch_id:
         app.state.launch_id = args.launch_id
     ready = DATA / "runtime" / "launcher" / "server.json"
     ready.parent.mkdir(parents=True, exist_ok=True)
-    state = {"launch_id": app.state.launch_id, "port": app.state.port, "pid": os.getpid()}
+    state = {"launch_id": app.state.launch_id, "port": app.state.port, "pid": os.getpid(), "share": bool(args.share)}
     ready.write_text(json.dumps(state), encoding="utf-8")
     print(f"campusMate: http://127.0.0.1:{app.state.port}", flush=True)
+    shared = DATA / "runtime" / "launcher" / "share.json"
+    if not args.share and shared.exists():
+        # Drop the address of a previous shared run so nobody pairs with a stale one.
+        shared.unlink()
+    if args.share:
+        addresses = share_access.urls(app.state.port)
+        pin = share_access.code(app.state.store)
+        shared.write_text(json.dumps({"urls": addresses, "code": pin, "port": app.state.port}, ensure_ascii=False), encoding="utf-8")
+        print(f"campusMate 手机端: {' / '.join(addresses) if addresses else '未发现局域网地址，请先连接 Wi-Fi'}  配对码: {pin}", flush=True)
     try:
-        uvicorn.run(app, host="127.0.0.1", port=app.state.port, access_log=False)
+        uvicorn.run(app, host="0.0.0.0" if args.share else "127.0.0.1", port=app.state.port, access_log=False)
     finally:
+        if shared.exists() and args.share:
+            shared.unlink()
         if ready.exists() and json.loads(ready.read_text(encoding="utf-8")).get("launch_id") == app.state.launch_id:
             ready.unlink()
 

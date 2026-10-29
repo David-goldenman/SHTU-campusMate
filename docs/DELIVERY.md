@@ -1,6 +1,6 @@
 # 四人协作、打包与迁移
 
-当前交付物是 Windows 原生运行的本地网页工作台，WSL 是可选开发入口。`run.cmd` 启动 Python 后端、官方 Harness 与本机 Edge；正式安装包由后续桌面集成工作提供。本文件约定四位成员共同遵守的边界。
+当前交付物是 Windows 原生运行的本地网页工作台，WSL 是可选开发入口。`run.cmd` 启动 Python 后端、官方 Harness 与本机 Edge；正式安装包由后续桌面集成工作提供。`ipa/` 内的 SwiftUI 客户端只是同一套页面的手机外壳，需要电脑以 `run.cmd --share` 运行，构建与签名见 [iPhone 客户端](../ipa/README.md)。本文件约定四位成员共同遵守的边界。
 
 ## 四人协作的共同约定
 

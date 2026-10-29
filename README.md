@@ -46,6 +46,6 @@ PDF 与 PPTX 资料支持按页提取文字和引用，扫描件可配置图片�
 
 ## 开始使用
 
-当前提供 Windows 本地网页体验。准备运行环境后，双击根目录的 `run.cmd` 打开工作台，在设置中连接校园服务并填写模型 API Key。
+当前提供 Windows 本地网页体验。准备运行环境后，双击根目录的 `run.cmd` 打开工作台，在设置中连接校园服务并填写模型 API Key。想让 iPhone/iPad 在同一 Wi-Fi 下打开同一个工作台时，运行 `run.cmd --share`，用启动窗口显示的局域网地址与配对码连接 [`ipa/`](ipa/README.md) 里的客户端。
 
 安装、启动和配置见 [使用指南](docs/PROJECT_GUIDE.md#启动)；品牌图标与宣传素材见 [品牌介绍](docs/BRAND.md)。

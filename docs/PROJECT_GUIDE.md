@@ -45,11 +45,14 @@
 # 在 PowerShell/CMD 中也可直接使用 run.cmd
 .\run.cmd --check
 .\run.ps1 --port 17666
+.\run.ps1 --share
 .\run.ps1 --distro Ubuntu-22.04
 .\run.ps1 --no-browser
 ```
 
 启动器默认使用 Windows 原生环境；指定 `--distro` 或 `CAMPUS_WSL_DISTRO` 时使用对应 WSL 发行版。`--distro` 或本机环境变量 `CAMPUS_WSL_DISTRO` 可指定个人选择，不修改系统默认发行版。路径从脚本目录解析，支持中文和空格。服务就绪后自动打开 Edge；重复双击会复用本项目已运行的实例。保留启动窗口，按 `Ctrl+C` 停止服务；失败时 `run.cmd` 暂停显示错误，便于查看。
+
+`--share` 打开手机访问：启动窗口打印 `campusMate 手机端: http://192.168.x.x:16666  配对码: ab12cd34`，同样的内容临时写入 `.private/runtime/launcher/share.json`，服务退出时删除。手机与电脑需在同一 Wi-Fi，配合 [`ipa/`](../ipa/README.md) 的 iOS 客户端使用；默认仍只监听 `127.0.0.1`，只有 `--share` 才监听 `0.0.0.0`，且局域网请求必须带配对码。该开关不能与 `--distro` 同用（WSL2 的端口不暴露到局域网）。微信群、QQ 群消息依赖电脑端登录，仍只在电脑上使用。
 
 默认端口为 16666，设置中修改后重启生效，`--port` 只覆盖当次运行。启动器确认本目录实例后复用已运行服务。`--help`、`--version` 不启动服务，`--check` 检查启动依赖。首次准备依赖需要联网；若 PATH 中没有 uv，启动器会用本机 Python/pip 将其安装到 `.private/runtime/tools/uv` 并复用，也可用 `CAMPUS_UV` 指定已有程序。uv 安装见 [官方说明](https://docs.astral.sh/uv/getting-started/installation/)。
 
