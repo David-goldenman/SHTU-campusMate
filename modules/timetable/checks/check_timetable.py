@@ -69,6 +69,37 @@ assert official_terms['2026-fall']['closures'] == [{'date': '2026-10-28', 'title
 assert official_terms['2026-spring']['week_one'] == '2027-02-15'
 noisy_terms = calendar_parser('秋学期（2025，9，巧．2026．L18）秋学期（2026．9．14．2027．L17）春学期（2027．2．15．2027．6．20）暑学期（2027．6．2 巷2027．7．18）')
 assert noisy_terms['2026-fall']['week_one'] == '2026-09-14' and noisy_terms['2026-spring']['week_one'] == '2027-02-15'
+holiday_parser = module.Holidays.refresh.__globals__['parse']
+holiday_years = module.Holidays.refresh.__globals__['calendar_years']
+notice_url = module.Holidays.refresh.__globals__['notice_url']
+assert holiday_years(None) == [] and holiday_years('2026-fall') == [2026, 2027]
+assert holiday_years('2027-spring') == [2027] and holiday_years('2027-summer') == [2027]
+notice = '''国务院办公厅关于2026年部分节假日安排的通知
+各省、自治区、直辖市人民政府，国务院各部委、各直属机构：
+一、元旦：
+1月1日（周四）至3日（周六）放假调休，共3天。1月4日（周日）上班。
+二、春节：
+2月15日（农历腊月二十八、周日）至23日（农历正月初七、周一）放假调休，共9天。2月14日（周六）、2月28日（周六）上班。
+三、国庆节、中秋节：
+10月1日（周四）至8日（周四）放假调休，共8天。9月27日（周日）、10月10日（周六）上班。
+国务院办公厅
+2025年11月4日'''
+holidays_on, workdays_on = holiday_parser(notice, 2026)
+assert len(holidays_on) == 20 and holidays_on['2026-01-01'] == '元旦'
+assert holidays_on['2026-02-15'] == '春节' and holidays_on['2026-02-23'] == '春节'
+assert holidays_on['2026-10-08'] == '国庆节、中秋节'
+assert workdays_on == {'2026-01-04': '元旦', '2026-02-14': '春节', '2026-02-28': '春节',
+                       '2026-09-27': '国庆节、中秋节', '2026-10-10': '国庆节、中秋节'}
+search = {'searchVO': {'listVO': [
+    {'title': '国务院办公厅关于<em>2026</em>年部分节假日安排的通知', 'url': 'https://www.gov.cn/zhengce/content_1.htm'},
+    {'title': '国务院办公厅关于2027年部分节假日安排的通知', 'url': 'https://example.invalid/2027.htm'}]}}
+assert notice_url(search, 2026) == 'https://www.gov.cn/zhengce/content_1.htm'
+try:
+    notice_url(search, 2027)
+except ValueError as error:
+    assert '2027' in str(error)
+else:
+    raise AssertionError('A notice outside www.gov.cn must not be used')
 from datetime import date
 legacy = {'metadata': {'units': 13}, 'timetable': [
     {**item, 'id': 'a-evening', 'period_start': 10, 'period_end': 11},
@@ -290,6 +321,27 @@ async def check_schedule():
                 selected = (await client.get('/schedule?week_start=2026-10-20')).json()['calendar']
                 assert selected['week_start'] == '2026-10-19' and selected['teaching_week'] == 1
                 assert len([item for item in selected['days'][1]['events'] if item['event_type'] == 'class']) == 2
+                assert schedule['holidays']['years'] == [2026, 2027] and schedule['holidays']['items'] == []
+                context.store.write('holidays:2026', {
+                    'holidays': [{'date': '2026-10-20', 'title': '合成假期'}],
+                    'workdays': [{'date': '2026-10-24', 'title': '合成调休'}],
+                    'checked_at': '2026-09-01T00:00:00+08:00', 'attempted_term': '2026-fall', 'error': None})
+                # A notice published after this term began is expected to be absent.
+                context.store.write('holidays:2027', {
+                    'holidays': [], 'workdays': [], 'checked_at': '2026-09-01T00:00:00+08:00',
+                    'attempted_term': '2026-fall', 'error': '国务院尚未公布 2027 年部分节假日安排。'})
+                closed_week = (await client.get('/schedule?week_start=2026-10-19')).json()
+                assert not [item for item in closed_week['calendar']['days'][1]['events'] if item['event_type'] == 'class']
+                assert any(item['id'] == 'calendar:holiday:2026-10-20' for day in closed_week['calendar']['days'] for item in day['events'])
+                assert [item['date'] for item in closed_week['holidays']['items']] == ['2026-10-20']
+                assert [item['date'] for item in closed_week['holidays']['workdays']] == ['2026-10-24']
+                assert not closed_week['holidays']['due'] and closed_week['holidays']['error'] is None
+                later = (await client.get('/schedule?week_start=2026-10-26')).json()
+                assert len([item for item in later['calendar']['days'][1]['events'] if item['event_type'] == 'class']) == 2
+                kept = (await client.get('/calendar/export/courses.ics')).content.decode('utf-8')
+                assert len(ics_blocks(kept, 'VEVENT')) == 2, 'Only the holiday lesson must drop from the export'
+                context.store.delete('holidays:2026')
+                context.store.delete('holidays:2027')
                 exported_courses = await client.get('/calendar/export/courses.ics')
                 course_body = exported_courses.content.decode('utf-8')
                 assert 'SUMMARY:合成课程' in course_body and 'LOCATION:测试教室' in course_body

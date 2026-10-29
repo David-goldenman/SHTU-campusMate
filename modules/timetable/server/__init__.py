@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pydantic import Field, model_validator
 
 from fastapi import HTTPException
@@ -17,11 +17,13 @@ from .commands import Command, adjustments_key, event_record, execute
 from .homework import homework_window, overview_weeks
 from .ical import COURSE_FILENAME, HOMEWORK_FILENAME, build_course_calendar, build_homework_calendar
 from .school_calendar import SchoolCalendar, term_key
+from .holidays import Holidays
 from .persistence import SavedTimetable, term_starts, verify_saved
 
 SCHEDULE_SOURCES = {"blackboard": "Blackboard", "gradescope": "Gradescope", "ecourse": "E 云课堂", "eams": "教务系统"}
 _source = None
 _calendar = None
+_holidays = None
 
 
 class ImportedEvent(Event):
@@ -38,7 +40,7 @@ class UpdatedEvent(Event):
 
 
 def create_router(context):
-    global _source, _calendar
+    global _source, _calendar, _holidays
 
     def read_schedule(remote, previous):
         data = fetch(remote, previous, term_starts=term_starts(context))
@@ -56,10 +58,14 @@ def create_router(context):
                          if value.get('week_one') and value['week_one'] <= today.isoformat()}
                 if begun and max(begun, key=begun.get) != term_key(data['metadata']):
                     data = fetch(remote, previous, term_starts=starts)
+        if holidays.due(term_key(data['metadata'])):
+            # Errors are stored per year and never block the saved timetable.
+            holidays.refresh(term_key(data['metadata']), force=False)
         return data
 
     source = _source = SavedTimetable(context, "ids", ["eams.shanghaitech.edu.cn"], read_schedule, target="timetable", network_target="timetable")
     school = _calendar = SchoolCalendar(context, source)
+    holidays = _holidays = Holidays(context, source)
     router = source.router()
 
     def settings_key():
@@ -92,7 +98,13 @@ def create_router(context):
 
     @router.post('/calendar/refresh')
     async def refresh_calendar(force: bool = True):
-        await run_in_threadpool(school.refresh, source.snapshot()['data']['metadata'], force=force)
+        metadata = source.snapshot()['data']['metadata']
+        try:
+            await run_in_threadpool(school.refresh, metadata, force=force)
+        finally:
+            # Holidays are independent of the PDF: refresh them even when the
+            # school calendar cannot be re-read.
+            await run_in_threadpool(holidays.refresh, term_key(metadata), force=force)
         return settings()
 
     @router.get('/calendar/image')
@@ -199,6 +211,22 @@ def create_router(context):
                            'at': item['date'] + 'T00:00:00+08:00', 'date': item['date'], 'all_day': True, 'url': dates.get('url')})
         if dates.get('error'):
             issues.append(dates['error'])
+        term = term_key(metadata)
+        holidays_view = holidays.view(term)
+        if dates['week_one']:
+            # Holidays only need to reach the last teaching week of this term.
+            weeks = [week for lesson in values['timetable']['data']['timetable']
+                     for week in lesson.get('weeks') or [] if type(week) is int]
+            last = date.fromisoformat(dates['week_one']) + timedelta(days=max(max(weeks, default=18), 1) * 7 - 1)
+            closed = {item['date'] for item in events if item.get('source') == 'calendar'}
+            for item in holidays.closures(term, dates['week_one'], last.isoformat()):
+                if item['date'] in closed:
+                    continue
+                events.append({'id': 'calendar:holiday:' + item['date'], 'title': item['title'] + '（法定假期）',
+                               'source': 'calendar', 'event_type': 'calendar', 'date': item['date'],
+                               'at': item['date'] + 'T00:00:00+08:00', 'all_day': True})
+        if holidays_view['error']:
+            issues.append('节假日：' + holidays_view['error'])
         if local_response.status_code != 200:
             issues.append('作业本地选择暂不可用；截止提醒可能包含已标记无需提交的项目。')
         for name, value in values.items():
@@ -237,6 +265,7 @@ def create_router(context):
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")],
                 "updated_at": updated, "data": data, 'account_revision': owner, 'adjustments': adjustments,
                 'calendar': {**plan, 'week_one_source': dates['source']}, 'school_calendar': school.view(metadata),
+                'holidays': holidays_view,
                 'saved_timetable': {'updated_at': values['timetable'].get('updated_at'), 'verification': verification},
                 'homework': reminders, 'palette': appearance.get('palette', []),
                 'overview': overview_weeks(data, reminders, dates['week_one'], adjustments),
@@ -266,15 +295,23 @@ def create_router(context):
 
 def start(context):
     metadata = _source.snapshot()['data']['metadata']
-    if term_key(metadata) and context.auth.get_status('ids')['identity_verified'] and _calendar.due(metadata):
-        def update():
-            try:
-                _calendar.refresh(metadata, force=False)
-            except HTTPException:
-                pass
-        pending = _source.executor.submit(update)
-        if getattr(context, 'runtime', None):
-            context.runtime.watch('校历更新', pending)
+    term = term_key(metadata)
+    if not term or not context.auth.get_status('ids')['identity_verified']:
+        return
+    if not (_calendar.due(metadata) or _holidays.due(term)):
+        return
+
+    def update():
+        try:
+            _calendar.refresh(metadata, force=False)
+        except HTTPException:
+            pass
+        # The holiday arrangement is read once per semester, including a year
+        # whose notice the State Council publishes after this term began.
+        _holidays.refresh(term, force=False)
+    pending = _source.executor.submit(update)
+    if getattr(context, 'runtime', None):
+        context.runtime.watch('校历与节假日更新', pending)
 
 
 def stop(context):
