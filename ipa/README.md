@@ -30,9 +30,9 @@ cd ipa
 CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh   # 用自动描述文件签名
 ```
 
-产物是 `ipa/campusMate.ipa`，中间文件都在 `ipa/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
+产物是 `ipa/campusMate.ipa`，归档和导出中间文件都在 `ipa/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
 
-`project.yml` 由 XcodeGen 生成 `build/campusMate.xcodeproj`；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
+`project.yml` 由 XcodeGen 生成 `ipa/campusMate.xcodeproj`（与 `INFOPLIST_FILE` 的相对路径一致，已被 `.gitignore` 忽略）；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
 
 版本号 `MARKETING_VERSION` 必须与 `backend/core/config.py` 的 `VERSION` 保持一致，`checks/check_ipa.py` 会校验这一点。
 
@@ -80,4 +80,4 @@ ipa/
 uv run --no-sync python checks/check_ipa.py
 ```
 
-`.github/workflows/ios.yml` 会在 macOS 上真实跑一遍 `build_ipa.sh`，保证工程文件、图标和 Swift 源码始终可编译。
+`.github/workflows/ios.yml` 会在 macOS 上真实跑一遍 `build_ipa.sh`，保证工程文件、图标和 Swift 源码始终可编译，并把未签名产物作为 `campusMate-ipa` artifact 上传，没有 Xcode 的机器可以直接下载。

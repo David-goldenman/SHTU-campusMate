@@ -14,14 +14,21 @@ APP=campusMate
 BUILD=build
 ARCHIVE="$BUILD/$APP.xcarchive"
 
-command -v xcodebuild >/dev/null || { echo 'Xcode command line tools are required (xcode-select --install).' >&2; exit 1; }
+xcodebuild -version >/dev/null 2>&1 || {
+    echo 'A full Xcode install is required, not just the command line tools:' >&2
+    echo '  install Xcode from the App Store, then: sudo xcode-select -s /Applications/Xcode.app' >&2
+    exit 1
+}
 command -v xcodegen >/dev/null || { echo 'xcodegen is required: brew install xcodegen' >&2; exit 1; }
 
-xcodegen generate --spec project.yml --project "$BUILD/$APP.xcodeproj" --quiet
+export TMPDIR="$(pwd)/.tmp"
+mkdir -p "$TMPDIR" "$BUILD"
+
+xcodegen generate --spec project.yml
 
 if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
     echo "Archiving for team $CAMPUS_IOS_TEAM."
-    xcodebuild archive -project "$BUILD/$APP.xcodeproj" -scheme "$APP" -configuration Release \
+    xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
         -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
         -allowProvisioningUpdates DEVELOPMENT_TEAM="$CAMPUS_IOS_TEAM" CODE_SIGN_STYLE=Automatic
     rm -rf "$BUILD/export"
@@ -33,7 +40,7 @@ if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
 fi
 
 echo 'Archiving without code signing; install with a sideloading tool or sign it later.'
-xcodebuild archive -project "$BUILD/$APP.xcodeproj" -scheme "$APP" -configuration Release \
+xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
