@@ -57,6 +57,35 @@ iOS 沙盒**禁止 fork/exec**，现有 26 处 `subprocess` 调用全部不可�
 
 CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起可加一个模拟器构建 job 防回归。
 
+## P1 进展：pydantic-core 已交叉编译成功
+
+FastAPI 这条链上唯一的原生模块是 `pydantic-core`（Rust / pyo3），其余
+（fastapi、starlette、anyio、httpx、pydantic 本体）都是纯 Python。
+
+已产出：
+
+```
+.codex/wheelhouse/pydantic_core-2.50.1-cp313-cp313-ios_16_0_arm64_iphoneos.whl
+  └ pydantic_core/_pydantic_core.cpython-313-iphoneos.so   (arm64, platform=iOS, minos 16.0)
+```
+
+复现脚本：[ipa/local/tools/build_pydantic_core.sh](../ipa/local/tools/build_pydantic_core.sh)。要点：
+
+1. `rustup target add aarch64-apple-ios`，`SDKROOT=xcrun --sdk iphoneos`，`IPHONEOS_DEPLOYMENT_TARGET=16.0`；
+2. pyo3 交叉编译需要目标 Python 的 "prefix"：`lib/libpython3.13.dylib`（链到 Python.framework）、
+   `lib/python3.13/_sysconfigdata__ios_arm64-iphoneos.py`、`include/python3.13/`，
+   并用 `PYO3_CROSS=1 PYO3_CROSS_PYTHON_VERSION=3.13 PYO3_CROSS_LIB_DIR=<prefix>`；
+3. `cargo build --release --target aarch64-apple-ios` 约 23 分钟（单 codegen unit）；
+4. 手动组装 wheel：`_pydantic_core.cpython-313-iphoneos.so` + 纯 Python 包 + dist-info，
+   平台标签 `ios_16_0_arm64_iphoneos`（PEP 730）。
+
+注意：`maturin` 直接 `--target aarch64-apple-ios` 会报 "platform.system() ... don't match"，
+`cibuildwheel --platform ios` 则要求系统装有 python.org 的 macOS Framework 版 CPython
+（需要 root 安装），因此这条 spike 用 cargo + 手工组装 wheel。
+
+剩余原生依赖：`cryptography`（OpenSSL）、`pillow`、`zstandard`、`pypdfium2`。
+其中 `cryptography` 是认证模块的导入依赖，编不出来后端就起不来。
+
 ## 已核实的外部事实（2026-11-10）
 
 - PyPI 上 `pydantic-core`、`cryptography`、`pillow`、`zstandard`、`pypdfium2` **均无 iOS 轮子**（0 个 `ios_*` wheel），必须自行交叉编译。
