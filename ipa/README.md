@@ -68,6 +68,28 @@ ipa/
 - `alert` / `confirm` / `window.prompt`（密码生成器用到）都有原生弹窗；
 - 页面加载失败显示离线提示与重试按钮。
 
+## 本地原型（P0，`ipa/local/`）
+
+`ipa/local/` 是「在手机上自己跑」的第一版：内嵌 CPython（BeeWare 的
+[Python-Apple-support](https://github.com/beeware/Python-Apple-support)），启动后用标准库
+`http.server` 在 `127.0.0.1` 提供打包进 app 的 `web/`，`WKWebView` 直接加载本机地址，不需要电脑。
+
+```bash
+# 一次性：把 Python.xcframework 放到 ipa/local/
+curl -L https://github.com/beeware/Python-Apple-support/releases/download/3.13-b18/Python-3.13-iOS-support.b18.tar.gz |
+    tar xz -C ipa/local
+cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
+```
+
+现状与限制：
+
+- 已实现：本地起服务、加载真实前端、主题目录、`/api/v1/bootstrap`、`/settings`、`/themes`、`/health`；
+- 未实现：业务模块（作业、课程、邮箱、AI 等）仍返回 503——它们依赖的 `pydantic-core`、`cryptography`
+  等原生扩展需要先交叉编译到 iOS，见 [IOS_LOCAL.md](../docs/IOS_LOCAL.md)；
+- 未签名产物无法安装到真机；用 Xcode 签名时，`python/lib/python3.13/lib-dynload/*.so` 也需要一并签名
+  （BeeWare 的 `build/utils.sh` 提供了 `.so → framework` 的转换脚本）；
+- 原型与正式外壳（`ipa/campusMate/`）互不影响，`ios.yml` 的 CI 仍只构建正式外壳。
+
 ## 已知边界
 
 - 只能在同一个局域网内使用；跨网络需要自己加 HTTPS 反向代理，届时 `--share` 的私有地址校验会拒绝公网域名。

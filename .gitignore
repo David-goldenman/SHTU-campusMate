@@ -15,3 +15,7 @@ python-path.txt
 /ipa/campusMate.xcodeproj/
 .DS_Store
 /ipa/.tmp/
+/ipa/local/build-local/
+/ipa/local/campusMateLocal.xcodeproj/
+/ipa/local/Python.xcframework/
+/ipa/local/campusMateLocal.ipa
