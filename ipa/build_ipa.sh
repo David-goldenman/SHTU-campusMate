@@ -13,6 +13,7 @@ cd "$(dirname "$0")"
 APP=campusMate
 BUILD=build
 ARCHIVE="$BUILD/$APP.xcarchive"
+DERIVED="$BUILD/DerivedData"
 
 xcodebuild -version >/dev/null 2>&1 || {
     echo 'A full Xcode install is required, not just the command line tools:' >&2
@@ -29,7 +30,7 @@ xcodegen generate --spec project.yml
 if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
     echo "Archiving for team $CAMPUS_IOS_TEAM."
     xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
-        -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+        -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$DERIVED" \
         -allowProvisioningUpdates DEVELOPMENT_TEAM="$CAMPUS_IOS_TEAM" CODE_SIGN_STYLE=Automatic
     rm -rf "$BUILD/export"
     xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
@@ -40,9 +41,12 @@ if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
 fi
 
 echo 'Archiving without code signing; install with a sideloading tool or sign it later.'
+# App Store thinning runs actool inside a booted simulator; an unsigned sideload
+# build does not need it, and the agent hangs on machines without a simulator.
 xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
-    -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
-    CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+    -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$DERIVED" \
+    CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
