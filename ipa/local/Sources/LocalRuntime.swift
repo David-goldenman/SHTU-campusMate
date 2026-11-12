@@ -32,7 +32,8 @@ final class LocalRuntime: ObservableObject {
         try? FileManager.default.removeItem(at: portFile)
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let code = cm_start_python(home, script, portFile.path)
+            let executable = Bundle.main.executableURL?.path ?? bundle.appendingPathComponent("campusMateLocal").path
+                let code = cm_start_python(home, script, portFile.path, executable)
             DispatchQueue.main.async {
                 if code != 0 {
                     self.state = .failed("Python 解释器启动失败（错误码 \(code)）。")

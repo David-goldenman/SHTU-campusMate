@@ -115,6 +115,19 @@ iOS 自带 PDFKit，没必要为 `pypdfium2`（C++ / PDFium，体积大）再造
   `PdfDocument` / `page.get_size()` / `page.render(scale).to_pil()` 子集；
 - 构建时该文件与 wheelhouse 一起装进 `site-packages`，后端 `import pypdfium2` 会命中这个 shim。
 
+## 签名与扩展模块加载
+
+iOS 不允许 `dlopen` 未被代码签名覆盖的松散 `.so`。BeeWare 的 CPython 为此内置了
+`.fwork` 约定：把扩展模块放进 `Frameworks/<name>.framework/<name>`，并在原位置留一个
+`<name>.so.fwork` 指向它，同时框架内留 `<name>.origin` 指回占位文件。
+
+`ipa/local/tools/convert_dylibs.sh` 在构建期把所有 `python/**/*.so` 转成框架（本机实测 75 个），
+`Sources/PythonBridge.c` 把 `sys.executable` 设成 app 根目录的二进制——importlib 用
+`dirname(sys.executable)` 解析 `.fwork` 里的相对路径。
+
+`boot.py` 会在 `Documents/data/boot.log` 记录启动过程；Python 初始化失败时（桥接返回 15）
+先看这个文件。
+
 ## 已核实的外部事实（2026-11-10）
 
 - PyPI 上 `pydantic-core`、`cryptography`、`pillow`、`zstandard`、`pypdfium2` **均无 iOS 轮子**（0 个 `ios_*` wheel），必须自行交叉编译。

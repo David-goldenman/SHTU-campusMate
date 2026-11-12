@@ -3,7 +3,7 @@
 #include <Python/Python.h>
 #include <stdio.h>
 
-int cm_start_python(const char *home, const char *script, const char *port_file) {
+int cm_start_python(const char *home, const char *script, const char *port_file, const char *executable) {
     PyStatus status;
     PyConfig config;
     PyConfig_InitPythonConfig(&config);
@@ -16,6 +16,19 @@ int cm_start_python(const char *home, const char *script, const char *port_file)
     if (PyStatus_Exception(status)) {
         PyConfig_Clear(&config);
         return 11;
+    }
+
+    // importlib resolves the .fwork framework paths against dirname(sys.executable),
+    // so it must be the binary at the root of the app bundle.
+    status = PyConfig_SetBytesString(&config, &config.executable, executable);
+    if (PyStatus_Exception(status)) {
+        PyConfig_Clear(&config);
+        return 10;
+    }
+    status = PyConfig_SetBytesString(&config, &config.program_name, executable);
+    if (PyStatus_Exception(status)) {
+        PyConfig_Clear(&config);
+        return 10;
     }
 
     char *argv[2] = {(char *)script, (char *)port_file};

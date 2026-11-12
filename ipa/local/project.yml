@@ -58,6 +58,9 @@ targets:
           for wheel in "$SRCROOT/../../.codex/wheelhouse"/*.whl; do
             [ -e "$wheel" ] && unzip -qo "$wheel" -d "$SITE"
           done
+          # iOS cannot dlopen loose .so files; convert them into frameworks
+          # that code signing will cover (BeeWare .fwork convention).
+          bash "$SRCROOT/tools/convert_dylibs.sh" "$BUNDLE" "$SRCROOT/Python.xcframework"
 schemes:
   campusMateLocal:
     build:
