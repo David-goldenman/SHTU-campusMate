@@ -18,6 +18,8 @@ targets:
         excludes:
           - boot.py
           - PythonBridge.h
+          - PDFKitBridge.h
+          - py_extra
     settings:
       base:
         PRODUCT_NAME: campusMateLocal
@@ -29,9 +31,12 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Sources/PythonBridge.h
         FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/Python.xcframework/ios-arm64
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        OTHER_LDFLAGS: $(inherited) -Wl,-export_dynamic
     dependencies:
       - framework: Python.xcframework
         embed: true
+      - sdk: PDFKit.framework
+      - sdk: UIKit.framework
     postCompileScripts:
       - name: Bundle the CPython standard library and the web workspace
         script: |
@@ -42,6 +47,12 @@ targets:
           rsync -a "$SRCROOT/Python.xcframework/ios-arm64/lib-arm64/" "$BUNDLE/python/lib/"
           rsync -a --delete "$SRCROOT/../../web/" "$BUNDLE/web/"
           cp "$SRCROOT/Sources/boot.py" "$BUNDLE/boot.py"
+          SITE="$BUNDLE/python/lib/python3.13/site-packages"
+          mkdir -p "$SITE"
+          cp -R "$SRCROOT/Sources/py_extra/." "$SITE/"
+          for wheel in "$SRCROOT/../../.codex/wheelhouse"/*.whl; do
+            [ -e "$wheel" ] && unzip -qo "$wheel" -d "$SITE"
+          done
 schemes:
   campusMateLocal:
     build:

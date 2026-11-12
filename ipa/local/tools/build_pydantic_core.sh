@@ -13,7 +13,7 @@
 #
 # Usage: ./build_pydantic_core.sh [version]
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../../.."
 REPO=$(pwd)
 export RUSTUP_HOME="$REPO/.codex/rust/rustup"
 export CARGO_HOME="$REPO/.codex/rust/cargo"

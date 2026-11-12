@@ -57,34 +57,43 @@ iOS 沙盒**禁止 fork/exec**，现有 26 处 `subprocess` 调用全部不可�
 
 CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起可加一个模拟器构建 job 防回归。
 
-## P1 进展：pydantic-core 已交叉编译成功
+## P1 进展：三个原生 wheel + PDFKit 替代
 
-FastAPI 这条链上唯一的原生模块是 `pydantic-core`（Rust / pyo3），其余
-（fastapi、starlette、anyio、httpx、pydantic 本体）都是纯 Python。
+已产出（`.codex/wheelhouse/`，全部 `platform=iOS`、`minos 16.0`、cp313）：
 
-已产出：
+| wheel | 说明 |
+| --- | --- |
+| `pydantic_core-2.50.1-cp313-cp313-ios_16_0_arm64_iphoneos.whl` | Rust/pyo3；FastAPI 链路上唯一的原生模块 |
+| `zstandard-0.25.0-...whl` | 纯 C 扩展，内嵌 zstd 源码，无外部依赖 |
+| `pillow-12.3.0-...whl` | 只带 zlib（JPEG/TIFF/WebP/freetype 关闭）；`_imaging`、`_imagingmath`、`_imagingmorph`、`_imagingtk` |
 
+复现脚本：
+
+```bash
+ipa/local/tools/build_pydantic_core.sh   # cargo + 手工组装 wheel
+ipa/local/tools/build_c_wheels.sh all    # zstandard + pillow（setuptools）
+ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 ```
-.codex/wheelhouse/pydantic_core-2.50.1-cp313-cp313-ios_16_0_arm64_iphoneos.whl
-  └ pydantic_core/_pydantic_core.cpython-313-iphoneos.so   (arm64, platform=iOS, minos 16.0)
-```
 
-复现脚本：[ipa/local/tools/build_pydantic_core.sh](../ipa/local/tools/build_pydantic_core.sh)。要点：
+踩过的坑（都写进脚本注释了）：
 
-1. `rustup target add aarch64-apple-ios`，`SDKROOT=xcrun --sdk iphoneos`，`IPHONEOS_DEPLOYMENT_TARGET=16.0`；
-2. pyo3 交叉编译需要目标 Python 的 "prefix"：`lib/libpython3.13.dylib`（链到 Python.framework）、
-   `lib/python3.13/_sysconfigdata__ios_arm64-iphoneos.py`、`include/python3.13/`，
-   并用 `PYO3_CROSS=1 PYO3_CROSS_PYTHON_VERSION=3.13 PYO3_CROSS_LIB_DIR=<prefix>`；
-3. `cargo build --release --target aarch64-apple-ios` 约 23 分钟（单 codegen unit）；
-4. 手动组装 wheel：`_pydantic_core.cpython-313-iphoneos.so` + 纯 Python 包 + dist-info，
-   平台标签 `ios_16_0_arm64_iphoneos`（PEP 730）。
+1. **pyo3 交叉编译**需要目标 Python 的 prefix：`lib/libpython3.13.dylib`、`lib/python3.13/_sysconfigdata__ios_arm64-iphoneos.py`、`include/python3.13/`，
+   并设置 `PYO3_CROSS=1 PYO3_CROSS_PYTHON_VERSION=3.13 PYO3_CROSS_LIB_DIR=<prefix>`；
+   `maturin --target` 会报平台不匹配，`cibuildwheel --platform ios` 要求系统装 python.org Framework 版 CPython，都不适用于本机。
+2. **Pillow 12 的 `_imaging` 依赖 `libpil_imaging_mode.a`**，必须 `setup.py build_clib build_ext`，只跑 `build_ext` 会链接失败。
+3. **distutils 会注入 macOS SDK 的 lib 目录**，`-lz` 会链到 macOS 的 libz，iOS 链接器直接报
+   “building for 'iOS', but linking in dylib” —— 必须把 `-L$SDKROOT/usr/lib` 放到 LDSHARED 最前面。
 
-注意：`maturin` 直接 `--target aarch64-apple-ios` 会报 "platform.system() ... don't match"，
-`cibuildwheel --platform ios` 则要求系统装有 python.org 的 macOS Framework 版 CPython
-（需要 root 安装），因此这条 spike 用 cargo + 手工组装 wheel。
+## PDF 渲染：用 PDFKit 取代 pypdfium2
 
-剩余原生依赖：`cryptography`（OpenSSL）、`pillow`、`zstandard`、`pypdfium2`。
-其中 `cryptography` 是认证模块的导入依赖，编不出来后端就起不来。
+iOS 自带 PDFKit，没必要为 `pypdfium2`（C++ / PDFium，体积大）再造一遍。做法：
+
+- `ipa/local/Sources/PDFKitBridge.m`：三个 C 函数 `cm_pdf_page_count` / `cm_pdf_page_size` / `cm_pdf_render_page`，
+  内部用 `PDFDocument` + `UIGraphicsImageRenderer` 渲染成 PNG；用 `__attribute__((used, visibility("default")))`
+  配合 `-Wl,-export_dynamic` 把符号留在主可执行文件里；
+- `ipa/local/Sources/py_extra/pypdfium2.py`：通过 `ctypes.CDLL(None)` 调这些符号，提供后端用到的
+  `PdfDocument` / `page.get_size()` / `page.render(scale).to_pil()` 子集；
+- 构建时该文件与 wheelhouse 一起装进 `site-packages`，后端 `import pypdfium2` 会命中这个 shim。
 
 ## 已核实的外部事实（2026-11-10）
 

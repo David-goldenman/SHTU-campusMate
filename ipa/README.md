@@ -84,8 +84,10 @@ cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
 现状与限制：
 
 - 已实现：本地起服务、加载真实前端、主题目录、`/api/v1/bootstrap`、`/settings`、`/themes`、`/health`；
-- 未实现：业务模块（作业、课程、邮箱、AI 等）仍返回 503——它们依赖的 `pydantic-core`、`cryptography`
-  等原生扩展需要先交叉编译到 iOS，见 [IOS_LOCAL.md](../docs/IOS_LOCAL.md)；
+- 已具备：`pydantic_core`、`zstandard`、`pillow` 的 iOS wheel，以及基于 PDFKit 的 `pypdfium2` 替身
+  （`Sources/PDFKitBridge.m` + `Sources/py_extra/pypdfium2.py`），构建时一起装进 `site-packages`；
+- 未实现：业务模块（作业、课程、邮箱、AI 等）仍返回 503——`cryptography` 尚未交叉编译，后端还无法导入，
+  见 [IOS_LOCAL.md](../docs/IOS_LOCAL.md)；
 - 未签名产物无法安装到真机；用 Xcode 签名时，`python/lib/python3.13/lib-dynload/*.so` 也需要一并签名
   （BeeWare 的 `build/utils.sh` 提供了 `.so → framework` 的转换脚本）；
 - 原型与正式外壳（`ipa/campusMate/`）互不影响，`ios.yml` 的 CI 仍只构建正式外壳。

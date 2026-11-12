@@ -9,6 +9,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+export PATH="/opt/homebrew/bin:$PATH"
+
 APP=campusMateLocal
 BUILD=build-local
 ARCHIVE="$BUILD/$APP.xcarchive"
@@ -23,17 +25,23 @@ command -v xcodegen >/dev/null || { echo 'xcodegen is required: brew install xco
     exit 1
 }
 
-mkdir -p "$BUILD"
+mkdir -p "$BUILD" "$BUILD/module-cache" "$BUILD/tmp"
+export CLANG_MODULE_CACHE_PATH="$PWD/$BUILD/module-cache"
+export TMPDIR="$PWD/$BUILD/tmp"
 xcodegen generate --spec project.yml >/dev/null
 
-xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
-    -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$BUILD/DerivedData" \
+# Build by target, not by scheme+destination: the scheme path needs the
+# simulator device types, which are absent once the simulator runtime is removed.
+# SYMROOT/OBJROOT keep every intermediate inside ipa/local/build-local.
+xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration Release -sdk iphoneos \
+    SYMROOT="$PWD/$BUILD/Products" OBJROOT="$PWD/$BUILD/Intermediates" \
+    MODULE_CACHE_DIR="$PWD/$BUILD/module-cache" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES
+    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES build
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
-ditto "$ARCHIVE/Products/Applications/$APP.app" "$BUILD/Payload/$APP.app"
+ditto "$BUILD/Products/Release-iphoneos/$APP.app" "$BUILD/Payload/$APP.app"
 rm -f "../$APP.ipa"
 (cd "$BUILD" && zip -qry "../$APP.ipa" Payload)
 echo "Local prototype IPA: $(pwd)/$APP.ipa"
