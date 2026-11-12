@@ -67,6 +67,7 @@ CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起�
 | `zstandard-0.25.0-...whl` | 纯 C 扩展，内嵌 zstd 源码，无外部依赖 |
 | `pillow-12.3.0-...whl` | 只带 zlib（JPEG/TIFF/WebP/freetype 关闭）；`_imaging`、`_imagingmath`、`_imagingmorph`、`_imagingtk` |
 | `cryptography-50.0.2-cp39-abi3-...whl` | Rust/pyo3 abi3，静态链接自建的 OpenSSL 4.0.3 |
+| `cffi-2.1.1-...whl` | `_cffi_backend`，静态链接自建的 libffi 3.8.0（cryptography 的 Rust 模块在导入时就要它） |
 
 复现脚本：
 
@@ -74,6 +75,7 @@ CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起�
 ipa/local/tools/build_pydantic_core.sh   # cargo + 手工组装 wheel
 ipa/local/tools/build_c_wheels.sh all    # zstandard + pillow（setuptools）
 ipa/local/tools/build_cryptography.sh    # OpenSSL(ios64-cross) + cryptography
+ipa/local/tools/build_cffi.sh            # libffi + cffi（cryptography 运行时依赖）
 ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 ```
 
