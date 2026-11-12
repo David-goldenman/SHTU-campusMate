@@ -28,20 +28,34 @@ final class LocalRuntime: ObservableObject {
         // The bundle is read-only at runtime; keep settings, SQLite and the
         // module data directory in the app's Documents folder.
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        setenv("CAMPUS_DATA_DIR", documents.appendingPathComponent("data").path, 1)
+        let dataDirectory = documents.appendingPathComponent("data")
+        try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        setenv("CAMPUS_DATA_DIR", dataDirectory.path, 1)
+        let logPath = dataDirectory.appendingPathComponent("python.log").path
         try? FileManager.default.removeItem(at: portFile)
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let executable = Bundle.main.executableURL?.path ?? bundle.appendingPathComponent("campusMateLocal").path
-                let code = cm_start_python(home, script, portFile.path, executable)
+            let executable = Bundle.main.executableURL?.path
+                ?? bundle.appendingPathComponent("campusMateLocal").path
+            let code = cm_start_python(home, script, portFile.path, executable, logPath)
             DispatchQueue.main.async {
                 if code != 0 {
-                    self.state = .failed("Python 解释器启动失败（错误码 \(code)）。")
+                    let tail = Self.tail(of: logPath, lines: 12)
+                    self.state = .failed("Python 解释器启动失败（错误码 \(code)）。\n\n\(tail)")
                 }
             }
         }
 
         waitForPort(portFile, attempts: 0)
+    }
+
+    /// Last lines of the Python log, shown in the failure screen so the error
+    /// is visible without Xcode or the Files app.
+    static func tail(of path: String, lines: Int) -> String {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return "（无法读取 \(path)）"
+        }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
     }
 
     private func waitForPort(_ url: URL, attempts: Int) {

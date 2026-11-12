@@ -45,9 +45,11 @@ private struct StatusView: View {
             }
             Text(title).font(.headline)
             Text(detail)
-                .font(.footnote)
+                .font(showsProgress ? .footnote : .caption.monospaced())
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(showsProgress ? .center : .leading)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(28)
     }
