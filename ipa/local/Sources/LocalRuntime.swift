@@ -12,7 +12,13 @@ final class LocalRuntime: ObservableObject {
     }
 
     @Published private(set) var state: State = .idle
+    /// One-line progress text shown at the bottom of every screen; it also ends
+    /// up in Documents/data/launch.log so a blank screen still tells a story.
+    @Published private(set) var info = "准备启动"
+
     private var started = false
+    private var logPath = ""
+    private var launchLogPath = ""
 
     func start() {
         guard !started else { return }
@@ -29,28 +35,59 @@ final class LocalRuntime: ObservableObject {
         // module data directory in the app's Documents folder.
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let dataDirectory = documents.appendingPathComponent("data")
-        try? FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+            note("数据目录: \(dataDirectory.path)")
+        } catch {
+            note("无法创建数据目录: \(error.localizedDescription)")
+        }
         setenv("CAMPUS_DATA_DIR", dataDirectory.path, 1)
-        let logPath = dataDirectory.appendingPathComponent("python.log").path
+        logPath = dataDirectory.appendingPathComponent("python.log").path
+        launchLogPath = dataDirectory.appendingPathComponent("launch.log").path
         try? FileManager.default.removeItem(at: portFile)
+
+        note("启动 Python: home=\(home)")
 
         DispatchQueue.global(qos: .userInitiated).async {
             // Redirect the process-level streams before the interpreter starts:
             // this catches Python tracebacks and any C-level output.
-            _ = freopen(logPath, "a", stderr)
-            _ = freopen(logPath, "a", stdout)
+            _ = freopen(self.logPath, "a", stderr)
+            _ = freopen(self.logPath, "a", stdout)
             let executable = Bundle.main.executableURL?.path
                 ?? bundle.appendingPathComponent("campusMateLocal").path
-            let code = cm_start_python(home, script, portFile.path, executable, logPath)
+            let code = cm_start_python(home, script, portFile.path, executable, self.logPath)
             DispatchQueue.main.async {
                 if code != 0 {
-                    let tail = Self.tail(of: logPath, lines: 12)
+                    let tail = Self.tail(of: self.logPath, lines: 12)
                     self.state = .failed("Python 解释器启动失败（错误码 \(code)）。\n\n\(tail)")
+                } else {
+                    self.note("Python 退出（服务已停止）")
                 }
             }
         }
 
         waitForPort(portFile, attempts: 0)
+    }
+
+    // MARK: - Diagnostics
+
+    private func note(_ message: String) {
+        info = message
+        guard !launchLogPath.isEmpty else { return }
+        let line = "[\(Self.stamp())] \(message)\n"
+        if let handle = FileHandle(forWritingAtPath: launchLogPath) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            handle.closeFile()
+        } else {
+            try? line.write(toFile: launchLogPath, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private static func stamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: Date())
     }
 
     /// Last lines of the Python log, shown in the failure screen so the error
@@ -62,18 +99,48 @@ final class LocalRuntime: ObservableObject {
         return text.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
     }
 
+    // MARK: - Readiness
+
     private func waitForPort(_ url: URL, attempts: Int) {
-        guard attempts < 120 else {
-            state = .failed("本地服务未能在 12 秒内就绪。")
+        guard attempts < 200 else {
+            note("等待端口超时")
+            state = .failed("本地服务未能在 20 秒内就绪。\n\n\(Self.tail(of: logPath, lines: 12))")
             return
         }
         if let text = try? String(contentsOf: url, encoding: .utf8),
            let port = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            state = .ready(port)
+            note("端口 \(port)，检查服务")
+            checkHealth(port: port, attempts: 0)
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.waitForPort(url, attempts: attempts + 1)
         }
+    }
+
+    private func checkHealth(port: Int, attempts: Int) {
+        guard attempts < 40 else {
+            note("健康检查失败")
+            state = .failed("本地服务已监听 \(port) 但请求 /api/v1/health 失败。\n\n\(Self.tail(of: logPath, lines: 12))")
+            return
+        }
+        guard let url = URL(string: "http://127.0.0.1:\(port)/api/v1/health") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    self.note("服务就绪 :\(port)")
+                    self.state = .ready(port)
+                } else {
+                    let reason = error?.localizedDescription ?? "HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)"
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.checkHealth(port: port, attempts: attempts + 1)
+                    }
+                    self.note("等待服务（\(reason)）")
+                }
+            }
+        }.resume()
     }
 }
