@@ -117,6 +117,32 @@ iOS 自带 PDFKit，没必要为 `pypdfium2`（C++ / PDFium，体积大）再造
   `PdfDocument` / `page.get_size()` / `page.render(scale).to_pil()` 子集；
 - 构建时该文件与 wheelhouse 一起装进 `site-packages`，后端 `import pypdfium2` 会命中这个 shim。
 
+## 真机跑通（2026-11-12，iPadOS 26.0）
+
+`campusMateLocal.ipa` 已在 iPad 上安装运行：启动约 10 秒后在设备本地起服务，界面、导航、主题、
+校园地图、时间表均正常渲染，底部状态显示 `服务就绪 :<port>`，页面探测 `errors: []`。
+
+跑通的完整链路：
+
+```
+Swift 启动 → 设置 CAMPUS_DATA_DIR 到 Documents/data
+          → fd 级重定向 stderr/stdout 到 python.log
+          → cm_start_python（PyConfig: home/executable/argv）
+          → boot.py：补丁 Vault、创建 uvicorn 应用
+          → 端口写文件 → Swift 健康检查 /api/v1/health
+          → WKWebView 加载 http://127.0.0.1:<port>/
+```
+
+一路踩到的坑（都已修复并有回归日志）：
+
+| 现象 | 根因 |
+| --- | --- |
+| 启动即 `-15`，无任何日志 | `PyRun_File` 不填 `__file__`，脚本第一行就 NameError |
+| 无 traceback | `sys.stderr` 在极早期失败时可能不可用，改为 C 层 `traceback.format_exception` + fd 重定向 |
+| `PermissionError: .private` | `paths.py` 在 import 时就 mkdir；改为尊重 `CAMPUS_DATA_DIR` |
+| `No module named '_cffi_backend'` | cryptography 的 Rust 模块导入即需要 cffi；补编 cffi + libffi |
+| 白屏 | 后端未就绪但 WebView 已加载；加健康检查与页面探测 |
+
 ## 签名与扩展模块加载
 
 iOS 不允许 `dlopen` 未被代码签名覆盖的松散 `.so`。BeeWare 的 CPython 为此内置了

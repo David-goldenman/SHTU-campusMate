@@ -15,6 +15,7 @@ final class LocalRuntime: ObservableObject {
     /// One-line progress text shown at the bottom of every screen; it also ends
     /// up in Documents/data/launch.log so a blank screen still tells a story.
     @Published private(set) var info = "准备启动"
+    @Published private(set) var showInfo = true
 
     private var started = false
     private var logPath = ""
@@ -133,6 +134,9 @@ final class LocalRuntime: ObservableObject {
                 if let http = response as? HTTPURLResponse, http.statusCode == 200 {
                     self.note("服务就绪 :\(port)")
                     self.state = .ready(port)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                        self.showInfo = false
+                    }
                 } else {
                     let reason = error?.localizedDescription ?? "HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1)"
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

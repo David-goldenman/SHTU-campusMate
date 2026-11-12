@@ -81,7 +81,9 @@ curl -L https://github.com/beeware/Python-Apple-support/releases/download/3.13-b
 cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
 ```
 
-现状与限制：
+现状：已在 iPadOS 26.0 真机跑通——设备本地启动 FastAPI 后端，界面、导航、主题、校园地图与时间表正常渲染。
+
+限制：
 
 - 已实现：app 内启动**真正的 FastAPI 后端**（`Sources/boot.py`），加载真实前端、模块清单与 `/api/v1`；
 - 已具备：`pydantic_core`、`zstandard`、`pillow`、`cryptography`（静态链接自建 OpenSSL）的 iOS wheel，

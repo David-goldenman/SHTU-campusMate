@@ -81,7 +81,15 @@ struct LocalWebView: UIViewRepresentable {
                     onIssue("页面脚本不可用: \(error.localizedDescription)")
                     return
                 }
-                onIssue("页面加载完成: \(result ?? "?")")
+                // Only surface something when the page is blank or broken.
+                if let json = result as? String,
+                   json.contains("\"text\":0") || json.contains("\"errors\":[\"") {
+                    onIssue("页面空白: \(json)")
+                } else if let error {
+                    onIssue("页面探测失败: \(error.localizedDescription)")
+                } else {
+                    onIssue("")
+                }
             }
         }
     }

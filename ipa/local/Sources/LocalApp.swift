@@ -22,14 +22,16 @@ struct RootView: View {
             content
             // Always visible: on a blank page this is the only clue about how
             // far the local server got.
-            Text(runtime.info)
-                .font(.caption2.monospaced())
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(.bottom, 6)
+            if runtime.showInfo {
+                Text(runtime.info)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 6)
+            }
         }
     }
 
@@ -42,7 +44,7 @@ struct RootView: View {
             }
             .ignoresSafeArea(edges: .bottom)
             .overlay(alignment: .top) {
-                if let pageIssue {
+                if let pageIssue, !pageIssue.isEmpty {
                     Text(pageIssue)
                         .font(.caption2.monospaced())
                         .foregroundStyle(.secondary)
