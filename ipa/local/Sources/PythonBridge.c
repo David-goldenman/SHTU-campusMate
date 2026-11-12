@@ -77,6 +77,22 @@ int cm_start_python(const char *home, const char *script, const char *port_file,
 
     PyObject *module = PyImport_AddModule("__main__");
     PyObject *globals = module ? PyModule_GetDict(module) : NULL;
+    if (globals != NULL) {
+        // PyRun_File does not populate __main__'s namespace, so fill in what a
+        // normal script would get: __file__, __name__ and __builtins__.
+        PyObject *file_obj = PyUnicode_FromString(script);
+        if (file_obj != NULL) {
+            PyDict_SetItemString(globals, "__file__", file_obj);
+            Py_DECREF(file_obj);
+        }
+        PyObject *name_obj = PyUnicode_FromString("__main__");
+        if (name_obj != NULL) {
+            PyDict_SetItemString(globals, "__name__", name_obj);
+            Py_DECREF(name_obj);
+        }
+        PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
+        PyDict_SetItemString(globals, "__spec__", Py_None);
+    }
     PyObject *result = globals ? PyRun_File(source, script, Py_file_input, globals, globals) : NULL;
     fclose(source);
     if (result == NULL) {
