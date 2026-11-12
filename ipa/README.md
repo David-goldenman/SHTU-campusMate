@@ -83,11 +83,12 @@ cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
 
 现状与限制：
 
-- 已实现：本地起服务、加载真实前端、主题目录、`/api/v1/bootstrap`、`/settings`、`/themes`、`/health`；
+- 已实现：app 内启动**真正的 FastAPI 后端**（`Sources/boot.py`），加载真实前端、模块清单与 `/api/v1`；
 - 已具备：`pydantic_core`、`zstandard`、`pillow`、`cryptography`（静态链接自建 OpenSSL）的 iOS wheel，
-  以及基于 PDFKit 的 `pypdfium2` 替身（`Sources/PDFKitBridge.m` + `Sources/py_extra/pypdfium2.py`），
-  构建时一起装进 `site-packages`；
-- 未实现：业务模块（作业、课程、邮箱、AI 等）仍返回 503——后端尚未接入本地服务，见
+  PDFKit 版 `pypdfium2` 替身，以及锁文件里全部纯 Python 依赖（`tools/stage_ios_site.sh` 裁剪）；
+- 平台差异：`group-messages` 不打包（Windows DLL）；Vault 用沙盒直通代替 DPAPI；AI harness 依赖 Node
+  子进程，iOS 上不可用，AI 功能暂时不可用；
+- 未在真机验证：`python/lib/python3.13/lib-dynload/*.so` 需要随 app 一起签名，见
   [IOS_LOCAL.md](../docs/IOS_LOCAL.md)；
 - 未签名产物无法安装到真机；用 Xcode 签名时，`python/lib/python3.13/lib-dynload/*.so` 也需要一并签名
   （BeeWare 的 `build/utils.sh` 提供了 `.so → framework` 的转换脚本）；

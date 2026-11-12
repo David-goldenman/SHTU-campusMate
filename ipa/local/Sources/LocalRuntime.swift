@@ -24,6 +24,11 @@ final class LocalRuntime: ObservableObject {
         let script = bundle.appendingPathComponent("boot.py").path
         let portFile = FileManager.default.temporaryDirectory
             .appendingPathComponent("campusmate-local-port.txt")
+
+        // The bundle is read-only at runtime; keep settings, SQLite and the
+        // module data directory in the app's Documents folder.
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        setenv("CAMPUS_DATA_DIR", documents.appendingPathComponent("data").path, 1)
         try? FileManager.default.removeItem(at: portFile)
 
         DispatchQueue.global(qos: .userInitiated).async {

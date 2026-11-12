@@ -91,6 +91,19 @@ ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 5. **distutils 会注入 macOS SDK 的 lib 目录**，`-lz` 会链到 macOS 的 libz，iOS 链接器直接报
    “building for 'iOS', but linking in dylib” —— 必须把 `-L$SDKROOT/usr/lib` 放到 LDSHARED 最前面。
 
+## P1 完成：真后端在 app 里启动
+
+`ipa/local/Sources/boot.py` 现在启动的是真正的 FastAPI 应用，不再是桩：
+
+- `backend.core.paths.DATA` 指向沙盒 `Documents/data`（`CAMPUS_DATA_DIR`，由 Swift 在启动前 setenv）；
+- `backend.core.vault` 的 DPAPI 调用被替换成直通（沙盒本身有 iOS 数据保护；Keychain 实现待做）；
+- uvicorn 绑定随机回环端口并写入端口文件，`WKWebView` 随后加载；
+- 纯 Python 依赖由 `ipa/local/tools/stage_ios_site.sh` 从锁定的 uv 环境裁剪而来（去掉 261 MB 的
+  Node runtime 和各平台二进制，换成 iOS wheel）；
+- `modules/group-messages` 不打包（依赖 Windows DLL，产品上本来也不提供）。
+
+已在本机 macOS 上用同一份代码验证：`/api/v1/health`、`/api/v1/bootstrap`、`/` 均 200，19 个模块全部加载。
+
 ## PDF 渲染：用 PDFKit 取代 pypdfium2
 
 iOS 自带 PDFKit，没必要为 `pypdfium2`（C++ / PDFium，体积大）再造一遍。做法：

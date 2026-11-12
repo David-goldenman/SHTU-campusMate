@@ -49,7 +49,12 @@ targets:
           cp "$SRCROOT/Sources/boot.py" "$BUNDLE/boot.py"
           SITE="$BUNDLE/python/lib/python3.13/site-packages"
           mkdir -p "$SITE"
+          # Pure-Python dependencies staged from the lockfile environment.
+          rsync -a "$SRCROOT/../../.codex/ios-site/" "$SITE/"
           cp -R "$SRCROOT/Sources/py_extra/." "$SITE/"
+          # Framework and business code; group-messages needs Windows DLLs.
+          rsync -a --delete "$SRCROOT/../../backend/" "$BUNDLE/backend/"
+          rsync -a --delete --exclude 'group-messages' "$SRCROOT/../../modules/" "$BUNDLE/modules/"
           for wheel in "$SRCROOT/../../.codex/wheelhouse"/*.whl; do
             [ -e "$wheel" ] && unzip -qo "$wheel" -d "$SITE"
           done
