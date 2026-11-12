@@ -43,9 +43,11 @@ def free_port():
 
 
 def prepare():
+    # backend.core.paths honours CAMPUS_DATA_DIR at import time, so it never
+    # tries to create .private inside the read-only app bundle.
     import backend.core.paths as paths
 
-    paths.DATA = DATA
+    assert paths.DATA == DATA, f"data dir mismatch: {paths.DATA} != {DATA}"
     (DATA / "runtime").mkdir(parents=True, exist_ok=True)
 
     import backend.core.vault as vault_module
