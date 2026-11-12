@@ -55,26 +55,15 @@ int cm_start_python(const char *home, const char *script, const char *port_file,
         return 13;
     }
 
+    fprintf(log, "bridge: interpreter ready\n");
+    fflush(log);
+
     FILE *source = fopen(script, "r");
     if (source == NULL) {
         fprintf(log, "bridge: cannot open %s\n", script);
         fflush(log);
         return 14;
     }
-    // Point sys.stdout/sys.stderr at the log file before running the script,
-    // so import-time failures land somewhere readable.
-    PyObject *path_obj = PyUnicode_FromString(log_path);
-    PyObject *path_repr = path_obj ? PyObject_Repr(path_obj) : NULL;
-    const char *quoted = path_repr ? PyUnicode_AsUTF8(path_repr) : NULL;
-    if (quoted != NULL) {
-        char redirect[4096];
-        snprintf(redirect, sizeof redirect,
-                 "import sys; _log = open(%s, 'a', 1); sys.stdout = _log; sys.stderr = _log", quoted);
-        PyRun_SimpleString(redirect);
-    }
-    Py_XDECREF(path_repr);
-    Py_XDECREF(path_obj);
-
     PyObject *module = PyImport_AddModule("__main__");
     PyObject *globals = module ? PyModule_GetDict(module) : NULL;
     if (globals != NULL) {
@@ -93,14 +82,41 @@ int cm_start_python(const char *home, const char *script, const char *port_file,
         PyDict_SetItemString(globals, "__builtins__", PyEval_GetBuiltins());
         PyDict_SetItemString(globals, "__spec__", Py_None);
     }
+    fprintf(log, "bridge: running boot.py\n");
+    fflush(log);
     PyObject *result = globals ? PyRun_File(source, script, Py_file_input, globals, globals) : NULL;
     fclose(source);
     if (result == NULL) {
-        PyErr_Print();
+        // Format the exception in C as well: the Python-level stderr may be
+        // unusable if the failure happened before it was set up.
+        PyObject *etype = NULL, *evalue = NULL, *etb = NULL;
+        PyErr_Fetch(&etype, &evalue, &etb);
+        PyErr_NormalizeException(&etype, &evalue, &etb);
+        PyObject *text = NULL;
+        PyObject *tb_module = PyImport_ImportModule("traceback");
+        if (tb_module != NULL) {
+            PyObject *lines = PyObject_CallMethod(tb_module, "format_exception", "OOO",
+                etype ? etype : Py_None, evalue ? evalue : Py_None, etb ? etb : Py_None);
+            if (lines != NULL) {
+                PyObject *separator = PyUnicode_FromString("");
+                text = separator ? PyUnicode_Join(separator, lines) : NULL;
+                Py_XDECREF(separator);
+                Py_DECREF(lines);
+            }
+            Py_DECREF(tb_module);
+        }
+        const char *message = text ? PyUnicode_AsUTF8(text) : NULL;
+        fprintf(log, "bridge: boot.py failed\n%s\n", message ? message : "(no traceback)");
+        fflush(log);
+        Py_XDECREF(text);
+        Py_XDECREF(etype);
+        Py_XDECREF(evalue);
+        Py_XDECREF(etb);
         return 15;
     }
+    fprintf(log, "bridge: script returned\n");
+    fflush(log);
     Py_DECREF(result);
-
     Py_FinalizeEx();
     return 0;
 }

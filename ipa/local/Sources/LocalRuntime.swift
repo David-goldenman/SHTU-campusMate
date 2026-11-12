@@ -35,6 +35,10 @@ final class LocalRuntime: ObservableObject {
         try? FileManager.default.removeItem(at: portFile)
 
         DispatchQueue.global(qos: .userInitiated).async {
+            // Redirect the process-level streams before the interpreter starts:
+            // this catches Python tracebacks and any C-level output.
+            _ = freopen(logPath, "a", stderr)
+            _ = freopen(logPath, "a", stdout)
             let executable = Bundle.main.executableURL?.path
                 ?? bundle.appendingPathComponent("campusMateLocal").path
             let code = cm_start_python(home, script, portFile.path, executable, logPath)
