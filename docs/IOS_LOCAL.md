@@ -66,12 +66,14 @@ CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起�
 | `pydantic_core-2.50.1-cp313-cp313-ios_16_0_arm64_iphoneos.whl` | Rust/pyo3；FastAPI 链路上唯一的原生模块 |
 | `zstandard-0.25.0-...whl` | 纯 C 扩展，内嵌 zstd 源码，无外部依赖 |
 | `pillow-12.3.0-...whl` | 只带 zlib（JPEG/TIFF/WebP/freetype 关闭）；`_imaging`、`_imagingmath`、`_imagingmorph`、`_imagingtk` |
+| `cryptography-50.0.2-cp39-abi3-...whl` | Rust/pyo3 abi3，静态链接自建的 OpenSSL 4.0.3 |
 
 复现脚本：
 
 ```bash
 ipa/local/tools/build_pydantic_core.sh   # cargo + 手工组装 wheel
 ipa/local/tools/build_c_wheels.sh all    # zstandard + pillow（setuptools）
+ipa/local/tools/build_cryptography.sh    # OpenSSL(ios64-cross) + cryptography
 ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 ```
 
@@ -81,7 +83,12 @@ ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
    并设置 `PYO3_CROSS=1 PYO3_CROSS_PYTHON_VERSION=3.13 PYO3_CROSS_LIB_DIR=<prefix>`；
    `maturin --target` 会报平台不匹配，`cibuildwheel --platform ios` 要求系统装 python.org Framework 版 CPython，都不适用于本机。
 2. **Pillow 12 的 `_imaging` 依赖 `libpil_imaging_mode.a`**，必须 `setup.py build_clib build_ext`，只跑 `build_ext` 会链接失败。
-3. **distutils 会注入 macOS SDK 的 lib 目录**，`-lz` 会链到 macOS 的 libz，iOS 链接器直接报
+3. **cryptography 需要先自建 OpenSSL**：`openssl-sys` 不会自动为 iOS 编vendored 版本，先用 OpenSSL 自带的
+   `ios64-cross` 目标（`CROSS_TOP`/`CROSS_SDK`）编出静态库，再设 `OPENSSL_DIR` + `OPENSSL_STATIC=1`；
+   cffi 生成代码要 `Python.h`，所以还要给 `CFLAGS_aarch64-apple-ios` 指向目标 prefix 的 include。
+4. **链接期会混进 `-lclang_rt.osx`**（macOS 编译器运行时），iOS 链接器直接报错。用
+   `.codex/tools/ios-linker.sh` 过滤掉这个参数（`CARGO_TARGET_AARCH64_APPLE_IOS_LINKER`）。
+5. **distutils 会注入 macOS SDK 的 lib 目录**，`-lz` 会链到 macOS 的 libz，iOS 链接器直接报
    “building for 'iOS', but linking in dylib” —— 必须把 `-L$SDKROOT/usr/lib` 放到 LDSHARED 最前面。
 
 ## PDF 渲染：用 PDFKit 取代 pypdfium2
