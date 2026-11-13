@@ -20,10 +20,17 @@ targets:
           - PythonBridge.h
           - PDFKitBridge.h
           - py_extra
+      - path: Resources
+        excludes:
+          - Info.plist
+          # actool needs a simulator runtime; icons ship as loose PNGs instead.
+          - Assets.xcassets
+          - Icons
     settings:
       base:
         PRODUCT_NAME: campusMateLocal
         PRODUCT_BUNDLE_IDENTIFIER: edu.shanghaitech.campusmate.local
+        CAMPUS_DISPLAY_NAME: campusMate
         INFOPLIST_FILE: Resources/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -32,6 +39,10 @@ targets:
         FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/Python.xcframework/ios-arm64
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         OTHER_LDFLAGS: $(inherited) -Wl,-export_dynamic
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: edu.shanghaitech.campusmate.local.dev
+          CAMPUS_DISPLAY_NAME: campusMate dev
     dependencies:
       - framework: Python.xcframework
         embed: true
@@ -61,6 +72,10 @@ targets:
           # iOS cannot dlopen loose .so files; convert them into frameworks
           # that code signing will cover (BeeWare .fwork convention).
           bash "$SRCROOT/tools/convert_dylibs.sh" "$BUNDLE" "$SRCROOT/Python.xcframework"
+          # Release vs dev icon: same file names, different artwork.
+          VARIANT=release
+          [ "$CONFIGURATION" = "Debug" ] && VARIANT=dev
+          cp "$SRCROOT/Resources/Icons/$VARIANT"/*.png "$BUNDLE/"
 schemes:
   campusMateLocal:
     build:

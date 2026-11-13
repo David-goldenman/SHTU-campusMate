@@ -12,6 +12,14 @@ cd "$(dirname "$0")"
 export PATH="/opt/homebrew/bin:$PATH"
 
 APP=campusMateLocal
+# "dev" builds install side by side with the release build and show a DEV icon.
+CONFIG=Release
+FLAVOUR=""
+case "${1:-release}" in
+    dev) CONFIG=Debug; FLAVOUR="-dev" ;;
+    release) ;;
+    *) echo "usage: $0 [release|dev]" >&2; exit 2 ;;
+esac
 BUILD=build-local
 ARCHIVE="$BUILD/$APP.xcarchive"
 
@@ -33,7 +41,7 @@ xcodegen generate --spec project.yml >/dev/null
 # Build by target, not by scheme+destination: the scheme path needs the
 # simulator device types, which are absent once the simulator runtime is removed.
 # SYMROOT/OBJROOT keep every intermediate inside ipa/local/build-local.
-xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration Release -sdk iphoneos \
+xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration "$CONFIG" -sdk iphoneos \
     SYMROOT="$PWD/$BUILD/Products" OBJROOT="$PWD/$BUILD/Intermediates" \
     MODULE_CACHE_DIR="$PWD/$BUILD/module-cache" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
@@ -41,7 +49,7 @@ xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration Release -sdk 
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
-ditto "$BUILD/Products/Release-iphoneos/$APP.app" "$BUILD/Payload/$APP.app"
-rm -f "../$APP.ipa"
-(cd "$BUILD" && zip -qry "../$APP.ipa" Payload)
-echo "Local prototype IPA: $(pwd)/$APP.ipa"
+ditto "$BUILD/Products/$CONFIG-iphoneos/$APP.app" "$BUILD/Payload/$APP.app"
+rm -f "campusMate$FLAVOUR.ipa"
+(cd "$BUILD" && zip -qry "../campusMate$FLAVOUR.ipa" Payload)
+echo "Local prototype IPA: $(pwd)/campusMate$FLAVOUR.ipa"
