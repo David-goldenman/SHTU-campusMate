@@ -8,10 +8,37 @@ struct LocalWebView: UIViewRepresentable {
     /// Reported when the page cannot load or renders empty, so a white screen
     /// still explains itself.
     var onIssue: (String) -> Void = { _ in }
+    /// The desktop backend opens Edge for the official login; on iOS the app
+    /// shows a native WKWebView instead and imports the cookies afterwards.
+    var onLoginRequest: (String, String?) -> Void = { _, _ in }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.userContentController.add(context.coordinator, name: "login")
+        let bridge = WKUserScript(source: """
+            (function () {
+                const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.login;
+                if (!native) { return; }
+                const original = window.fetch;
+                window.fetch = function (input, init) {
+                    try {
+                        const url = typeof input === 'string' ? input : (input && input.url) || '';
+                        const match = url.match(/\\/api\\/v1\\/auth\\/([a-z]+)\\/browser(?:\\?|$)/);
+                        if (match) {
+                            let target = null;
+                            try { target = init && init.body ? JSON.parse(init.body).target : null; } catch (e) {}
+                            native.postMessage({ provider: match[1], target: target });
+                            return Promise.resolve(new Response('{"launching":true}', {
+                                status: 200, headers: { 'Content-Type': 'application/json' }
+                            }));
+                        }
+                    } catch (e) {}
+                    return original.apply(this, arguments);
+                };
+            })();
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        configuration.userContentController.addUserScript(bridge)
         let script = WKUserScript(source: """
             window.__cmErrors = [];
             window.addEventListener('error', function (event) {
@@ -33,15 +60,27 @@ struct LocalWebView: UIViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(base: url, onIssue: onIssue) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(base: url, onIssue: onIssue, onLoginRequest: onLoginRequest)
+    }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         private let base: URL
         private let onIssue: (String) -> Void
+        private let onLoginRequest: (String, String?) -> Void
 
-        init(base: URL, onIssue: @escaping (String) -> Void) {
+        init(base: URL, onIssue: @escaping (String) -> Void,
+             onLoginRequest: @escaping (String, String?) -> Void) {
             self.base = base
             self.onIssue = onIssue
+            self.onLoginRequest = onLoginRequest
+        }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "login",
+                  let body = message.body as? [String: Any],
+                  let provider = body["provider"] as? String else { return }
+            onLoginRequest(provider, body["target"] as? String)
         }
 
         /// Keep the app inside its own origin; anything else opens in Safari.

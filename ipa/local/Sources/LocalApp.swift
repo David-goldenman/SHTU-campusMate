@@ -16,6 +16,14 @@ struct CampusMateLocalApp: App {
 struct RootView: View {
     @EnvironmentObject private var runtime: LocalRuntime
     @State private var pageIssue: String?
+    @State private var loginRequest: LoginRequest?
+    @State private var reloadToken = 0
+
+    struct LoginRequest: Identifiable {
+        let id = UUID()
+        let provider: String
+        let target: String?
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -33,15 +41,26 @@ struct RootView: View {
                     .padding(.bottom, 6)
             }
         }
+        .sheet(item: $loginRequest) { request in
+            if case .ready(let port) = runtime.state {
+                LoginSheet(provider: request.provider, target: request.target, port: port) {
+                    reloadToken += 1
+                    pageIssue = nil
+                }
+            }
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         switch runtime.state {
         case .ready(let port):
-            LocalWebView(url: URL(string: "http://127.0.0.1:\(port)/")!) { issue in
+            LocalWebView(url: URL(string: "http://127.0.0.1:\(port)/")!, onIssue: { issue in
                 pageIssue = issue
-            }
+            }, onLoginRequest: { provider, target in
+                loginRequest = LoginRequest(provider: provider, target: target)
+            })
+            .id(reloadToken)
             .ignoresSafeArea(edges: .bottom)
             .overlay(alignment: .top) {
                 if let pageIssue, !pageIssue.isEmpty {
