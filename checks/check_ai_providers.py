@@ -79,7 +79,54 @@ def main():
             assert result['content'] == '合成摘要' and calls[0][0] == '/v1/chat/completions'
     finally:
         server.shutdown();server.server_close();thread.join()
-    print('PASS: official provider catalog, automatic enable, credential separation, endpoint validation and native adapter completion')
+
+    # Embedded path (iOS): no Harness runtime, so the same request goes out as a
+    # plain OpenAI-compatible chat.completions call.
+    json_calls = []
+
+    class JSONModel(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            json_calls.append((self.path, body))
+            assert self.headers['Authorization'] == 'Bearer synthetic-model-key'
+            assert body['stream'] is False and body['model'] == 'synthetic-model'
+            payload = {'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': '{"text":"合成回答"}'}, 'finish_reason': 'stop'}],
+                       'usage': {'prompt_tokens': 1, 'completion_tokens': 2, 'total_tokens': 3}}
+            data = json.dumps(payload, ensure_ascii=False).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    embedded_server = ThreadingHTTPServer(('127.0.0.1', 0), JSONModel)
+    embedded_thread = threading.Thread(target=embedded_server.serve_forever, daemon=True)
+    embedded_thread.start()
+    from backend.services.ai import provider as provider_module
+    embedded_config = {**config, 'base_url': f'http://127.0.0.1:{embedded_server.server_port}/v1'}
+    provider_module.EMBEDDED = True
+    try:
+        result = provider_module.complete_openai([{'role': 'user', 'content': '合成问题'}], embedded_config, 'synthetic-model-key', 'json')
+        assert result['content'] == {'text': '合成回答'}, result
+        assert result['usage']['total_tokens'] == 3
+        assert json_calls[0][0] == '/v1/chat/completions'
+        delegated = provider_module.complete_with_harness([{'role': 'user', 'content': '合成问题'}], embedded_config,
+                                                          'synthetic-model-key', Path('.'), 'json')
+        assert delegated['content'] == {'text': '合成回答'}, delegated
+        bad = {**embedded_config, 'base_url': ''}
+        try:
+            provider_module.complete_openai([{'role': 'user', 'content': 'x'}], bad, 'k')
+            raise AssertionError('missing base_url must fail')
+        except HTTPException as error:
+            assert error.status_code == 409
+    finally:
+        provider_module.EMBEDDED = False
+        embedded_server.shutdown(); embedded_server.server_close(); embedded_thread.join()
+
+    print('PASS: official provider catalog, automatic enable, credential separation, endpoint validation, native adapter completion and the embedded HTTP path')
 
 
 if __name__ == '__main__':
