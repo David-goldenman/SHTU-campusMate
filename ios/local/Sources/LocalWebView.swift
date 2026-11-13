@@ -18,10 +18,22 @@ struct LocalWebView: UIViewRepresentable {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         configuration.userContentController.add(context.coordinator, name: "login")
+        configuration.userContentController.add(context.coordinator, name: "calendar")
         let bridge = WKUserScript(source: """
             (function () {
                 const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.login;
                 if (!native) { return; }
+                // .ics exports: fetch the text and hand it to the app, which
+                // writes the events with EventKit (no share sheet, no Files).
+                document.addEventListener('click', function (event) {
+                    const link = event.target && event.target.closest ? event.target.closest('a[href$=".ics"]') : null;
+                    if (!link) { return; }
+                    event.preventDefault();
+                    fetch(link.href, { credentials: 'same-origin' })
+                        .then(function (response) { return response.text(); })
+                        .then(function (text) { window.webkit.messageHandlers.calendar.postMessage(text); })
+                        .catch(function (error) { window.webkit.messageHandlers.calendar.postMessage('ERROR:' + error); });
+                }, true);
                 const original = window.fetch;
                 window.fetch = function (input, init) {
                     try {
@@ -120,6 +132,23 @@ struct LocalWebView: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "calendar", let text = message.body as? String {
+                if text.hasPrefix("ERROR:") {
+                    onCalendarImport("读取日历文件失败: " + text.dropFirst(6))
+                } else {
+                    ICSImporter.importText(text) { result in
+                        DispatchQueue.main.async {
+                            switch result {
+                            case .success(let count):
+                                self.onCalendarImport(count == 0 ? "日程已在日历中，无需重复导入。" : "已导入 \(count) 个日程到日历。")
+                            case .failure(let error):
+                                self.onCalendarImport(error.localizedDescription)
+                            }
+                        }
+                    }
+                }
+                return
+            }
             guard message.name == "login",
                   let body = message.body as? [String: Any],
                   let provider = body["provider"] as? String else { return }

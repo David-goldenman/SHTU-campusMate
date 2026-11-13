@@ -18,6 +18,10 @@ enum ICSImporter {
             completion(.failure(Failure(message: "无法读取日历文件。")))
             return
         }
+        importText(text, completion: completion)
+    }
+
+    static func importText(_ text: String, completion: @escaping (Result<Int, Error>) -> Void) {
         let events = parse(text)
         guard !events.isEmpty else {
             completion(.failure(Failure(message: "日历文件里没有可导入的日程。")))

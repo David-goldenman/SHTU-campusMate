@@ -185,6 +185,11 @@ class AIService:
             self.store.write('ai:settings', DEFAULTS)
         return self.settings()
 
+    @property
+    def supports_tools(self):
+        """False when plugin tools cannot run (the embedded iOS build)."""
+        return not provider.EMBEDDED
+
     def _connection(self):
         settings = self.settings()
         if not settings['enabled'] or settings['provider'] == 'deepseek' and not settings['key_saved']:
