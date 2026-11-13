@@ -11,6 +11,8 @@ struct LocalWebView: UIViewRepresentable {
     /// The desktop backend opens Edge for the official login; on iOS the app
     /// shows a native WKWebView instead and imports the cookies afterwards.
     var onLoginRequest: (String, String?) -> Void = { _, _ in }
+    /// Result text for an .ics import (the timetable export ends up here).
+    var onCalendarImport: (String) -> Void = { _ in }
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -61,19 +63,60 @@ struct LocalWebView: UIViewRepresentable {
     func updateUIView(_ view: WKWebView, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(base: url, onIssue: onIssue, onLoginRequest: onLoginRequest)
+        Coordinator(base: url, onIssue: onIssue, onLoginRequest: onLoginRequest,
+                    onCalendarImport: onCalendarImport)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, WKDownloadDelegate {
         private let base: URL
         private let onIssue: (String) -> Void
         private let onLoginRequest: (String, String?) -> Void
+        private let onCalendarImport: (String) -> Void
+        private var destinations: [ObjectIdentifier: URL] = [:]
 
         init(base: URL, onIssue: @escaping (String) -> Void,
-             onLoginRequest: @escaping (String, String?) -> Void) {
+             onLoginRequest: @escaping (String, String?) -> Void,
+             onCalendarImport: @escaping (String) -> Void) {
             self.base = base
             self.onIssue = onIssue
             self.onLoginRequest = onLoginRequest
+            self.onCalendarImport = onCalendarImport
+        }
+
+        // MARK: - Downloads (.ics timetable export)
+
+        func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+            download.delegate = self
+        }
+
+        func download(_ download: WKDownload,
+                      decideDestinationUsing response: URLResponse,
+                      suggestedFilename: String,
+                      completionHandler: @escaping (URL?) -> Void) {
+            let directory = FileManager.default.temporaryDirectory
+            let target = directory.appendingPathComponent(suggestedFilename.isEmpty ? "campusMate.ics" : suggestedFilename)
+            try? FileManager.default.removeItem(at: target)
+            destinations[ObjectIdentifier(download)] = target
+            completionHandler(target)
+        }
+
+        func downloadDidFinish(_ download: WKDownload) {
+            guard let url = destinations.removeValue(forKey: ObjectIdentifier(download)),
+                  url.pathExtension.lowercased() == "ics" else { return }
+            ICSImporter.importFile(at: url) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let count):
+                        self.onCalendarImport(count == 0 ? "日程已在日历中，无需重复导入。" : "已导入 \(count) 个日程到日历。")
+                    case .failure(let error):
+                        self.onCalendarImport(error.localizedDescription)
+                    }
+                }
+            }
+        }
+
+        func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
+            onCalendarImport("导出失败: \(error.localizedDescription)")
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -88,6 +131,10 @@ struct LocalWebView: UIViewRepresentable {
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard let target = navigationAction.request.url else {
                 decisionHandler(.allow)
+                return
+            }
+            if navigationAction.shouldPerformDownload {
+                decisionHandler(.download)
                 return
             }
             if target.host == base.host || target.host == nil {

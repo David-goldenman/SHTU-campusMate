@@ -18,6 +18,8 @@ struct RootView: View {
     @State private var pageIssue: String?
     @State private var loginRequest: LoginRequest?
     @State private var reloadToken = 0
+    @State private var importMessage: String?
+    @State private var showImportAlert = false
 
     struct LoginRequest: Identifiable {
         let id = UUID()
@@ -41,6 +43,11 @@ struct RootView: View {
                     .padding(.bottom, 6)
             }
         }
+        .alert("日历导入", isPresented: $showImportAlert) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(importMessage ?? "")
+        }
         .sheet(item: $loginRequest) { request in
             if case .ready(let port) = runtime.state {
                 LoginSheet(provider: request.provider, target: request.target, port: port) {
@@ -59,6 +66,9 @@ struct RootView: View {
                 pageIssue = issue
             }, onLoginRequest: { provider, target in
                 loginRequest = LoginRequest(provider: provider, target: target)
+            }, onCalendarImport: { message in
+                importMessage = message
+                showImportAlert = true
             })
             .id(reloadToken)
             .ignoresSafeArea(edges: .bottom)
