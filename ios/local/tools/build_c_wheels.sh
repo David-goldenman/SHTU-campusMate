@@ -39,7 +39,7 @@ build_zstandard() {
     cp "$src"/zstandard/backend_c.cpython-313-darwin.so \
        "$stage/zstandard/backend_c.cpython-313-iphoneos.so"
     cp "$src/PKG-INFO" "$stage/zstandard-0.25.0.dist-info/METADATA"
-    "$PY" "$REPO/ipa/local/tools/assemble_wheel.py" "$stage" zstandard 0.25.0 "$WHEELS"
+    "$PY" "$REPO/ios/local/tools/assemble_wheel.py" "$stage" zstandard 0.25.0 "$WHEELS"
 }
 
 build_pillow() {
@@ -55,7 +55,7 @@ build_pillow() {
         cp "$so" "$stage/PIL/$(basename "$so" .cpython-313-darwin.so).cpython-313-iphoneos.so"
     done
     cp "$src/PKG-INFO" "$stage/pillow-12.3.0.dist-info/METADATA"
-    "$PY" "$REPO/ipa/local/tools/assemble_wheel.py" "$stage" pillow 12.3.0 "$WHEELS"
+    "$PY" "$REPO/ios/local/tools/assemble_wheel.py" "$stage" pillow 12.3.0 "$WHEELS"
 }
 
 case "${1:-all}" in

@@ -56,4 +56,4 @@ cp -R "$WORK/cffi-$CFFI/src/cffi" "$STAGE/"
 cp "$WORK/cffi-$CFFI/build/lib.macosx-11.0-arm64-cpython-313/_cffi_backend.cpython-313-darwin.so" \
    "$STAGE/_cffi_backend.cpython-313-iphoneos.so"
 cp "$WORK/cffi-$CFFI/PKG-INFO" "$STAGE/cffi-$CFFI.dist-info/METADATA"
-"$PY" "$REPO/ipa/local/tools/assemble_wheel.py" "$STAGE" cffi "$CFFI" "$WHEELS"
+"$PY" "$REPO/ios/local/tools/assemble_wheel.py" "$STAGE" cffi "$CFFI" "$WHEELS"

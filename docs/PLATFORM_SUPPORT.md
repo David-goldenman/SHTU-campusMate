@@ -6,12 +6,12 @@
 
 campusMate 的**主程序不是跨平台 Python 应用**：它依赖 Windows 的凭据保护、浏览器自动化和本机进程能力。只有下面这些组合可以正常运行。
 
-| 环境 | 主程序（网页工作台） | iOS 端（`ipa/`） |
+| 环境 | 主程序（网页工作台） | iOS 端（`ios/shell/`） |
 | --- | --- | --- |
 | **Windows 10/11** | ✅ 支持，`run.cmd` | ✅ 需要 macOS 构建 IPA |
 | **WSL2（Windows 内）** | ✅ 支持，`run.sh` / `run.cmd --distro`，依赖 Windows 互操作 | ✅ 同上 |
 | **纯 Linux / 容器 / 云主机** | ❌ 不支持 | ❌ 不支持（没有 Xcode） |
-| **macOS** | ❌ 不支持主程序（缺 DPAPI / Edge 自动化） | ✅ 支持，`ipa/build_ipa.sh` |
+| **macOS** | ❌ 不支持主程序（缺 DPAPI / Edge 自动化） | ✅ 支持，`ios/shell/build_ipa.sh` |
 
 这不是安装步骤的问题，也不是少装某个依赖就能解决的——见下一节的具体原因。
 
@@ -64,5 +64,5 @@ run.cmd --distro          # 由启动器选择 WSL
 ## 相关
 
 - 启动与环境：[运行与开发指南](PROJECT_GUIDE.md)
-- iOS 客户端：[ipa/README.md](../ipa/README.md)
+- iOS 客户端：[ios/shell/README.md](../ios/shell/README.md)
 - 平台依赖替换清单：[IOS_LOCAL.md](IOS_LOCAL.md)

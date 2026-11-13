@@ -91,7 +91,7 @@ cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
 - 平台差异：`group-messages` 不打包（Windows DLL）；Vault 用沙盒直通代替 DPAPI；AI harness 依赖 Node
   子进程，iOS 上不可用，AI 功能暂时不可用；
 - 未在真机验证：`python/lib/python3.13/lib-dynload/*.so` 需要随 app 一起签名，见
-  [IOS_LOCAL.md](../docs/IOS_LOCAL.md)；
+  [IOS_LOCAL.md](../../docs/IOS_LOCAL.md)；
 - 未签名产物无法安装到真机；用 Xcode 签名时，`python/lib/python3.13/lib-dynload/*.so` 也需要一并签名
   （BeeWare 的 `build/utils.sh` 提供了 `.so → framework` 的转换脚本）；
 - 原型与正式外壳（`ipa/campusMate/`）互不影响，`ios.yml` 的 CI 仍只构建正式外壳。

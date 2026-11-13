@@ -8,7 +8,7 @@
 
 理由：后端约 2.35 万行 Python、19 个模块，前端约 6000 行 JS；前端全部通过同源 `/api/v1` 访问，服务一旦在手机本机跑起来，`web/` 与模块前端不需要改写。原生重写（SwiftUI + URLSession）意味着把 19 个模块的业务逻辑重做一遍，不适合当前阶段。
 
-`ipa/campusMate/Info.plist` 已有 `NSAllowsLocalNetworking`，本机 HTTP 不需要额外 ATS 例外。
+`ios/shell/campusMate/Info.plist` 已有 `NSAllowsLocalNetworking`，本机 HTTP 不需要额外 ATS 例外。
 
 ## 必须先消除的桌面依赖
 
@@ -72,11 +72,11 @@ CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起�
 复现脚本：
 
 ```bash
-ipa/local/tools/build_pydantic_core.sh   # cargo + 手工组装 wheel
-ipa/local/tools/build_c_wheels.sh all    # zstandard + pillow（setuptools）
-ipa/local/tools/build_cryptography.sh    # OpenSSL(ios64-cross) + cryptography
-ipa/local/tools/build_cffi.sh            # libffi + cffi（cryptography 运行时依赖）
-ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
+ios/local/tools/build_pydantic_core.sh   # cargo + 手工组装 wheel
+ios/local/tools/build_c_wheels.sh all    # zstandard + pillow（setuptools）
+ios/local/tools/build_cryptography.sh    # OpenSSL(ios64-cross) + cryptography
+ios/local/tools/build_cffi.sh            # libffi + cffi（cryptography 运行时依赖）
+ios/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 ```
 
 踩过的坑（都写进脚本注释了）：
@@ -95,12 +95,12 @@ ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 
 ## P1 完成：真后端在 app 里启动
 
-`ipa/local/Sources/boot.py` 现在启动的是真正的 FastAPI 应用，不再是桩：
+`ios/local/Sources/boot.py` 现在启动的是真正的 FastAPI 应用，不再是桩：
 
 - `backend.core.paths.DATA` 指向沙盒 `Documents/data`（`CAMPUS_DATA_DIR`，由 Swift 在启动前 setenv）；
 - `backend.core.vault` 的 DPAPI 调用被替换成直通（沙盒本身有 iOS 数据保护；Keychain 实现待做）；
 - uvicorn 绑定随机回环端口并写入端口文件，`WKWebView` 随后加载；
-- 纯 Python 依赖由 `ipa/local/tools/stage_ios_site.sh` 从锁定的 uv 环境裁剪而来（去掉 261 MB 的
+- 纯 Python 依赖由 `ios/local/tools/stage_ios_site.sh` 从锁定的 uv 环境裁剪而来（去掉 261 MB 的
   Node runtime 和各平台二进制，换成 iOS wheel）；
 - `modules/group-messages` 不打包（依赖 Windows DLL，产品上本来也不提供）。
 
@@ -110,10 +110,10 @@ ipa/local/tools/assemble_wheel.py        # 通用 wheel 组装（RECORD/WHEEL）
 
 iOS 自带 PDFKit，没必要为 `pypdfium2`（C++ / PDFium，体积大）再造一遍。做法：
 
-- `ipa/local/Sources/PDFKitBridge.m`：三个 C 函数 `cm_pdf_page_count` / `cm_pdf_page_size` / `cm_pdf_render_page`，
+- `ios/local/Sources/PDFKitBridge.m`：三个 C 函数 `cm_pdf_page_count` / `cm_pdf_page_size` / `cm_pdf_render_page`，
   内部用 `PDFDocument` + `UIGraphicsImageRenderer` 渲染成 PNG；用 `__attribute__((used, visibility("default")))`
   配合 `-Wl,-export_dynamic` 把符号留在主可执行文件里；
-- `ipa/local/Sources/py_extra/pypdfium2.py`：通过 `ctypes.CDLL(None)` 调这些符号，提供后端用到的
+- `ios/local/Sources/py_extra/pypdfium2.py`：通过 `ctypes.CDLL(None)` 调这些符号，提供后端用到的
   `PdfDocument` / `page.get_size()` / `page.render(scale).to_pil()` 子集；
 - 构建时该文件与 wheelhouse 一起装进 `site-packages`，后端 `import pypdfium2` 会命中这个 shim。
 
@@ -149,7 +149,7 @@ iOS 不允许 `dlopen` 未被代码签名覆盖的松散 `.so`。BeeWare 的 CPy
 `.fwork` 约定：把扩展模块放进 `Frameworks/<name>.framework/<name>`，并在原位置留一个
 `<name>.so.fwork` 指向它，同时框架内留 `<name>.origin` 指回占位文件。
 
-`ipa/local/tools/convert_dylibs.sh` 在构建期把所有 `python/**/*.so` 转成框架（本机实测 75 个），
+`ios/local/tools/convert_dylibs.sh` 在构建期把所有 `python/**/*.so` 转成框架（本机实测 75 个），
 `Sources/PythonBridge.c` 把 `sys.executable` 设成 app 根目录的二进制——importlib 用
 `dirname(sys.executable)` 解析 `.fwork` 里的相对路径。
 

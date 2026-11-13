@@ -12,7 +12,7 @@ from PIL import Image
 
 from backend.core.config import VERSION
 
-IPA = PROJECT / "ipa"
+IPA = PROJECT / "ios" / "shell"
 APP = IPA / "campusMate"
 SOURCES = ("CampusMateApp.swift", "ContentView.swift", "CampusWebView.swift", "ServerSettings.swift", "SetupView.swift")
 SIGNING = {".p12", ".cer", ".mobileprovision", ".ipa", ".xcarchive", ".provisionprofile"}
@@ -90,7 +90,7 @@ def check():
                 assert marker not in text, f"{path.relative_to(PROJECT)} must not contain secrets."
 
     workflow = (PROJECT / ".github" / "workflows" / "ios.yml").read_text(encoding="utf-8")
-    assert "runs-on: macos" in workflow and "./build_ipa.sh" in workflow and "working-directory: ipa" in workflow
+    assert "runs-on: macos" in workflow and "./build_ipa.sh" in workflow and "working-directory: ios/shell" in workflow
     assert re.search(r"uses: \S+@[0-9a-f]{40}", workflow), "Actions stay pinned to commit SHAs."
     print("ipa: shell sources, icon, plist, pairing defaults, build script and macOS workflow passed")
 

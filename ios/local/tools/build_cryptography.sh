@@ -66,5 +66,5 @@ cp -R "$WORK/cryptography-$VERSION/src/cryptography" "$STAGE/"
 cp "$CARGO_TARGET_DIR/aarch64-apple-ios/release/libcryptography_rust.dylib" \
    "$STAGE/cryptography/hazmat/bindings/_rust.abi3.so"
 cp "$WORK/cryptography-$VERSION/PKG-INFO" "$STAGE/cryptography-$VERSION.dist-info/METADATA"
-"$PY" "$REPO/ipa/local/tools/assemble_wheel.py" "$STAGE" cryptography "$VERSION" "$WHEELS" \
+"$PY" "$REPO/ios/local/tools/assemble_wheel.py" "$STAGE" cryptography "$VERSION" "$WHEELS" \
     cp39-abi3-ios_16_0_arm64_iphoneos

@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'ipa/**'
+      - 'ios/**'
       - '.github/workflows/ios.yml'
   pull_request:
     paths:
-      - 'ipa/**'
+      - 'ios/**'
       - '.github/workflows/ios.yml'
 
 permissions:
@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
-        working-directory: ipa
+        working-directory: ios/shell
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: campusMate-ipa
-          path: ipa/campusMate.ipa
+          path: ios/shell/campusMate.ipa
           if-no-files-found: error
