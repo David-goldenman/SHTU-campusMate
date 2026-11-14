@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -88,8 +89,7 @@ def complete_openai(messages, config, api_key, format="text", transport=None, *,
         headers["Authorization"] = "Bearer " + api_key
     try:
         with httpx.Client(timeout=90, transport=transport) as client:
-            response = client.post(_completion_url(config), headers=headers, json=payload)
-            response.raise_for_status()
+            response = _post(client, _completion_url(config), headers=headers, payload=payload)
             result = response.json()
             choice = result["choices"][0]
             if choice.get("finish_reason") not in (None, "stop"):
@@ -112,6 +112,37 @@ def complete_openai(messages, config, api_key, format="text", transport=None, *,
         raise HTTPException(502, "AI 返回的数据格式不完整，请重试。") from None
 
 
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _post(client, url, *, headers, payload, attempts=3):
+    """Retry transient provider failures; long classification batches hit 429."""
+    last = None
+    for attempt in range(attempts):
+        try:
+            response = client.post(url, headers=headers, json=payload)
+            if response.status_code in RETRY_STATUS and attempt + 1 < attempts:
+                last = response
+                time.sleep(1 + attempt * 2)
+                continue
+            response.raise_for_status()
+            return response
+        except httpx.TimeoutException as error:
+            last = error
+            if attempt + 1 < attempts:
+                time.sleep(1 + attempt * 2)
+                continue
+            raise
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code not in RETRY_STATUS or attempt + 1 == attempts:
+                raise
+            last = error
+            time.sleep(1 + attempt * 2)
+    if isinstance(last, httpx.HTTPStatusError):
+        raise last
+    raise httpx.TimeoutException("provider timeout")
+
+
 def complete(messages, model, api_key, format="text", transport=None):
     payload = {"model": model, "messages": messages, "thinking": {"type": "disabled"}, "max_tokens": 6000, "stream": False}
     if format == "json":
@@ -119,8 +150,8 @@ def complete(messages, model, api_key, format="text", transport=None):
         payload["response_format"] = {"type": "json_object"}
     try:
         with httpx.Client(timeout=90, transport=transport) as client:
-            response = client.post("https://api.deepseek.com/chat/completions", headers={"Authorization": "Bearer " + api_key}, json=payload)
-            response.raise_for_status()
+            response = _post(client, "https://api.deepseek.com/chat/completions",
+                             headers={"Authorization": "Bearer " + api_key}, payload=payload)
             result = response.json()
             choice = result["choices"][0]
             if choice.get("finish_reason") != "stop":

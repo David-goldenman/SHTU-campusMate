@@ -24,8 +24,9 @@ enum ICSImporter {
     static func importText(_ text: String, completion: @escaping (Result<Int, Error>) -> Void) {
         let events = parse(text)
         guard !events.isEmpty else {
-            let head = text.prefix(200).replacingOccurrences(of: "\n", with: " ")
-            completion(.failure(Failure(message: "日历文件里没有可导入的日程。\n内容开头：\(head)")))
+            let head = text.prefix(160).replacingOccurrences(of: "\n", with: " ")
+            let blocks = text.components(separatedBy: "BEGIN:VEVENT").count - 1
+            completion(.failure(Failure(message: "日历文件里没有可导入的日程（VEVENT 数量：\(blocks)）。\n内容开头：\(head)")))
             return
         }
 

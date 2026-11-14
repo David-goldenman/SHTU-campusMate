@@ -1,4 +1,5 @@
 import secrets
+import time
 import threading
 from datetime import date
 from typing import Literal
@@ -110,7 +111,42 @@ def create_router(context):
                 item["body_text"] = bodies.get(item["id"], {}).get("body_text", item["body_text"])
             values = classify_values(result["messages"], context.store.read("rules", DEFAULT_RULES), scoped(context, "labels", {}))
             save(context, "labels", values, owner)
+        auto_classify()
         return result
+
+    def auto_classify(limit=6):
+        """Classify newly arrived mail without waiting for a manual review.
+
+        Runs only where the AI has no plugin tools (iOS), where the fallback is
+        a plain model call. Bounded so a rate limit never blocks the inbox.
+        """
+        if _intelligence is None or getattr(context.ai, "supports_tools", True):
+            return
+        owner = _source.owner()
+
+        def work():
+            try:
+                reviews = context.store.read("reviews:" + owner, {})
+                pending = []
+                for item in messages()[:20]:
+                    prepared = _intelligence._prepared(item, _intelligence.effective_preferences(),
+                                                       context.ai.settings(), owner)
+                    record = reviews.get(item["id"])
+                    if record and record.get("fingerprint") == prepared["fingerprint"]:
+                        continue
+                    pending.append(item["id"])
+                for message_id in pending[:limit]:
+                    if _intelligence.stopping.is_set() or _source.owner() != owner:
+                        return
+                    try:
+                        _intelligence.review(message_id, "", force=True)
+                    except Exception:
+                        return  # rate limited or unavailable: the next sync retries
+                    time.sleep(0.4)
+            except Exception:
+                return
+
+        threading.Thread(target=work, name="mail-auto-classify", daemon=True).start()
 
     _source = Source(context, "coremail", ["mail.shanghaitech.edu.cn"], refresh_inbox,
                      direct=lambda: bool(getattr(context.auth, "imap_enabled", lambda provider: False)("coremail")))

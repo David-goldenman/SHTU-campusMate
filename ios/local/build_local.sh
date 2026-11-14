@@ -13,12 +13,19 @@ export PATH="/opt/homebrew/bin:$PATH"
 
 APP=campusMateLocal
 # "dev" builds install side by side with the release build and show a DEV icon.
-CONFIG=Release
-FLAVOUR=""
-case "${1:-release}" in
-    dev) CONFIG=Debug; FLAVOUR="-dev" ;;
-    release) ;;
-    *) echo "usage: $0 [release|dev]" >&2; exit 2 ;;
+CONFIG=Debug
+FLAVOUR="-dev"
+case "${1:-dev}" in
+    dev) ;;
+    release)
+        # ios/DEVELOPMENT.md: release IPAs are only built from main, after merge.
+        [ "${CAMPUS_RELEASE:-}" = "1" ] || {
+            echo 'release builds are reserved for main: set CAMPUS_RELEASE=1 (see ios/DEVELOPMENT.md)' >&2
+            exit 2
+        }
+        CONFIG=Release; FLAVOUR=""
+        ;;
+    *) echo "usage: $0 [dev|release]" >&2; exit 2 ;;
 esac
 BUILD=build-local
 ARCHIVE="$BUILD/$APP.xcarchive"
