@@ -11,6 +11,7 @@ dist/
 python-path.txt
 /PPT/
 /ios/shell/build/
+/ios/shell/campusMate/Icons/
 /ios/shell/campusMate.ipa
 /ios/shell/campusMate.xcodeproj/
 .DS_Store

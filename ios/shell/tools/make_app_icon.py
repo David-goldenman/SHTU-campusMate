@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 PROJECT = Path(__file__).resolve().parents[3]
 SOURCE = PROJECT / "web" / "brand" / "campusmate-app-icon.png"
-ASSETS = PROJECT / "ios" / "shell" / "campusMate" / "Assets.xcassets"
+ICONS = PROJECT / "ios" / "shell" / "tools" / "icons"
 BACKGROUND = (77, 116, 252)
 BADGE = (24, 32, 48)
 BADGE_TEXT = (255, 255, 255)
@@ -51,35 +51,29 @@ def badge(icon: Image.Image, label: str) -> Image.Image:
     return canvas
 
 
-def write_catalog(name: str, image: Image.Image) -> None:
-    folder = ASSETS / f"{name}.appiconset"
-    folder.mkdir(parents=True, exist_ok=True)
-    image.save(folder / "AppIcon-1024.png", optimize=True)
-    (folder / "Contents.json").write_text(
-        """{
-  "images" : [
-    {
-      "filename" : "AppIcon-1024.png",
-      "idiom" : "universal",
-      "platform" : "ios",
-      "size" : "1024x1024"
-    }
-  ],
-  "info" : {
-    "author" : "xcode",
-    "version" : 1
-  }
+# Loose PNGs instead of an asset catalog: actool needs a simulator runtime,
+# which build machines may not have. @2x/@3x sizes follow CFBundleIcons.
+SIZES = {
+    "AppIcon60x60@2x.png": 120,
+    "AppIcon60x60@3x.png": 180,
+    "AppIcon76x76@2x.png": 152,
+    "AppIcon83.5x83.5@2x.png": 167,
+    "AppIcon-1024.png": 1024,
 }
-""",
-        encoding="utf-8",
-    )
+
+
+def write_variant(name: str, image: Image.Image) -> None:
+    folder = ICONS / name
+    folder.mkdir(parents=True, exist_ok=True)
+    for filename, size in SIZES.items():
+        image.resize((size, size), Image.LANCZOS).save(folder / filename, optimize=True)
     print(f"wrote {folder.relative_to(PROJECT)}")
 
 
 def main() -> None:
     base = flattened()
-    write_catalog("AppIcon", base)
-    write_catalog("AppIconWeb", badge(base, "web"))
+    write_variant("release", base)
+    write_variant("web", badge(base, "web"))
 
 
 if __name__ == "__main__":

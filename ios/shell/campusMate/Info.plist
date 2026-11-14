@@ -37,9 +37,32 @@
 		<false/>
 	</dict>
 	<key>UILaunchScreen</key>
+	<dict/>
+	<key>CFBundleIcons</key>
 	<dict>
-		<key>UIColorName</key>
-		<string>LaunchBackground</string>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60</string>
+				<string>AppIcon76x76</string>
+				<string>AppIcon83.5x83.5</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
 	</dict>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>

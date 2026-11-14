@@ -22,19 +22,18 @@ VERSION="${CAMPUS_VERSION:-}"
 if [[ "$VARIANT" == "web" ]]; then
     BUNDLE_ID="edu.shanghaitech.campusmate.web"
     DISPLAY_NAME="campusMate web"
-    ICON_NAME="AppIconWeb"
+    ICON_VARIANT="web"
     OUTPUT_NAME="campusMate-web"
 else
     BUNDLE_ID="edu.shanghaitech.campusmate"
     DISPLAY_NAME="campusMate"
-    ICON_NAME="AppIcon"
+    ICON_VARIANT="release"
     OUTPUT_NAME="campusMate"
 fi
-OUTPUT="../ipa/$OUTPUT_NAME.ipa"
+OUTPUT="$(cd .. && pwd)/ipa/$OUTPUT_NAME.ipa"
 EXTRA_SETTINGS=()
 [[ -n "$VERSION" ]] && EXTRA_SETTINGS+=(MARKETING_VERSION="$VERSION")
-EXTRA_SETTINGS+=(PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CAMPUS_DISPLAY_NAME="$DISPLAY_NAME"
-                 ASSETCATALOG_COMPILER_APPICON_NAME="$ICON_NAME")
+EXTRA_SETTINGS+=(PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CAMPUS_DISPLAY_NAME="$DISPLAY_NAME")
 ARCHIVE="$BUILD/$APP.xcarchive"
 DERIVED="$BUILD/DerivedData"
 
@@ -48,6 +47,11 @@ command -v xcodegen >/dev/null || { echo 'xcodegen is required: brew install xco
 export TMPDIR="$(pwd)/.tmp"
 mkdir -p "$TMPDIR" "$BUILD"
 
+# Copy the variant's icons into the target; the catalog is deliberately not
+# used because actool needs a simulator runtime.
+rm -rf campusMate/Icons
+mkdir -p campusMate/Icons
+cp tools/icons/"$ICON_VARIANT"/*.png campusMate/Icons/
 xcodegen generate --spec project.yml
 
 if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
@@ -65,19 +69,23 @@ if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
     exit 0
 fi
 
-echo 'Archiving without code signing; install with a sideloading tool or sign it later.'
-# App Store thinning runs actool inside a booted simulator; an unsigned sideload
-# build does not need it, and the agent hangs on machines without a simulator.
-xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
-    -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$DERIVED" \
+echo 'Building without code signing; install with a sideloading tool or sign it later.'
+# Build by target, not by scheme+destination: destination resolution needs the
+# iOS platform runtime, which is absent on machines that removed the simulator.
+# App Store thinning also runs actool inside a simulator, so skip it.
+mkdir -p "$BUILD/module-cache" "$BUILD/tmp"
+CLANG_MODULE_CACHE_PATH="$PWD/$BUILD/module-cache" TMPDIR="$PWD/$BUILD/tmp" \
+xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration Release -sdk iphoneos \
+    SYMROOT="$PWD/$BUILD/Products" OBJROOT="$PWD/$BUILD/Intermediates" \
+    MODULE_CACHE_DIR="$PWD/$BUILD/module-cache" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
     ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES \
-    "${EXTRA_SETTINGS[@]}"
+    "${EXTRA_SETTINGS[@]}" build
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
-ditto "$ARCHIVE/Products/Applications/$APP.app" "$BUILD/Payload/$APP.app"
+ditto "$BUILD/Products/Release-iphoneos/$APP.app" "$BUILD/Payload/$APP.app"
 mkdir -p "$(dirname "$OUTPUT")"
 rm -f "$OUTPUT"
 (cd "$BUILD" && zip -qry "$OUTPUT" Payload)
-echo "Unsigned IPA: $(pwd)/$OUTPUT"
+echo "Unsigned IPA: $OUTPUT"
