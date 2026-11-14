@@ -1,8 +1,8 @@
-# iPhone / iPad 客户端（campusMate.ipa）
+# 网络外壳（`ios/shell`）
 
 ## 它是什么
 
-`ipa/` 里是一个原生 SwiftUI + WKWebView 外壳，打开电脑上运行的同一套工作台：同一个 HTTP 接口、同一份课表与作业数据。后端仍然跑在电脑上——它依赖 Windows 凭据保护、Node.js 学校登录窗口和本地文件，这些无法塞进 iOS，所以手机里不启动 Python 服务。
+`ios/shell/` 里是一个原生 SwiftUI + WKWebView 外壳，打开电脑上运行的同一套工作台：同一个 HTTP 接口、同一份课表与作业数据。后端仍然跑在电脑上——它依赖 Windows 凭据保护、Node.js 学校登录窗口和本地文件，这些无法塞进 iOS，所以手机里不启动 Python 服务。
 
 依赖电脑端登录状态的功能（微信群、QQ 群消息）暂不在手机端实现，仍在电脑上使用；手机端也不缓存任何学校账号密码。
 
@@ -25,14 +25,14 @@
 需要 macOS + Xcode 15 及以上 + [XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）。
 
 ```bash
-cd ipa
+cd ios/shell
 ./build_ipa.sh                              # 未签名产物
 CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh   # 用自动描述文件签名
 ```
 
-产物是 `ipa/campusMate.ipa`，归档和导出中间文件都在 `ipa/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
+产物是 `ios/shell/campusMate.ipa`，归档和导出中间文件都在 `ios/shell/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
 
-`project.yml` 由 XcodeGen 生成 `ipa/campusMate.xcodeproj`（与 `INFOPLIST_FILE` 的相对路径一致，已被 `.gitignore` 忽略）；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
+`project.yml` 由 XcodeGen 生成 `ios/shell/campusMate.xcodeproj`（与 `INFOPLIST_FILE` 的相对路径一致，已被 `.gitignore` 忽略）；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
 
 版本号 `MARKETING_VERSION` 必须与 `backend/core/config.py` 的 `VERSION` 保持一致，`checks/check_ipa.py` 会校验这一点。
 
@@ -45,7 +45,7 @@ CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh   # 用自动描述文件签名
 ## 目录
 
 ```
-ipa/
+ios/shell/
   project.yml             XcodeGen 工程定义（bundle id、版本、签名风格）
   build_ipa.sh            归档 + 打包：未签名与签名两条路径
   ExportOptions.plist     签名导出的参数
@@ -64,37 +64,15 @@ ipa/
 
 - 只允许留在配对电脑的 origin 内，外部链接交给 Safari；
 - `target=_blank` 在同一视图打开；
-- `.ics` 导出走 `WKDownload`，完成后弹系统分享面板，可直接存到“文件”或导入日历；
+- `.ics` 导出走 `WKDownload`，完成后弹系统分享面板，可直接存到“文件”或导入日历（本地版改为 EventKit 直写，见 [../README.md](../README.md)）；
 - `alert` / `confirm` / `window.prompt`（密码生成器用到）都有原生弹窗；
 - 页面加载失败显示离线提示与重试按钮。
 
-## 本地原型（P0，`ipa/local/`）
+## 和本地版的关系
 
-`ipa/local/` 是「在手机上自己跑」的第一版：内嵌 CPython（BeeWare 的
-[Python-Apple-support](https://github.com/beeware/Python-Apple-support)），启动后用标准库
-`http.server` 在 `127.0.0.1` 提供打包进 app 的 `web/`，`WKWebView` 直接加载本机地址，不需要电脑。
-
-```bash
-# 一次性：把 Python.xcframework 放到 ipa/local/
-curl -L https://github.com/beeware/Python-Apple-support/releases/download/3.13-b18/Python-3.13-iOS-support.b18.tar.gz |
-    tar xz -C ipa/local
-cd ipa/local && ./build_local.sh          # 产物 ipa/local/campusMateLocal.ipa
-```
-
-现状：已在 iPadOS 26.0 真机跑通——设备本地启动 FastAPI 后端，界面、导航、主题、校园地图与时间表正常渲染。
-
-限制：
-
-- 已实现：app 内启动**真正的 FastAPI 后端**（`Sources/boot.py`），加载真实前端、模块清单与 `/api/v1`；
-- 已具备：`pydantic_core`、`zstandard`、`pillow`、`cryptography`（静态链接自建 OpenSSL）的 iOS wheel，
-  PDFKit 版 `pypdfium2` 替身，以及锁文件里全部纯 Python 依赖（`tools/stage_ios_site.sh` 裁剪）；
-- 平台差异：`group-messages` 不打包（Windows DLL）；Vault 用沙盒直通代替 DPAPI；AI harness 依赖 Node
-  子进程，iOS 上不可用，AI 功能暂时不可用；
-- 未在真机验证：`python/lib/python3.13/lib-dynload/*.so` 需要随 app 一起签名，见
-  [IOS_LOCAL.md](../../docs/IOS_LOCAL.md)；
-- 未签名产物无法安装到真机；用 Xcode 签名时，`python/lib/python3.13/lib-dynload/*.so` 也需要一并签名
-  （BeeWare 的 `build/utils.sh` 提供了 `.so → framework` 的转换脚本）；
-- 原型与正式外壳（`ipa/campusMate/`）互不影响，`ios.yml` 的 CI 仍只构建正式外壳。
+`ios/local/` 是同一套前端的设备内版本：它把 Python 服务、`backend/` 和 `modules/` 都打进 app，
+不再需要电脑。两者平级、互不包含，共享仓库根的 `web/`；版本、构建与缓存规则见
+[../DEVELOPMENT.md](../DEVELOPMENT.md)。
 
 ## 已知边界
 

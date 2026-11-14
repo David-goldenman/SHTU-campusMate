@@ -19,6 +19,22 @@
 - dev 版与正式版靠图标（右下角 `DEV` 徽章）、名称（`campusMate dev`）和 Bundle ID 区分，其余代码完全一致。
 - 每次构建都会更换二进制时间戳，App 启动时据此清理 WKWebView 缓存；服务端对页面与资源发送 `Cache-Control: no-cache`。新增缓存层时请沿用这套约定。
 
+## dev 专属功能
+
+dev 构建多一个侧边栏入口 **开发者模式**（`web/app.js`），里面可以发测试通知、手动跑一次后台同步、导入示例日历、重载页面。
+
+- 开关来自后端 `GET /api/v1/bootstrap` 的 `dev` 字段，它读取 `CAMPUS_DEV_BUILD` 环境变量；
+- 只有 Debug 构建在 `LocalRuntime.start()` 里设置该变量（`#if DEBUG`），Release 构建会 `unsetenv`；
+- 原生侧的消息处理器 `dev` 也只在 `#if DEBUG` 注册；
+- **正式版必须没有这个入口**：新增 dev 功能时，服务端与原生侧都要保持"Release 下不可达"，不能只靠界面隐藏。
+
+## 后台与通知
+
+- 后台同步由 `BGAppRefreshTask` 驱动（`Sources/BackgroundRefresh.swift`），在 `AppDelegate` 里注册，进后台与回前台都会重排；
+- 一次后台任务约 30 秒，只做"同步 + 读通知快照 + 投递本地通知"，失败的下次再来；
+- iOS 不允许常驻后台，通知时效由系统调度决定；需要即时推送时只能引入服务端 APNs；
+- 新增后台动作时保持幂等，并在 `BackgroundRefresh.pass()` 里按"可选调用"处理模块未启用的 404/409。
+
 ## 发布
 
 1. 功能在 dev 版验证通过、版本号已递增；
@@ -30,8 +46,17 @@
 
 ```
 ios/
-  shell/   网络外壳（WKWebView + 电脑上的后端）
-  local/   本地版（内嵌 CPython + FastAPI）
+  README.md                 两个工程的对照与当前能力
+  DEVELOPMENT.md            本文件
+  shell/                    网络外壳（WKWebView + 电脑上的后端）
+    build_ipa.sh
+  local/                    本地版（内嵌 CPython + FastAPI）
+    build_local.sh          默认 dev；release 需要 CAMPUS_RELEASE=1
+    Sources/LocalRuntime.swift      启动 Python、端口发现、缓存清理
+    Sources/LocalWebView.swift      页面加载、登录桥、.ics 拦截、恢复重试
+    Sources/BackgroundRefresh.swift 后台同步与本地通知
+    Sources/ICSImporter.swift       EventKit 日历导入
+    tools/                          原生依赖的 iOS 交叉编译脚本
 ```
 
 两个工程平级，互不包含；共用仓库根的 `web/`，本地版另外打包 `backend/`、`modules/` 与 iOS wheel。
