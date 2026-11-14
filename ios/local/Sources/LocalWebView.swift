@@ -133,6 +133,7 @@ struct LocalWebView: UIViewRepresentable {
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "calendar", let text = message.body as? String {
+                onCalendarImport("正在写入日历…")
                 if text.hasPrefix("ERROR:") {
                     onCalendarImport("读取日历文件失败: " + text.dropFirst(6))
                 } else {
