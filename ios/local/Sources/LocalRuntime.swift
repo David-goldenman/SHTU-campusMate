@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 /// Boots the embedded CPython once and reports the port its local server bound.
 /// The Python side writes the port to a file, so nothing has to be guessed or
@@ -45,6 +46,9 @@ final class LocalRuntime: ObservableObject {
         setenv("CAMPUS_DATA_DIR", dataDirectory.path, 1)
         logPath = dataDirectory.appendingPathComponent("python.log").path
         launchLogPath = dataDirectory.appendingPathComponent("launch.log").path
+        // Overwrite installs keep WKWebView's disk cache; when the binary is
+        // newer than the last run, drop the cached page and scripts.
+        Self.purgeWebCacheIfRebuilt()
         try? FileManager.default.removeItem(at: portFile)
 
         note("启动 Python: home=\(home)")
@@ -68,6 +72,27 @@ final class LocalRuntime: ObservableObject {
         }
 
         waitForPort(portFile, attempts: 0)
+    }
+
+    // MARK: - Caches
+
+    private static func purgeWebCacheIfRebuilt() {
+        let defaults = UserDefaults.standard
+        let key = "campusMate.buildStamp"
+        let stamp = buildStamp()
+        guard defaults.string(forKey: key) != stamp else { return }
+        defaults.set(stamp, forKey: key)
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+            modifiedSince: .distantPast) {}
+    }
+
+    private static func buildStamp() -> String {
+        guard let executable = Bundle.main.executableURL,
+              let attributes = try? FileManager.default.attributesOfItem(atPath: executable.path),
+              let modified = attributes[.modificationDate] as? Date else { return "unknown" }
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        return "\(version)/\(Int(modified.timeIntervalSince1970))"
     }
 
     // MARK: - Diagnostics

@@ -69,6 +69,16 @@ def main():
 
     port = free_port()
     app = create_app(active_port=port, data_dir=DATA)
+
+    @app.middleware("http")
+    async def no_stale_ui(request, call_next):
+        # The app bundle is replaced on every install; revalidating keeps an
+        # overwrite-install from running the previous build's JavaScript.
+        response = await call_next(request)
+        path = request.url.path
+        if path == "/" or path.startswith(("/assets/", "/module-assets/")):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
     log(f"boot: app created on port {port}")
     if port_file:
         port_file.write_text(str(port), encoding="utf-8")
