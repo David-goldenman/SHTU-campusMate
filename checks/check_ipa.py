@@ -29,7 +29,7 @@ def check():
     version = re.search(r'MARKETING_VERSION:\s*"([^"]+)"', spec)
     assert version and version.group(1) == VERSION, f"The shell version must track backend {VERSION}."
     for fragment in ('iOS: "16.0"', "INFOPLIST_FILE: campusMate/Info.plist", "GENERATE_INFOPLIST_FILE: NO",
-                     "ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon", "excludes:", "SUPPORTS_MACCATALYST: NO"):
+                     "path: campusMate/Icons", "excludes:", "SUPPORTS_MACCATALYST: NO"):
         assert fragment in spec, f"project.yml lost {fragment}"
 
     info = plistlib.loads((APP / "Info.plist").read_bytes())
@@ -43,17 +43,21 @@ def check():
     assert transport["NSAllowsLocalNetworking"] is True, "Local HTTP needs the ATS local-networking exception."
     assert "NSAllowsArbitraryLoads" not in transport, "Only local HTTP may be relaxed."
     assert len(info["NSLocalNetworkUsageDescription"]) >= 8
-    assert info["UILaunchScreen"]["UIColorName"] == "LaunchBackground"
     assert "UIInterfaceOrientationPortrait" in info["UISupportedInterfaceOrientations"]
+    primary = info["CFBundleIcons"]["CFBundlePrimaryIcon"]["CFBundleIconFiles"]
+    assert primary == ["AppIcon60x60"], "Loose icons are referenced through CFBundleIcons."
+    assert info["CFBundleIcons~ipad"]["CFBundlePrimaryIcon"]["CFBundleIconFiles"]
 
-    icons = json.loads((APP / "Assets.xcassets/AppIcon.appiconset/Contents.json").read_text(encoding="utf-8"))
-    name = icons["images"][0]["filename"]
-    assert icons["images"][0]["size"] == "1024x1024" and len(icons["images"]) == 1
-    icon = Image.open(APP / "Assets.xcassets/AppIcon.appiconset" / name)
-    assert icon.size == (1024, 1024) and icon.mode == "RGB", "App Store icons are 1024x1024 without an alpha channel."
-    colors = json.loads((APP / "Assets.xcassets/LaunchBackground.colorset/Contents.json").read_text(encoding="utf-8"))
-    components = colors["colors"][0]["color"]
-    assert components["color-space"] == "srgb" and set(components["components"]) == {"red", "green", "blue", "alpha"}
+    # Icons are loose PNGs (no asset catalog: actool needs a simulator runtime).
+    for variant, sizes in (("release", {"AppIcon-1024.png": 1024, "AppIcon60x60@2x.png": 120,
+                                        "AppIcon60x60@3x.png": 180, "AppIcon76x76@2x.png": 152,
+                                        "AppIcon83.5x83.5@2x.png": 167}),
+                           ("web", {"AppIcon-1024.png": 1024})):
+        folder = IPA / "tools" / "icons" / variant
+        for name, size in sizes.items():
+            icon = Image.open(folder / name)
+            assert icon.size == (size, size), f"{variant}/{name} has the wrong size."
+            assert icon.mode == "RGB", f"{variant}/{name} must not carry an alpha channel."
 
     for source in SOURCES:
         assert (APP / source).is_file(), f"{source} is missing."
@@ -93,6 +97,7 @@ def check():
 
     workflow = (PROJECT / ".github" / "workflows" / "ios.yml").read_text(encoding="utf-8")
     assert "runs-on: macos" in workflow and "./build_ipa.sh" in workflow and "working-directory: ios/shell" in workflow
+    assert "path: ios/ipa/campusMate.ipa" in workflow, "The uploaded artifact must match the build output."
     assert re.search(r"uses: \S+@[0-9a-f]{40}", workflow), "Actions stay pinned to commit SHAs."
     print("ipa: shell sources, icon, plist, pairing defaults, build script and macOS workflow passed")
 

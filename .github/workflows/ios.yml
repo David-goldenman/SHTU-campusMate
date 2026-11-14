@@ -1,7 +1,7 @@
 name: iOS shell
 
 # The iPhone client is a thin WKWebView shell; this job proves the project still
-# builds on a Mac and uploads the unsigned campusMate.ipa as an artifact, so a
+# builds on a Mac and uploads the unsigned ios/ipa/campusMate.ipa as an artifact, so a
 # machine without Xcode can still get the build output.
 on:
   workflow_dispatch:
@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: campusMate-ipa
-          path: ios/shell/campusMate.ipa
+          path: ios/ipa/campusMate.ipa
           if-no-files-found: error

@@ -4,16 +4,18 @@
 
 ```
 ios/
-  shell/   网络外壳：WKWebView 连接电脑上 `run.cmd --share` 的工作台
+  shell/   网页外壳：WKWebView 连接电脑上 `run.cmd --share` 的工作台
   local/   本地版：app 内嵌 CPython + FastAPI，设备上独立运行
-  ipa/     正式版产物目录（campusMate.ipa，合并 main 后构建）
+  ipa/     正式版产物目录（两个 1.x.y 安装包都在这里）
 ```
 
-| | `shell/` | `local/` |
+| | `shell/`（网页外壳） | `local/`（本地版） |
 | --- | --- | --- |
 | 后端在哪 | 电脑（同一 Wi-Fi） | app 自己的沙盒 |
 | 构建 | `cd shell && ./build_ipa.sh` | `cd local && ./build_local.sh` |
-| 产物 | `shell/campusMate.ipa` | `local/campusMate-dev.ipa`（dev）/ `ipa/campusMate.ipa`（正式） |
+| 正式产物 | `ipa/campusMate-web.ipa` | `ipa/campusMate.ipa` |
+| 日常产物 | — | `local/campusMate-dev.ipa`（DEV 徽章） |
+| Bundle ID | `edu.shanghaitech.campusmate.web` | `…campusmate.local` / `…local.dev`（dev） |
 | 版本 | 跟随 `backend/core/config.py` 的 `VERSION` | `0.x.y`（dev）/ `1.x.y`（正式） |
 | CI | `.github/workflows/ios.yml` 自动构建 | 本机构建（依赖 `.codex/wheelhouse` 的 iOS wheel） |
 | 说明 | [shell/README.md](shell/README.md) | [../docs/IOS_LOCAL.md](../docs/IOS_LOCAL.md) |
@@ -30,6 +32,19 @@ ios/
 - 开发期**只构建 dev 版**，正式版 IPA 只在合并 `main` 之后构建；
 - 版本号改动只改 `ios/local/project.yml` 的 `MARKETING_VERSION`，**Bundle ID 永远不变**；
 - 覆盖安装会保留缓存，启动时按二进制时间戳清理 WKWebView 缓存。
+
+## 两种正式包
+
+合并 `main` 之后各构建一次，都输出到 `ios/ipa/`：
+
+```bash
+cd ios/shell && CAMPUS_VARIANT=web CAMPUS_VERSION=1.0.0 ./build_ipa.sh   # → ipa/campusMate-web.ipa
+cd ios/local && CAMPUS_RELEASE=1 CAMPUS_VERSION=1.0.0 ./build_local.sh release  # → ipa/campusMate.ipa
+```
+
+- 网页外壳的图标右下角带 **web** 角标，显示名 `campusMate web`，Bundle ID 加 `.web`；
+- 两个包的 Bundle ID 不同，可以同时安装；
+- `CAMPUS_VERSION` 只在构建时覆盖 `MARKETING_VERSION`，不改仓库里的 dev 版本号。
 
 ## 本地版现在能做什么
 

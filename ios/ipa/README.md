@@ -1,12 +1,16 @@
 # 正式版产物
 
-从 `main` 构建的正式版 IPA 放在这里，文件名固定 `campusMate.ipa`。
+从 `main` 构建的两个正式版 IPA 放在这里：
+
+| 文件 | 来源 | Bundle ID |
+| --- | --- | --- |
+| `campusMate.ipa` | `ios/local`（设备内运行） | `edu.shanghaitech.campusmate.local` |
+| `campusMate-web.ipa` | `ios/shell`（网页外壳，图标带 web 角标） | `edu.shanghaitech.campusmate.web` |
 
 ```bash
 # 只在合并到 main 之后执行
-cd ios/local
-CAMPUS_RELEASE=1 ./build_local.sh release
-# → ios/ipa/campusMate.ipa
+cd ios/local && CAMPUS_RELEASE=1 CAMPUS_VERSION=1.0.0 ./build_local.sh release
+cd ios/shell && CAMPUS_VARIANT=web CAMPUS_VERSION=1.0.0 ./build_ipa.sh
 ```
 
 规则（详见 [../DEVELOPMENT.md](../DEVELOPMENT.md)）：

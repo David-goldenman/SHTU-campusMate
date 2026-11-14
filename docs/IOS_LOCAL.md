@@ -209,7 +209,8 @@ iOS 不允许 `dlopen` 未被代码签名覆盖的松散 `.so`。BeeWare 的 CPy
 | 产物 | 路径 | 说明 |
 | --- | --- | --- |
 | dev | `ios/local/campusMate-dev.ipa` | 日常开发，`0.x.y`，带 DEV 徽章 |
-| 正式 | `ios/ipa/campusMate.ipa` | 合并 `main` 后用 `CAMPUS_RELEASE=1 ./build_local.sh release` 构建，`1.x.y` |
+| 本地版正式 | `ios/ipa/campusMate.ipa` | 合并 `main` 后 `CAMPUS_RELEASE=1 CAMPUS_VERSION=1.0.0 ./build_local.sh release` |
+| 网页外壳正式 | `ios/ipa/campusMate-web.ipa` | `cd ios/shell && CAMPUS_VARIANT=web CAMPUS_VERSION=1.0.0 ./build_ipa.sh`，Bundle ID 加 `.web`、图标带 web 角标 |
 
 Bundle ID 固定：`edu.shanghaitech.campusmate.local`（正式）/ `...local.dev`（dev），覆盖安装依赖这一点。
 
@@ -217,4 +218,5 @@ Bundle ID 固定：`edu.shanghaitech.campusmate.local`（正式）/ `...local.de
 
 - 真机（iPadOS 26.x）运行正常：本地服务、课程、时间表、作业、邮箱、通知、AI 问答；
 - 已实现纯 Python AI、EventKit 日历导入、后台刷新与本地通知、dev 开发者模式；
-- 未完成：Keychain 版 Vault（当前为沙盒直通）、Harness 插件工具、APNs 即时推送。
+- 未完成：Keychain 版 Vault（当前为沙盒直通）、Harness 插件工具、APNs 即时推送；
+- 1.0.0 已发布到 GitHub Release（本地版 + 网页外壳两个未签名 IPA）。

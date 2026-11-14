@@ -23,7 +23,7 @@ campusMate 的**主程序不是跨平台 Python 应用**：它依赖 Windows 的
 | `需要 Windows powershell，请使用 Windows 或启用了 Windows 互操作的 WSL。` | 启动初始化 `Vault()` | 凭据加密调用 `scripts/dpapi.ps1`（Windows DPAPI），纯 Linux 没有对应的系统凭据保护（`backend/core/vault.py`） |
 | `FileNotFoundError: wslpath` | 同上 | 非 Windows 分支用 `wslpath` 把路径翻译给 Windows 工具，纯 Linux 没有该命令 |
 | `验证窗口未能启动，请检查 Windows Node 与 Edge。` | 连接校园服务时 | 学校统一登录用 Node + Edge 的 CDP 自动化（`scripts/browser.mjs`），Linux 上没有 Edge |
-| `xcodebuild: command not found` / `Xcode command line tools are required` | `cd ipa && ./build_ipa.sh` | iOS 工程只能用 macOS 的 Xcode 构建；Linux 上没有任何 iOS SDK |
+| `xcodebuild: command not found` / `Xcode command line tools are required` | `cd ios/shell && ./build_ipa.sh` | iOS 工程只能用 macOS 的 Xcode 构建；Linux 上没有任何 iOS SDK |
 
 ## 为什么必须这样
 

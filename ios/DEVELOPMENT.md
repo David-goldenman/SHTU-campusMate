@@ -16,7 +16,10 @@
 
 - **开发期只构建 dev 版**：`cd ios/local && ./build_local.sh`（默认即 dev）。
 - **不得在开发期构建正式版 IPA**：`./build_local.sh release` 需要显式设置 `CAMPUS_RELEASE=1` 才会执行，产物固定写到 `ios/ipa/campusMate.ipa`（该目录只留说明文件，IPA 不进版本库）。
+- 网页外壳的正式版是另一个包：`CAMPUS_VARIANT=web CAMPUS_VERSION=<版本> ./build_ipa.sh`，产物 `ios/ipa/campusMate-web.ipa`，Bundle ID 为 `edu.shanghaitech.campusmate.web`、显示名 `campusMate web`、图标右下角带 `web` 角标。
+- `CAMPUS_VERSION` 只在构建命令里覆盖 `MARKETING_VERSION`，**不要**为了发版去改 `project.yml` 里的 dev 版本号。
 - dev 版与正式版靠图标（右下角 `DEV` 徽章）、名称（`campusMate dev`）和 Bundle ID 区分，其余代码完全一致。
+- 图标是**散装 PNG + `CFBundleIcons`**，不用 asset catalog：`actool` 需要模拟器运行时，构建机可能没有。图标由 `ios/shell/tools/make_app_icon.py` 生成到 `ios/shell/tools/icons/{release,web}/`，构建时复制到 target。
 - 每次构建都会更换二进制时间戳，App 启动时据此清理 WKWebView 缓存；服务端对页面与资源发送 `Cache-Control: no-cache`。新增缓存层时请沿用这套约定。
 
 ## dev 专属功能
@@ -27,6 +30,17 @@ dev 构建多一个侧边栏入口 **开发者模式**（`web/app.js`），里�
 - 只有 Debug 构建在 `LocalRuntime.start()` 里设置该变量（`#if DEBUG`），Release 构建会 `unsetenv`；
 - 原生侧的消息处理器 `dev` 也只在 `#if DEBUG` 注册；
 - **正式版必须没有这个入口**：新增 dev 功能时，服务端与原生侧都要保持"Release 下不可达"，不能只靠界面隐藏。
+
+## 发布产物
+
+正式版只发布两个包，都放在 `ios/ipa/`：
+
+| 包 | 构建命令 | Bundle ID |
+| --- | --- | --- |
+| `campusMate-web.ipa` | `cd ios/shell && CAMPUS_VARIANT=web CAMPUS_VERSION=<版本> ./build_ipa.sh` | `edu.shanghaitech.campusmate.web` |
+| `campusMate.ipa` | `cd ios/local && CAMPUS_RELEASE=1 CAMPUS_VERSION=<版本> ./build_local.sh release` | `edu.shanghaitech.campusmate.local` |
+
+两个包都是未签名产物，发布到 GitHub Release 时需要说明重签方式；Release 描述里同时写明版本、Bundle ID、能力范围和系统要求。
 
 ## 后台与通知
 
@@ -50,7 +64,8 @@ ios/
   DEVELOPMENT.md            本文件
   shell/                    网络外壳（WKWebView + 电脑上的后端）
     build_ipa.sh
-  ipa/                      正式版产物目录（README 说明用途，IPA 被 gitignore）
+  ipa/                      正式版产物目录（两个包；README 说明用途，IPA 被 gitignore）
+  shell/tools/icons/        生成好的两套图标（release / web）
   local/                    本地版（内嵌 CPython + FastAPI）
     build_local.sh          默认 dev；release 需要 CAMPUS_RELEASE=1，输出到 ../ipa
     Sources/LocalRuntime.swift      启动 Python、端口发现、缓存清理
