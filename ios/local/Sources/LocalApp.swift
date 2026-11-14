@@ -2,13 +2,29 @@ import SwiftUI
 
 @main
 struct CampusMateLocalApp: App {
-    @StateObject private var runtime = LocalRuntime()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var runtime = LocalRuntime.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(runtime)
-                .task { runtime.start() }
+                .task {
+                    BackgroundRefresh.requestAuthorization()
+                    runtime.start()
+                }
+                .onChange(of: scenePhase) { phase in
+                    switch phase {
+                    case .background:
+                        BackgroundRefresh.schedule()
+                        BackgroundRefresh.keepAlive()
+                    case .active:
+                        BackgroundRefresh.schedule(after: 10 * 60)
+                    default:
+                        break
+                    }
+                }
         }
     }
 }

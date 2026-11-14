@@ -162,6 +162,53 @@ async function refreshNavigationMetadata(current, signal) {
   }
 }
 
+function openDevTools() {
+  const existing = document.querySelector('#dev-tools');
+  if (existing) {existing.remove(); return;}
+  const panel = document.createElement('div');
+  panel.id = 'dev-tools';
+  panel.setAttribute('role','dialog');
+  panel.setAttribute('aria-label','开发者模式');
+  panel.style.cssText = 'position:fixed;inset:auto 16px 16px 16px;max-width:460px;margin:0 auto;z-index:9999;background:var(--surface,#1b2230);color:var(--text,#e6e9ef);border:1px solid var(--border,#39445a);border-radius:14px;padding:14px;box-shadow:0 12px 40px #0009;font:13px/1.5 system-ui';
+  panel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong>开发者模式</strong><button type="button" data-close style="background:none;border:0;color:inherit;font-size:18px">×</button></div>' +
+    '<p style="margin:0 0 10px;opacity:.7">版本 ' + escape(state.version || '?') + ' · 仅 dev 构建提供</p>' +
+    '<div style="display:grid;gap:8px">' +
+    '<button type="button" data-dev="notify">发送测试通知</button>' +
+    '<button type="button" data-dev="background">立即执行后台同步</button>' +
+    '<button type="button" data-dev="ics">导入示例日历（6 个日程）</button>' +
+    '<button type="button" data-dev="reload">重新加载页面</button>' +
+    '</div>' +
+    '<pre data-dev-log style="margin:10px 0 0;max-height:120px;overflow:auto;font-size:11px;opacity:.75"></pre>';
+  panel.querySelectorAll('button').forEach(button => {button.style.cssText = 'padding:8px 10px;border-radius:8px;border:1px solid #39445a;background:#232c3d;color:inherit;text-align:left';});
+  panel.querySelector('[data-close]').onclick = () => panel.remove();
+  const log = message => {panel.querySelector('[data-dev-log]').textContent = message;};
+  panel.querySelectorAll('[data-dev]').forEach(button => button.onclick = () => {
+    const action = button.dataset.dev;
+    if (action === 'reload') {location.reload();return;}
+    if (action === 'ics') {importSampleCalendar(log);return;}
+    const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dev;
+    if (!bridge) {log('当前环境没有原生调试桥（网页版）。');return;}
+    bridge.postMessage({action});
+    log('已发送：' + action);
+  });
+  document.body.append(panel);
+}
+
+function importSampleCalendar(log) {
+  const stamp = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+  const day = stamp.slice(0,8);
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//campusMate//dev//ZH','BEGIN:VEVENT','UID:dev-' + stamp,'DTSTAMP:' + stamp,'DTSTART:' + day + 'T010000Z','DTEND:' + day + 'T020000Z','SUMMARY:campusMate 测试日程','END:VEVENT','END:VCALENDAR'].join('\r\n') + '\r\n';
+  window.webkit.messageHandlers.calendar.postMessage(ics);
+  log('已提交示例日历。');
+}
+
+document.addEventListener('click', event => {
+  const entry = event.target.closest && event.target.closest('[data-dev-tools]');
+  if (!entry) return;
+  event.preventDefault();
+  openDevTools();
+}, true);
+
 async function render(refreshMetadata = false) {
   const current = ++revision;
   await dispose();
@@ -175,7 +222,10 @@ async function render(refreshMetadata = false) {
   const requested = location.hash.slice(1).split('?')[0];
   const page = items.some(([id]) => id === requested) ? requested : items[0][0];
   if (requested !== page) history.replaceState(null,'','#' + page);
-  document.querySelector('#navigation').innerHTML = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>').join('');
+  const links = items.map(([id,icon,label],index) => (id === 'settings' && index ? '<span class="nav-divider"></span>' : '') + '<a href="#' + id + '" data-nav="' + id + '"><span class="nav-icon" aria-hidden="true">' + navIcon(icon) + '</span>' + escape(label) + '</a>');
+  // Development builds only; release builds never receive the dev flag.
+  if (state.dev) links.push('<span class="nav-divider"></span><a href="#dev" data-dev-tools><span class="nav-icon" aria-hidden="true">' + navIcon('✎') + '</span>开发者模式</a>');
+  document.querySelector('#navigation').innerHTML = links.join('');
   closeMenu();
   document.querySelector('#page-label').textContent = labels.get(page);
   document.querySelectorAll('[data-nav]').forEach(link => {

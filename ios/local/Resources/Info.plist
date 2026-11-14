@@ -50,6 +50,15 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>edu.shanghaitech.campusmate.local.refresh</string>
+		<string>edu.shanghaitech.campusmate.local.dev.refresh</string>
+	</array>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>campusMate 需要写入日历，才能把导出的课程表与作业截止导入系统日历。</string>
 	<key>NSAppTransportSecurity</key>

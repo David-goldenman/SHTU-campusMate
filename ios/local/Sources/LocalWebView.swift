@@ -19,6 +19,9 @@ struct LocalWebView: UIViewRepresentable {
         configuration.websiteDataStore = .default()
         configuration.userContentController.add(context.coordinator, name: "login")
         configuration.userContentController.add(context.coordinator, name: "calendar")
+        #if DEBUG
+        configuration.userContentController.add(context.coordinator, name: "dev")
+        #endif
         let bridge = WKUserScript(source: """
             (function () {
                 const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.login;
@@ -95,6 +98,7 @@ struct LocalWebView: UIViewRepresentable {
         private let onLoginRequest: (String, String?) -> Void
         private let onCalendarImport: (String) -> Void
         private var destinations: [ObjectIdentifier: URL] = [:]
+        private var retries = 0
 
         init(base: URL, onIssue: @escaping (String) -> Void,
              onLoginRequest: @escaping (String, String?) -> Void,
@@ -142,6 +146,15 @@ struct LocalWebView: UIViewRepresentable {
         }
 
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "dev", let body = message.body as? [String: Any],
+               let action = body["action"] as? String {
+                switch action {
+                case "notify": BackgroundRefresh.sendTestNotification()
+                case "background": Task { await BackgroundRefresh.runNow() }
+                default: break
+                }
+                return
+            }
             if message.name == "calendar", let text = message.body as? String {
                 onCalendarImport("正在写入日历…")
                 if text.hasPrefix("ERROR:") {
@@ -187,13 +200,27 @@ struct LocalWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             onIssue("页面加载失败: \(error.localizedDescription)")
+            retry(webView)
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             onIssue("页面无法连接: \(error.localizedDescription)")
+            retry(webView)
+        }
+
+        /// iOS suspends the app (and the local server) in the background; when
+        /// the app comes back the page often loads before Python is ready.
+        private func retry(_ webView: WKWebView) {
+            guard retries < 12 else { return }
+            retries += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self, weak webView] in
+                guard let self, let webView else { return }
+                webView.load(URLRequest(url: self.base))
+            }
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            retries = 0
             let probe = """
                 JSON.stringify({
                     title: document.title || '',

@@ -5,6 +5,9 @@ import WebKit
 /// The Python side writes the port to a file, so nothing has to be guessed or
 /// shared through fragile in-memory callbacks.
 final class LocalRuntime: ObservableObject {
+    /// One runtime per process; background refresh reads its port.
+    static let shared = LocalRuntime()
+
     enum State {
         case idle
         case starting
@@ -44,6 +47,13 @@ final class LocalRuntime: ObservableObject {
             note("无法创建数据目录: \(error.localizedDescription)")
         }
         setenv("CAMPUS_DATA_DIR", dataDirectory.path, 1)
+        #if DEBUG
+        // Development builds expose the sidebar's developer panel; release
+        // builds never set this flag (ios/DEVELOPMENT.md).
+        setenv("CAMPUS_DEV_BUILD", "1", 1)
+        #else
+        unsetenv("CAMPUS_DEV_BUILD")
+        #endif
         logPath = dataDirectory.appendingPathComponent("python.log").path
         launchLogPath = dataDirectory.appendingPathComponent("launch.log").path
         // Overwrite installs keep WKWebView's disk cache; when the binary is

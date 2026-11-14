@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .core.config import VERSION, Settings
+from .core.config import DEV_BUILD, VERSION, Settings
 from .core.modules import ModuleManager
 from .core.paths import DATA, MODULES, WEB
 from .core.store import Store
@@ -153,7 +153,7 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
 
     @app.get("/api/v1/bootstrap", tags=["框架"], summary="初始化网页与模块清单")
     def bootstrap():
-        return {"version": VERSION, "csrf_token": csrf, "settings": settings(), **modules.list()}
+        return {"version": VERSION, "dev": DEV_BUILD, "csrf_token": csrf, "settings": settings(), **modules.list()}
 
     @app.get("/api/v1/health", tags=["框架"], summary="本机启动器就绪检查")
     def health():

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+DEV_BUILD = os.environ.get("CAMPUS_DEV_BUILD") == "1"
 VERSION = "0.1.0"
 
 
