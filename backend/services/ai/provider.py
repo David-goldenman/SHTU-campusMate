@@ -1,8 +1,10 @@
-"""DeepSeek HTTP boundary. Credentials travel only in the request header."""
+"""Model HTTP boundary. Credentials travel only in the request header."""
 import json
 import os
 import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
 
 import httpx
@@ -10,6 +12,135 @@ from fastapi import HTTPException
 from deepseek_harness_runtime import resolve_bundled_launch_args
 
 from .catalog import runtime_route
+
+def json_object(text):
+    """Best-effort JSON object extraction from a model answer.
+
+    Models wrap JSON in code fences, prepend a sentence, or double-encode it as
+    a string; all three used to surface as "AI 返回的数据格式不完整".
+    """
+    if not isinstance(text, str):
+        raise ValueError("text required")
+    value = text.strip()
+    if value.startswith("```"):
+        value = value.split("\n", 1)[1] if "\n" in value else value
+        value = value.rsplit("```", 1)[0] if "```" in value else value
+        value = value.strip()
+    candidates = [value]
+    start, end = value.find("{"), value.rfind("}")
+    if 0 <= start < end:
+        candidates.append(value[start:end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, str):
+            try:
+                parsed = json.loads(parsed)
+            except (TypeError, ValueError):
+                continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("JSON object required")
+
+# The embedded iOS build has no subprocess, so the Harness adapters are
+# unavailable there; the app talks to the provider over HTTP instead.
+EMBEDDED = sys.platform == "ios"
+
+
+def _completion_url(config):
+    base = (config.get("base_url") or "").rstrip("/")
+    if not base:
+        raise HTTPException(409, "本地版请在 AI 设置里使用“自定义模型 API”填写兼容 OpenAI 的地址。")
+    if config.get("protocol", "openai-completions") != "openai-completions":
+        raise HTTPException(409, "本地版目前只支持 OpenAI 兼容的 chat/completions 协议。")
+    return base + "/chat/completions"
+
+
+def _wire_messages(messages):
+    """Translate the internal content parts to OpenAI's chat format."""
+    wired = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if part.get("type") == "text":
+                    parts.append({"type": "text", "text": part.get("text", "")})
+                elif part.get("type") == "image":
+                    parts.append({"type": "image_url",
+                                  "image_url": {"url": f"data:{part.get('media_type', 'image/png')};base64,{part.get('data', '')}"}})
+            wired.append({**message, "content": parts})
+        else:
+            wired.append(message)
+    return wired
+
+
+def complete_openai(messages, config, api_key, format="text", transport=None, *, check_cancelled=lambda: None):
+    """One model call against any OpenAI-compatible endpoint."""
+    check_cancelled()
+    payload = {"model": config["model"], "messages": _wire_messages(messages), "stream": False}
+    if format == "json":
+        payload["messages"] = [{"role": "system", "content": "请将回答输出为一个合法的 JSON 对象。"}, *payload["messages"]]
+        payload["response_format"] = {"type": "json_object"}
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    try:
+        with httpx.Client(timeout=90, transport=transport) as client:
+            response = _post(client, _completion_url(config), headers=headers, payload=payload)
+            result = response.json()
+            choice = result["choices"][0]
+            if choice.get("finish_reason") not in (None, "stop"):
+                raise HTTPException(502, "AI 回答未完整生成，请缩小内容范围后重试。")
+            content = choice["message"]["content"]
+            if format == "json":
+                content = json_object(content)
+            usage = result.get("usage") or {}
+            check_cancelled()
+            return {"content": content, "model": config["model"],
+                    "usage": {field: usage.get(field, 0) for field in ("prompt_tokens", "completion_tokens", "total_tokens")}}
+    except httpx.HTTPStatusError as error:
+        code = error.response.status_code
+        message = {401: "模型 API Key 未通过验证，请在设置中更新。", 402: "模型账户余额不足。",
+                   429: "模型请求过于频繁，请稍后重试。"}.get(code, f"模型请求失败（HTTP {code}）。")
+        raise HTTPException(502, message) from None
+    except httpx.HTTPError:
+        raise HTTPException(502, "暂时无法连接模型服务，请检查地址与网络后重试。") from None
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError):
+        raise HTTPException(502, "AI 返回的数据格式不完整，请重试。") from None
+
+
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+
+def _post(client, url, *, headers, payload, attempts=3):
+    """Retry transient provider failures; long classification batches hit 429."""
+    last = None
+    for attempt in range(attempts):
+        try:
+            response = client.post(url, headers=headers, json=payload)
+            if response.status_code in RETRY_STATUS and attempt + 1 < attempts:
+                last = response
+                time.sleep(1 + attempt * 2)
+                continue
+            response.raise_for_status()
+            return response
+        except httpx.TimeoutException as error:
+            last = error
+            if attempt + 1 < attempts:
+                time.sleep(1 + attempt * 2)
+                continue
+            raise
+        except httpx.HTTPStatusError as error:
+            if error.response.status_code not in RETRY_STATUS or attempt + 1 == attempts:
+                raise
+            last = error
+            time.sleep(1 + attempt * 2)
+    if isinstance(last, httpx.HTTPStatusError):
+        raise last
+    raise httpx.TimeoutException("provider timeout")
 
 
 def complete(messages, model, api_key, format="text", transport=None):
@@ -19,8 +150,8 @@ def complete(messages, model, api_key, format="text", transport=None):
         payload["response_format"] = {"type": "json_object"}
     try:
         with httpx.Client(timeout=90, transport=transport) as client:
-            response = client.post("https://api.deepseek.com/chat/completions", headers={"Authorization": "Bearer " + api_key}, json=payload)
-            response.raise_for_status()
+            response = _post(client, "https://api.deepseek.com/chat/completions",
+                             headers={"Authorization": "Bearer " + api_key}, payload=payload)
             result = response.json()
             choice = result["choices"][0]
             if choice.get("finish_reason") != "stop":
@@ -29,9 +160,7 @@ def complete(messages, model, api_key, format="text", transport=None):
             if not isinstance(content, str):
                 raise ValueError("Text content required")
             if format == "json":
-                content = json.loads(content)
-                if not isinstance(content, dict):
-                    raise ValueError("JSON object required")
+                content = json_object(content)
             usage = result.get("usage") or {}
             return {"content": content, "model": model, "usage": {field: usage.get(field, 0) for field in ("prompt_tokens", "completion_tokens", "total_tokens")}}
     except httpx.HTTPStatusError as error:
@@ -46,6 +175,8 @@ def complete(messages, model, api_key, format="text", transport=None):
 
 def complete_with_harness(messages, config, api_key, runtime_root, format='text', *, check_cancelled=lambda: None):
     """One model call through the same official adapter as plugin workflows."""
+    if EMBEDDED:
+        return complete_openai(messages, config, api_key, format, check_cancelled=check_cancelled)
     temporary = runtime_root / 'tmp'
     temporary.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='ai-text-', dir=temporary) as name:

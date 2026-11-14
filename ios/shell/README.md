@@ -1,8 +1,8 @@
-# iPhone / iPad 客户端（campusMate.ipa）
+# 网络外壳（`ios/shell`）
 
 ## 它是什么
 
-`ipa/` 里是一个原生 SwiftUI + WKWebView 外壳，打开电脑上运行的同一套工作台：同一个 HTTP 接口、同一份课表与作业数据。后端仍然跑在电脑上——它依赖 Windows 凭据保护、Node.js 学校登录窗口和本地文件，这些无法塞进 iOS，所以手机里不启动 Python 服务。
+`ios/shell/` 里是一个原生 SwiftUI + WKWebView 外壳，打开电脑上运行的同一套工作台：同一个 HTTP 接口、同一份课表与作业数据。后端仍然跑在电脑上——它依赖 Windows 凭据保护、Node.js 学校登录窗口和本地文件，这些无法塞进 iOS，所以手机里不启动 Python 服务。
 
 依赖电脑端登录状态的功能（微信群、QQ 群消息）暂不在手机端实现，仍在电脑上使用；手机端也不缓存任何学校账号密码。
 
@@ -25,14 +25,14 @@
 需要 macOS + Xcode 15 及以上 + [XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）。
 
 ```bash
-cd ipa
+cd ios/shell
 ./build_ipa.sh                              # 未签名产物
 CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh   # 用自动描述文件签名
 ```
 
-产物是 `ipa/campusMate.ipa`，中间文件都在 `ipa/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
+产物是 `ios/shell/campusMate.ipa`，归档和导出中间文件都在 `ios/shell/build/`（已被 `.gitignore` 忽略，不随仓库提交）。
 
-`project.yml` 由 XcodeGen 生成 `build/campusMate.xcodeproj`；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
+`project.yml` 由 XcodeGen 生成 `ios/shell/campusMate.xcodeproj`（与 `INFOPLIST_FILE` 的相对路径一致，已被 `.gitignore` 忽略）；也可以自己 `xcodegen generate` 后用 Xcode 打开、选真机 Archive。Bundle id 默认 `edu.shanghaitech.campusmate`，换成自己的团队前缀只需要改 `project.yml` 的 `PRODUCT_BUNDLE_IDENTIFIER`。
 
 版本号 `MARKETING_VERSION` 必须与 `backend/core/config.py` 的 `VERSION` 保持一致，`checks/check_ipa.py` 会校验这一点。
 
@@ -45,7 +45,7 @@ CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh   # 用自动描述文件签名
 ## 目录
 
 ```
-ipa/
+ios/shell/
   project.yml             XcodeGen 工程定义（bundle id、版本、签名风格）
   build_ipa.sh            归档 + 打包：未签名与签名两条路径
   ExportOptions.plist     签名导出的参数
@@ -64,9 +64,15 @@ ipa/
 
 - 只允许留在配对电脑的 origin 内，外部链接交给 Safari；
 - `target=_blank` 在同一视图打开；
-- `.ics` 导出走 `WKDownload`，完成后弹系统分享面板，可直接存到“文件”或导入日历；
+- `.ics` 导出走 `WKDownload`，完成后弹系统分享面板，可直接存到“文件”或导入日历（本地版改为 EventKit 直写，见 [../README.md](../README.md)）；
 - `alert` / `confirm` / `window.prompt`（密码生成器用到）都有原生弹窗；
 - 页面加载失败显示离线提示与重试按钮。
+
+## 和本地版的关系
+
+`ios/local/` 是同一套前端的设备内版本：它把 Python 服务、`backend/` 和 `modules/` 都打进 app，
+不再需要电脑。两者平级、互不包含，共享仓库根的 `web/`；版本、构建与缓存规则见
+[../DEVELOPMENT.md](../DEVELOPMENT.md)。
 
 ## 已知边界
 
@@ -80,4 +86,4 @@ ipa/
 uv run --no-sync python checks/check_ipa.py
 ```
 
-`.github/workflows/ios.yml` 会在 macOS 上真实跑一遍 `build_ipa.sh`，保证工程文件、图标和 Swift 源码始终可编译。
+`.github/workflows/ios.yml` 会在 macOS 上真实跑一遍 `build_ipa.sh`，保证工程文件、图标和 Swift 源码始终可编译，并把未签名产物作为 `campusMate-ipa` artifact 上传，没有 Xcode 的机器可以直接下载。

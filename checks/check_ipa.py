@@ -12,7 +12,7 @@ from PIL import Image
 
 from backend.core.config import VERSION
 
-IPA = PROJECT / "ipa"
+IPA = PROJECT / "ios" / "shell"
 APP = IPA / "campusMate"
 SOURCES = ("CampusMateApp.swift", "ContentView.swift", "CampusWebView.swift", "ServerSettings.swift", "SetupView.swift")
 SIGNING = {".p12", ".cer", ".mobileprovision", ".ipa", ".xcarchive", ".provisionprofile"}
@@ -35,7 +35,9 @@ def check():
     info = plistlib.loads((APP / "Info.plist").read_bytes())
     assert info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
     assert info["CFBundleShortVersionString"] == "$(MARKETING_VERSION)" and info["CFBundleVersion"] == "$(CURRENT_PROJECT_VERSION)"
-    assert info["CFBundleDisplayName"] == "campusMate" and info["LSRequiresIPhoneOS"] is True
+    # The display name comes from a build setting so the web variant can add
+    # its suffix without duplicating Info.plist.
+    assert info["CFBundleDisplayName"] == "$(CAMPUS_DISPLAY_NAME)" and info["LSRequiresIPhoneOS"] is True
     assert info["ITSAppUsesNonExemptEncryption"] is False
     transport = info["NSAppTransportSecurity"]
     assert transport["NSAllowsLocalNetworking"] is True, "Local HTTP needs the ATS local-networking exception."
@@ -90,7 +92,7 @@ def check():
                 assert marker not in text, f"{path.relative_to(PROJECT)} must not contain secrets."
 
     workflow = (PROJECT / ".github" / "workflows" / "ios.yml").read_text(encoding="utf-8")
-    assert "runs-on: macos" in workflow and "./build_ipa.sh" in workflow and "working-directory: ipa" in workflow
+    assert "runs-on: macos" in workflow and "./build_ipa.sh" in workflow and "working-directory: ios/shell" in workflow
     assert re.search(r"uses: \S+@[0-9a-f]{40}", workflow), "Actions stay pinned to commit SHAs."
     print("ipa: shell sources, icon, plist, pairing defaults, build script and macOS workflow passed")
 

@@ -10,6 +10,13 @@ node_modules/
 dist/
 python-path.txt
 /PPT/
-/ipa/build/
-/ipa/campusMate.ipa
-/ipa/campusMate.xcodeproj/
+/ios/shell/build/
+/ios/shell/campusMate.ipa
+/ios/shell/campusMate.xcodeproj/
+.DS_Store
+/ios/shell/.tmp/
+/ios/local/build-local/
+/ios/local/campusMateLocal.xcodeproj/
+/ios/local/Python.xcframework/
+/ios/local/campusMate*.ipa
+/ios/ipa/*.ipa

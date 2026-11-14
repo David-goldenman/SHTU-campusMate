@@ -1,0 +1,85 @@
+name: campusMateLocal
+options:
+  bundleIdPrefix: edu.shanghaitech
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  campusMateLocal:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - boot.py
+          - PythonBridge.h
+          - PDFKitBridge.h
+          - py_extra
+      - path: Resources
+        excludes:
+          - Info.plist
+          # actool needs a simulator runtime; icons ship as loose PNGs instead.
+          - Assets.xcassets
+          - Icons
+    settings:
+      base:
+        PRODUCT_NAME: campusMateLocal
+        PRODUCT_BUNDLE_IDENTIFIER: edu.shanghaitech.campusmate.local
+        CAMPUS_DISPLAY_NAME: campusMate
+        INFOPLIST_FILE: Resources/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/PythonBridge.h
+        FRAMEWORK_SEARCH_PATHS: $(inherited) $(SRCROOT)/Python.xcframework/ios-arm64
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        OTHER_LDFLAGS: $(inherited) -Wl,-export_dynamic
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: edu.shanghaitech.campusmate.local.dev
+          CAMPUS_DISPLAY_NAME: campusMate dev
+    dependencies:
+      - framework: Python.xcframework
+        embed: true
+      - sdk: PDFKit.framework
+      - sdk: UIKit.framework
+    postCompileScripts:
+      - name: Bundle the CPython standard library and the web workspace
+        script: |
+          set -euo pipefail
+          BUNDLE="$CODESIGNING_FOLDER_PATH"
+          mkdir -p "$BUNDLE/python/lib"
+          rsync -a --delete "$SRCROOT/Python.xcframework/lib/" "$BUNDLE/python/lib/" --exclude 'libpython*.dylib'
+          rsync -a "$SRCROOT/Python.xcframework/ios-arm64/lib-arm64/" "$BUNDLE/python/lib/"
+          rsync -a --delete "$SRCROOT/../../web/" "$BUNDLE/web/"
+          cp "$SRCROOT/Sources/boot.py" "$BUNDLE/boot.py"
+          SITE="$BUNDLE/python/lib/python3.13/site-packages"
+          mkdir -p "$SITE"
+          # Pure-Python dependencies staged from the lockfile environment.
+          rsync -a "$SRCROOT/../../.codex/ios-site/" "$SITE/"
+          cp -R "$SRCROOT/Sources/py_extra/." "$SITE/"
+          # Framework and business code; group-messages needs Windows DLLs.
+          rsync -a --delete "$SRCROOT/../../backend/" "$BUNDLE/backend/"
+          rsync -a --delete --exclude 'group-messages' "$SRCROOT/../../modules/" "$BUNDLE/modules/"
+          for wheel in "$SRCROOT/../../.codex/wheelhouse"/*.whl; do
+            [ -e "$wheel" ] && unzip -qo "$wheel" -d "$SITE"
+          done
+          # iOS cannot dlopen loose .so files; convert them into frameworks
+          # that code signing will cover (BeeWare .fwork convention).
+          bash "$SRCROOT/tools/convert_dylibs.sh" "$BUNDLE" "$SRCROOT/Python.xcframework"
+          # Release vs dev icon: same file names, different artwork.
+          VARIANT=release
+          [ "$CONFIGURATION" = "Debug" ] && VARIANT=dev
+          cp "$SRCROOT/Resources/Icons/$VARIANT"/*.png "$BUNDLE/"
+schemes:
+  campusMateLocal:
+    build:
+      targets:
+        campusMateLocal: all
+    archive:
+      config: Release

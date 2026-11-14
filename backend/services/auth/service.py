@@ -373,6 +373,11 @@ class AuthService:
                 self.school.watch_browser(target)
         return self.get_status(provider)
 
+    def import_cookies(self, provider: str, cookies: list[dict], user_agent: str | None = None):
+        """Native iOS login window: store the cookies, then validate them."""
+        self.browser.save_state(provider, cookies, user_agent)
+        return self.import_session(provider)
+
     def import_session(self, provider: str, target: str | None = None):
         if provider == "ids" and target is None:
             target = self.store.read("auth:browser_target:ids")

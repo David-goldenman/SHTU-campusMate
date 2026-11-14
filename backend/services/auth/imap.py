@@ -28,6 +28,16 @@ def checked_settings(port=None, secure=True) -> dict:
     return {"host": IMAP_HOST, "port": checked_port(DEFAULT_PORT if port in (None, "") else port), "ssl": bool(secure)}
 
 
+def ssl_context():
+    """TLS context that also works where the OS has no CA bundle (iOS)."""
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except (ImportError, OSError):
+        return ssl.create_default_context()
+
+
 def connect(username: str, password: str, port=None, secure=True, *, readonly=True) -> imaplib.IMAP4:
     """Return a logged-in mailbox with INBOX selected.
 
@@ -42,7 +52,7 @@ def connect(username: str, password: str, port=None, secure=True, *, readonly=Tr
     try:
         if settings["ssl"]:
             mailbox = imaplib.IMAP4_SSL(settings["host"], settings["port"],
-                                       ssl_context=ssl.create_default_context(), timeout=TIMEOUT)
+                                       ssl_context=ssl_context(), timeout=TIMEOUT)
         else:
             mailbox = imaplib.IMAP4(settings["host"], settings["port"], timeout=TIMEOUT)
     except (OSError, ssl.SSLError, imaplib.IMAP4.error):

@@ -1,12 +1,17 @@
 import json
 import shutil
 import subprocess
+import sys
 import time
 
 from ...core.paths import PROJECT, RUNTIME
 from ...core.errors import PublicError
 from ...core.vault import windows_path, windows_tool
-from .protocols import PROVIDERS
+from .protocols import PROVIDERS, UA
+
+# The embedded iOS build has no subprocess, so the login window is a native
+# WKWebView in the app; it hands the cookies back through save_state().
+EMBEDDED = sys.platform == "ios"
 
 
 class VerificationBrowser:
@@ -29,7 +34,19 @@ class VerificationBrowser:
             raise PublicError("验证窗口尚未启动或已经关闭，请重新打开。")
         return json.loads(result.stdout)
 
+    def state_path(self, provider):
+        return self._directory(provider) / "state.json"
+
+    def save_state(self, provider, cookies, user_agent=None):
+        path = self.state_path(provider)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"cookies": list(cookies), "user_agent": user_agent or UA}
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return payload
+
     def open(self, provider, url, *, device_setup=False):
+        if EMBEDDED:
+            raise PublicError("iOS 请在应用内登录窗口完成登录。")
         process = self.launchers.get(provider)
         if device_setup and process is not None:
             # Enrollment keeps its CDP document guide attached through school redirects.
@@ -50,11 +67,19 @@ class VerificationBrowser:
         return json.loads(line)
 
     def state(self, provider):
+        path = self.state_path(provider)
+        if path.is_file():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        if EMBEDDED:
+            return {"cookies": []}
         return self._run("state", provider)
 
     def close(self, provider):
         directory = self._directory(provider)
-        if directory.exists():
+        if directory.exists() and not EMBEDDED:
             try:
                 self._run("close", provider)
             except RuntimeError:

@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 from datetime import datetime, timezone
 
+from . import protocols
 from .protocols import PROVIDERS
 from .network import NetworkDiagnostics, explain_failure
 
@@ -33,6 +34,11 @@ class ImapCredentials(BaseModel):
     password: str = Field(max_length=4096)
     port: int = Field(default=993, ge=1, le=65535)
     ssl: bool = True
+
+
+class BrowserCookies(BaseModel):
+    cookies: list[dict] = Field(max_length=200)
+    user_agent: str | None = Field(default=None, max_length=512)
 
 
 class DeviceConsent(BaseModel):
@@ -94,6 +100,15 @@ def create_router(service):
     @router.post("/{provider}/login")
     def login(provider: str, body: LoginOptions | None = None):
         return service.login(checked(provider), body.target if body else None)
+
+    @router.get("/{provider}/login-url")
+    def login_url(provider: str, target: str | None = None):
+        provider = checked(provider)
+        return {"url": protocols.browser_url(provider, protocols.checked_target(provider, target))}
+
+    @router.post("/{provider}/cookies")
+    def save_cookies(provider: str, body: BrowserCookies):
+        return service.import_cookies(checked(provider), body.cookies, body.user_agent)
 
     @router.post("/{provider}/browser")
     def browser(provider: str, body: LoginOptions | None = None):
