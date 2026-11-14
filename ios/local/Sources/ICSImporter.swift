@@ -24,7 +24,8 @@ enum ICSImporter {
     static func importText(_ text: String, completion: @escaping (Result<Int, Error>) -> Void) {
         let events = parse(text)
         guard !events.isEmpty else {
-            completion(.failure(Failure(message: "日历文件里没有可导入的日程。")))
+            let head = text.prefix(200).replacingOccurrences(of: "\n", with: " ")
+            completion(.failure(Failure(message: "日历文件里没有可导入的日程。\n内容开头：\(head)")))
             return
         }
 

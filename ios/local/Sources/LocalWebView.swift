@@ -30,8 +30,18 @@ struct LocalWebView: UIViewRepresentable {
                     if (!link) { return; }
                     event.preventDefault();
                     fetch(link.href, { credentials: 'same-origin' })
-                        .then(function (response) { return response.text(); })
-                        .then(function (text) { window.webkit.messageHandlers.calendar.postMessage(text); })
+                        .then(function (response) {
+                            return response.text().then(function (text) {
+                                if (!response.ok || text.indexOf('BEGIN:VCALENDAR') !== 0) {
+                                    window.webkit.messageHandlers.calendar.postMessage(
+                                        'ERROR:HTTP ' + response.status + ' ' +
+                                        (response.headers.get('content-type') || '?') + ' · ' +
+                                        text.slice(0, 160).replace(/\\s+/g, ' '));
+                                } else {
+                                    window.webkit.messageHandlers.calendar.postMessage(text);
+                                }
+                            });
+                        })
                         .catch(function (error) { window.webkit.messageHandlers.calendar.postMessage('ERROR:' + error); });
                 }, true);
                 const original = window.fetch;

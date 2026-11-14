@@ -12,6 +12,37 @@ from deepseek_harness_runtime import resolve_bundled_launch_args
 
 from .catalog import runtime_route
 
+def json_object(text):
+    """Best-effort JSON object extraction from a model answer.
+
+    Models wrap JSON in code fences, prepend a sentence, or double-encode it as
+    a string; all three used to surface as "AI 返回的数据格式不完整".
+    """
+    if not isinstance(text, str):
+        raise ValueError("text required")
+    value = text.strip()
+    if value.startswith("```"):
+        value = value.split("\n", 1)[1] if "\n" in value else value
+        value = value.rsplit("```", 1)[0] if "```" in value else value
+        value = value.strip()
+    candidates = [value]
+    start, end = value.find("{"), value.rfind("}")
+    if 0 <= start < end:
+        candidates.append(value[start:end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(parsed, str):
+            try:
+                parsed = json.loads(parsed)
+            except (TypeError, ValueError):
+                continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("JSON object required")
+
 # The embedded iOS build has no subprocess, so the Harness adapters are
 # unavailable there; the app talks to the provider over HTTP instead.
 EMBEDDED = sys.platform == "ios"
@@ -65,9 +96,7 @@ def complete_openai(messages, config, api_key, format="text", transport=None, *,
                 raise HTTPException(502, "AI 回答未完整生成，请缩小内容范围后重试。")
             content = choice["message"]["content"]
             if format == "json":
-                content = json.loads(content)
-                if not isinstance(content, dict):
-                    raise ValueError("JSON object required")
+                content = json_object(content)
             usage = result.get("usage") or {}
             check_cancelled()
             return {"content": content, "model": config["model"],
@@ -100,9 +129,7 @@ def complete(messages, model, api_key, format="text", transport=None):
             if not isinstance(content, str):
                 raise ValueError("Text content required")
             if format == "json":
-                content = json.loads(content)
-                if not isinstance(content, dict):
-                    raise ValueError("JSON object required")
+                content = json_object(content)
             usage = result.get("usage") or {}
             return {"content": content, "model": model, "usage": {field: usage.get(field, 0) for field in ("prompt_tokens", "completion_tokens", "total_tokens")}}
     except httpx.HTTPStatusError as error:

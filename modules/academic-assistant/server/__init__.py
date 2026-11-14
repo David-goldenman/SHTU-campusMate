@@ -206,11 +206,16 @@ def create_router(context):
                         {'role': 'user', 'content': json.dumps({'prompt': body.message, 'context': data}, ensure_ascii=False)}],
                         format='json')
                     payload = fallback.get('content') if isinstance(fallback, dict) else None
-                    text = payload.get('text') if isinstance(payload, dict) else None
+                    if isinstance(payload, str):
+                        text = payload
+                    elif isinstance(payload, dict):
+                        text = payload.get('text') or payload.get('answer') or payload.get('content')
+                    else:
+                        text = None
                     if not text:
                         raise HTTPException(502, '学习助手尚未完成回答，请重试。')
                     task.answer = {'text': text, 'citations': [],
-                                   'insufficient_context': bool(payload.get('insufficient_context'))}
+                                   'insufficient_context': bool(payload.get('insufficient_context')) if isinstance(payload, dict) else False}
                     result = {'content': text, 'model': fallback.get('model'), 'tools': []}
                 else:
                     result = await run_in_threadpool(context.ai.run, prompt=INSTRUCTION + '\n用户本次请求：\n' + body.message,

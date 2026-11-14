@@ -67,6 +67,21 @@ def checked(result, selected):
     return {"text": answer.text, "insufficient_context": answer.insufficient_context, "citations": references, "labels": [label.model_dump() for label in answer.labels], "context": selected["context"], "model": result.get("model"), "usage": result.get("usage", {})}
 
 
+def sanitize(result, selected):
+    """Drop citations the model invented; iOS answers have no tool grounding."""
+    content = result.get("content") if isinstance(result, dict) else None
+    if isinstance(content, dict) and isinstance(content.get("citation_ids"), list):
+        known = {item["id"] for item in selected["items"]}
+        content["citation_ids"] = [identity for identity in content["citation_ids"]
+                                   if isinstance(identity, str) and identity in known]
+    return result
+
+
+def citation_hint(selected):
+    ids = [item["id"] for item in selected["items"][:40]]
+    return "只能引用这些资料 id：" + "、".join(ids) + "。请重新输出 JSON，不要编造引用。"
+
+
 def empty_answer(selected):
     return {"text": "当前范围还没有可分析的资料，请先连接账号并同步，或选择可用资料。", "insufficient_context": True, "citations": [], "labels": [], "context": selected["context"], "model": None, "usage": {}}
 
@@ -84,10 +99,20 @@ def create_router(context):
         selected = await build_context(context, body.course_id, body.context_ids)
         if not selected["items"]:
             return empty_answer(selected)
-        result = await run_in_threadpool(context.ai.generate, prompt=INSTRUCTION + "\n任务：" + body.task + "\n用户请求：" + body.prompt, context=selected["text"], format="json")
+        prompt = INSTRUCTION + "\n任务：" + body.task + "\n用户请求：" + body.prompt
+        result = await run_in_threadpool(context.ai.generate, prompt=prompt, context=selected["text"], format="json")
+        sanitize(result, selected)
         if account_revision(context) != selected["account_revision"]:
             raise HTTPException(409, "账号已更新，请重新选择资料。")
-        return checked(result, selected)
+        try:
+            return checked(result, selected)
+        except SourceError:
+            if getattr(context.ai, "supports_tools", True):
+                raise
+            result = await run_in_threadpool(context.ai.generate, prompt=prompt + "\n" + citation_hint(selected),
+                                             context=selected["text"], format="json")
+            sanitize(result, selected)
+            return checked(result, selected)
 
     def history(course_id):
         saved = context.store.read("chat", {}).get(course_id or "all", {})
@@ -124,7 +149,16 @@ def create_router(context):
                 messages.extend({"role": item["role"], "content": item["text"][:1500]} for item in previous[-6:])
                 messages.append({"role": "user", "content": body.message})
                 result = await run_in_threadpool(context.ai.chat, messages=messages, format="json")
-                answer = checked(result, selected)
+                sanitize(result, selected)
+                try:
+                    answer = checked(result, selected)
+                except SourceError:
+                    if getattr(context.ai, "supports_tools", True):
+                        raise
+                    retry = messages + [{"role": "user", "content": citation_hint(selected)}]
+                    result = await run_in_threadpool(context.ai.chat, messages=retry, format="json")
+                    sanitize(result, selected)
+                    answer = checked(result, selected)
             if account_revision(context) != selected["account_revision"]:
                 raise HTTPException(409, "账号已更新，请重新选择资料。")
             created = datetime.now(timezone.utc).isoformat()
