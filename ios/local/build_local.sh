@@ -31,7 +31,7 @@ BUILD=build-local
 ARCHIVE="$BUILD/$APP.xcarchive"
 
 xcodebuild -version >/dev/null 2>&1 || {
-    echo 'A full Xcode install is required; see ipa/README.md.' >&2
+    echo 'A full Xcode install is required; see ios/ipa/README.md.' >&2
     exit 1
 }
 command -v xcodegen >/dev/null || { echo 'xcodegen is required: brew install xcodegen' >&2; exit 1; }
@@ -57,6 +57,14 @@ xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration "$CONFIG" -sd
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
 ditto "$BUILD/Products/$CONFIG-iphoneos/$APP.app" "$BUILD/Payload/$APP.app"
-rm -f "campusMate$FLAVOUR.ipa"
-(cd "$BUILD" && zip -qry "../campusMate$FLAVOUR.ipa" Payload)
-echo "Local prototype IPA: $(pwd)/campusMate$FLAVOUR.ipa"
+# Release artifacts live in ios/ipa (they are built from main only); the dev
+# build stays next to its project.
+if [ "$CONFIG" = "Release" ]; then
+    OUTPUT="$(cd .. && pwd)/ipa/campusMate.ipa"
+else
+    OUTPUT="$PWD/campusMate-dev.ipa"
+fi
+mkdir -p "$(dirname "$OUTPUT")"
+rm -f "$OUTPUT"
+(cd "$BUILD" && zip -qry "$OUTPUT" Payload)
+echo "IPA: $OUTPUT"

@@ -6,13 +6,14 @@
 ios/
   shell/   网络外壳：WKWebView 连接电脑上 `run.cmd --share` 的工作台
   local/   本地版：app 内嵌 CPython + FastAPI，设备上独立运行
+  ipa/     正式版产物目录（campusMate.ipa，合并 main 后构建）
 ```
 
 | | `shell/` | `local/` |
 | --- | --- | --- |
 | 后端在哪 | 电脑（同一 Wi-Fi） | app 自己的沙盒 |
 | 构建 | `cd shell && ./build_ipa.sh` | `cd local && ./build_local.sh` |
-| 产物 | `shell/campusMate.ipa` | `local/campusMate-dev.ipa` |
+| 产物 | `shell/campusMate.ipa` | `local/campusMate-dev.ipa`（dev）/ `ipa/campusMate.ipa`（正式） |
 | 版本 | 跟随 `backend/core/config.py` 的 `VERSION` | `0.x.y`（dev）/ `1.x.y`（正式） |
 | CI | `.github/workflows/ios.yml` 自动构建 | 本机构建（依赖 `.codex/wheelhouse` 的 iOS wheel） |
 | 说明 | [shell/README.md](shell/README.md) | [../docs/IOS_LOCAL.md](../docs/IOS_LOCAL.md) |
@@ -21,7 +22,8 @@ ios/
 
 ## 先读这个
 
-[DEVELOPMENT.md](DEVELOPMENT.md) 是这行的开发规范：版本号怎么走、什么时候能出正式版、Bundle ID 为什么不能改、缓存怎么处理。改动前先看。
+[DEVELOPMENT.md](DEVELOPMENT.md) 是这行的开发规范，架构取舍见
+[docs/architecture/0002-ios-local.md](../docs/architecture/0002-ios-local.md)：版本号怎么走、什么时候能出正式版、Bundle ID 为什么不能改、缓存怎么处理。改动前先看。
 
 要点：
 

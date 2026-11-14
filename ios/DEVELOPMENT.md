@@ -15,7 +15,7 @@
 ## 构建
 
 - **开发期只构建 dev 版**：`cd ios/local && ./build_local.sh`（默认即 dev）。
-- **不得在开发期构建正式版 IPA**：`./build_local.sh release` 需要显式设置 `CAMPUS_RELEASE=1` 才会执行，构建产物 `campusMate.ipa` 不应留在工作区。
+- **不得在开发期构建正式版 IPA**：`./build_local.sh release` 需要显式设置 `CAMPUS_RELEASE=1` 才会执行，产物固定写到 `ios/ipa/campusMate.ipa`（该目录只留说明文件，IPA 不进版本库）。
 - dev 版与正式版靠图标（右下角 `DEV` 徽章）、名称（`campusMate dev`）和 Bundle ID 区分，其余代码完全一致。
 - 每次构建都会更换二进制时间戳，App 启动时据此清理 WKWebView 缓存；服务端对页面与资源发送 `Cache-Control: no-cache`。新增缓存层时请沿用这套约定。
 
@@ -50,8 +50,9 @@ ios/
   DEVELOPMENT.md            本文件
   shell/                    网络外壳（WKWebView + 电脑上的后端）
     build_ipa.sh
+  ipa/                      正式版产物目录（README 说明用途，IPA 被 gitignore）
   local/                    本地版（内嵌 CPython + FastAPI）
-    build_local.sh          默认 dev；release 需要 CAMPUS_RELEASE=1
+    build_local.sh          默认 dev；release 需要 CAMPUS_RELEASE=1，输出到 ../ipa
     Sources/LocalRuntime.swift      启动 Python、端口发现、缓存清理
     Sources/LocalWebView.swift      页面加载、登录桥、.ics 拦截、恢复重试
     Sources/BackgroundRefresh.swift 后台同步与本地通知

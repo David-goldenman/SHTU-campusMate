@@ -19,3 +19,4 @@ python-path.txt
 /ios/local/campusMateLocal.xcodeproj/
 /ios/local/Python.xcframework/
 /ios/local/campusMate*.ipa
+/ios/ipa/*.ipa

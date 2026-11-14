@@ -2,6 +2,9 @@
 
 目标：iPhone/iPad 不依赖电脑上的 Python 服务，本地完成课程、作业、邮件、日程与 AI 问答；**不含微信/QQ 群消息**。
 
+架构决策与取舍见 [architecture/0002-ios-local.md](architecture/0002-ios-local.md)；构建、版本与缓存规则见
+[../ios/DEVELOPMENT.md](../ios/DEVELOPMENT.md)。
+
 ## 结论
 
 采用 **内嵌 CPython + 复用现有 FastAPI 与 `web/` 前端**：app 在自身沙盒里用 `uvicorn` 监听 `127.0.0.1`，`WKWebView` 加载 `http://127.0.0.1:<port>`。
@@ -39,21 +42,33 @@ iOS 沙盒**禁止 fork/exec**，现有 26 处 `subprocess` 调用全部不可�
 
 结论：**用 `WKWebView` 作为登录容器**（外观就是内嵌 Safari），登录完成后 `getAllCookies()` → Swift 桥 → Python `httpx` CookieJar。这样 `PROVIDERS`（coremail/ids/gradescope/piazza）的既有逻辑基本不改，只把 `VerificationBrowser` 换成桥接调用。
 
-## AI 的三条路
+## AI：已定为纯 Python
 
-1. **纯 Python 直连模型（推荐）**：`AIService` 用 `httpx` 调 DeepSeek/OpenAI 兼容接口，保留 `chat`/`generate`/流式；放弃 Harness 插件运行时（`academic-assistant` 等模块的插件工具会失效）。
-2. **nodejs-mobile 内嵌 Node 跑 Harness**：可保留插件，但上游最新是 Node 18（2024-10 停更），体积与审核风险高。
-3. **AI 走远程**：把 Harness 留在电脑/服务器，手机端只做 UI——违背"本地运行"，仅作兜底。
+比较过三条路，最终选了第 1 条：
+
+| 方案 | 结论 |
+| --- | --- |
+| 纯 Python 直连模型（**采用**） | `AIService` 用 `httpx` 调 DeepSeek 与任意 OpenAI 兼容端点；插件工具降级 |
+| nodejs-mobile 内嵌 Harness | `@deepseek-ai/dsh` 要求 Node ≥ 24.9；nodejs-mobile 最新只到 18.20.4，社区 PR #158 移植到 24.5 仍未合并，且需自行编译 V8（本次实测 6 核机器 3 小时仍未编完） |
+| 远程 Harness | 违背"本地运行"，保留为将来的可选增强 |
+
+实现要点：
+
+- `provider.complete`（DeepSeek 官方）与 `provider.complete_openai`（自定义网关）都做了容错 JSON 解析：
+  去 ```` ```json ```` 围栏、截取首尾花括号、双层编码解一次；
+- 失败重试 429/5xx/超时（3 次，1s/3s 退避），这是长批量分类能跑完的关键；
+- 无插件工具时：`AIService.supports_tools = False`，邮箱分类直接用模型输出的 decision、主页学习助手
+  直接填充 `task.answer`、AI 助手过滤模型编造的 citation_id 后重试一次。
 
 ## 分阶段计划
 
-| 阶段 | 内容 | 验收 |
+| 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| P0 | Briefcase/BeeWare 工程，内嵌 CPython 启动 `uvicorn`，`WKWebView` 打开首页 | 模拟器能进首页、`/api/v1/health` 通 |
-| P1 | 交叉编译 5 个原生依赖，`import` 全通过 | `python -c "import fastapi, pydantic, cryptography, PIL, zstandard"` 在模拟器通过 |
-| P2 | Keychain 替 Vault；WKWebView 登录 + Cookie 桥 | 连接邮箱/Blackboard 成功 |
-| P3 | AI 改纯 Python；删除 `group-messages`；清空 26 处 `subprocess` | 无 `fork/exec`；问答可用 |
-| P4 | 后台刷新、真机、打包 | 真机连续使用 1 天 |
+| P0 | 内嵌 CPython 启动 `uvicorn`，`WKWebView` 打开首页 | ✅ 真机跑通 |
+| P1 | 交叉编译 5 个原生依赖，`import` 全通过 | ✅ 见下文 |
+| P2 | WKWebView 登录 + Cookie 桥；Keychain 替 Vault | ✅ Cookie 桥 / ⏳ Keychain 未做（沙盒直通） |
+| P3 | AI 改纯 Python；不打包 `group-messages` | ✅ 问答可用（插件工具降级） |
+| P4 | 后台刷新、通知、真机验证 | ✅ 后台刷新 + 本地通知；持续观察系统调度频次 |
 
 CI 已能在 `macos-latest` 上构建（`.github/workflows/ios.yml`），P0 起可加一个模拟器构建 job 防回归。
 
@@ -163,7 +178,43 @@ iOS 不允许 `dlopen` 未被代码签名覆盖的松散 `.so`。BeeWare 的 CPy
 - Python-Apple-support 最新 `3.15-b3`（2026-10-26），稳定线 `3.14-b14`；Briefcase `v0.4.7`。
 - `nodejs-mobile` 最新 `v18.20.4`（2024-10-07）。
 
-## 待定
+## 日历导入（2026-11）
 
-- AI 走"纯 Python"还是"内嵌 Node"？
-- 群消息模块是删除，还是保留代码但 iOS 不编译？
+`.ics` 不再走下载：页面拦截 `a[href$=".ics"]` 的点击 → `fetch` 文本 → `window.webkit.messageHandlers.calendar`
+交给原生 → `ICSImporter` 解析 VEVENT → EventKit 写入默认日历。
+
+- 权限：`requestFullAccessToEvents`（iOS 17+），Info.plist 声明 `NSCalendarsFullAccessUsageDescription`；
+- 去重：导出的 UID 写进事件备注（`campusMate:<uid>`），重复导入跳过已有；
+- 踩过的坑：ICS 用 CRLF，解析时先按 `\r\n` 切分再按 `\n` 切分会让每个值带上尾部 `\r` 并覆盖
+  DTSTART，导致"6 个 VEVENT 解析出 0 个"。
+
+## 后台与通知（2026-11）
+
+- `BGAppRefreshTask`（`ios/local/Sources/BackgroundRefresh.swift`），在 `AppDelegate` 注册，进后台与
+  回前台各重排一次；一次约 30 秒，做"同步邮件/作业/时间表 → 生成通知 → 读取快照 → 投递本地通知"；
+- 通知去重按通知 id 存在 UserDefaults，保留最近 400 条；
+- 后台刷新是系统机会式调度（通常每天几次），App 被划掉后不再唤醒；即时推送需要 APNs；
+- 回前台时页面若在 Python 绑定端口前加载失败，会自动重试（最多 12 次、每秒一次）。
+
+## 开发者模式（仅 dev）
+
+`web/app.js` 在 `bootstrap.dev` 为真时往侧边栏追加"开发者模式"入口，面板里可以：发测试通知、手动跑一次
+后台同步、导入示例日历、重载页面。
+
+`dev` 来自 `CAMPUS_DEV_BUILD`，只有 Debug 构建在 `LocalRuntime.start()` 里设置；Release 构建会 `unsetenv`，
+原生侧 `dev` 消息处理器也只在 `#if DEBUG` 注册。规则见 [../ios/DEVELOPMENT.md](../ios/DEVELOPMENT.md)。
+
+## 版本与产物
+
+| 产物 | 路径 | 说明 |
+| --- | --- | --- |
+| dev | `ios/local/campusMate-dev.ipa` | 日常开发，`0.x.y`，带 DEV 徽章 |
+| 正式 | `ios/ipa/campusMate.ipa` | 合并 `main` 后用 `CAMPUS_RELEASE=1 ./build_local.sh release` 构建，`1.x.y` |
+
+Bundle ID 固定：`edu.shanghaitech.campusmate.local`（正式）/ `...local.dev`（dev），覆盖安装依赖这一点。
+
+## 现状
+
+- 真机（iPadOS 26.x）运行正常：本地服务、课程、时间表、作业、邮箱、通知、AI 问答；
+- 已实现纯 Python AI、EventKit 日历导入、后台刷新与本地通知、dev 开发者模式；
+- 未完成：Keychain 版 Vault（当前为沙盒直通）、Harness 插件工具、APNs 即时推送。
