@@ -28,6 +28,8 @@ case "${1:-dev}" in
     *) echo "usage: $0 [dev|release]" >&2; exit 2 ;;
 esac
 BUILD=build-local
+VERSION_ARGS=()
+[[ -n "${CAMPUS_VERSION:-}" ]] && VERSION_ARGS+=(MARKETING_VERSION="$CAMPUS_VERSION")
 ARCHIVE="$BUILD/$APP.xcarchive"
 
 xcodebuild -version >/dev/null 2>&1 || {
@@ -52,7 +54,7 @@ xcodebuild -project "$APP.xcodeproj" -target "$APP" -configuration "$CONFIG" -sd
     SYMROOT="$PWD/$BUILD/Products" OBJROOT="$PWD/$BUILD/Intermediates" \
     MODULE_CACHE_DIR="$PWD/$BUILD/module-cache" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES build
+    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} build
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"

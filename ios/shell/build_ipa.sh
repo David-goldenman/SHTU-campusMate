@@ -3,6 +3,9 @@
 #
 #   ./build_ipa.sh                 unsigned .ipa (works on a simulator/unsigned install tools)
 #   CAMPUS_IOS_TEAM=XXXXXXXXXX ./build_ipa.sh
+#   CAMPUS_VARIANT=web CAMPUS_VERSION=1.0.0 ./build_ipa.sh
+#                                  web-shell variant (bundle id +.web, "web"
+#                                  badge icon, output ios/ipa/campusMate-web.ipa)
 #                                  signed .ipa for a real device, using the Apple
 #                                  developer team and automatic provisioning
 #
@@ -12,6 +15,26 @@ cd "$(dirname "$0")"
 
 APP=campusMate
 BUILD=build
+VARIANT="${CAMPUS_VARIANT:-}"
+VERSION="${CAMPUS_VERSION:-}"
+# The web variant shares the code but is a separate app: its own bundle id,
+# display name, "web" badge icon and output file.
+if [[ "$VARIANT" == "web" ]]; then
+    BUNDLE_ID="edu.shanghaitech.campusmate.web"
+    DISPLAY_NAME="campusMate web"
+    ICON_NAME="AppIconWeb"
+    OUTPUT_NAME="campusMate-web"
+else
+    BUNDLE_ID="edu.shanghaitech.campusmate"
+    DISPLAY_NAME="campusMate"
+    ICON_NAME="AppIcon"
+    OUTPUT_NAME="campusMate"
+fi
+OUTPUT="../ipa/$OUTPUT_NAME.ipa"
+EXTRA_SETTINGS=()
+[[ -n "$VERSION" ]] && EXTRA_SETTINGS+=(MARKETING_VERSION="$VERSION")
+EXTRA_SETTINGS+=(PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CAMPUS_DISPLAY_NAME="$DISPLAY_NAME"
+                 ASSETCATALOG_COMPILER_APPICON_NAME="$ICON_NAME")
 ARCHIVE="$BUILD/$APP.xcarchive"
 DERIVED="$BUILD/DerivedData"
 
@@ -31,12 +54,14 @@ if [[ -n "${CAMPUS_IOS_TEAM:-}" ]]; then
     echo "Archiving for team $CAMPUS_IOS_TEAM."
     xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
         -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$DERIVED" \
-        -allowProvisioningUpdates DEVELOPMENT_TEAM="$CAMPUS_IOS_TEAM" CODE_SIGN_STYLE=Automatic
+        -allowProvisioningUpdates DEVELOPMENT_TEAM="$CAMPUS_IOS_TEAM" CODE_SIGN_STYLE=Automatic \
+        "${EXTRA_SETTINGS[@]}"
     rm -rf "$BUILD/export"
     xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
         -exportPath "$BUILD/export" -allowProvisioningUpdates
-    cp "$BUILD/export/$APP.ipa" "$APP.ipa"
-    echo "Signed IPA: $(pwd)/$APP.ipa"
+    mkdir -p "$(dirname "$OUTPUT")"
+    cp "$BUILD/export/$APP.ipa" "$OUTPUT"
+    echo "Signed IPA: $(pwd)/$OUTPUT"
     exit 0
 fi
 
@@ -46,11 +71,13 @@ echo 'Archiving without code signing; install with a sideloading tool or sign it
 xcodebuild archive -project "$APP.xcodeproj" -scheme "$APP" -configuration Release \
     -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" -derivedDataPath "$DERIVED" \
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES
+    ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT=YES \
+    "${EXTRA_SETTINGS[@]}"
 
 rm -rf "$BUILD/Payload"
 mkdir -p "$BUILD/Payload"
 ditto "$ARCHIVE/Products/Applications/$APP.app" "$BUILD/Payload/$APP.app"
-rm -f "$APP.ipa"
-(cd "$BUILD" && zip -qry "../$APP.ipa" Payload)
-echo "Unsigned IPA: $(pwd)/$APP.ipa"
+mkdir -p "$(dirname "$OUTPUT")"
+rm -f "$OUTPUT"
+(cd "$BUILD" && zip -qry "$OUTPUT" Payload)
+echo "Unsigned IPA: $(pwd)/$OUTPUT"

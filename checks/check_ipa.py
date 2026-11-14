@@ -35,7 +35,9 @@ def check():
     info = plistlib.loads((APP / "Info.plist").read_bytes())
     assert info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
     assert info["CFBundleShortVersionString"] == "$(MARKETING_VERSION)" and info["CFBundleVersion"] == "$(CURRENT_PROJECT_VERSION)"
-    assert info["CFBundleDisplayName"] == "campusMate" and info["LSRequiresIPhoneOS"] is True
+    # The display name comes from a build setting so the web variant can add
+    # its suffix without duplicating Info.plist.
+    assert info["CFBundleDisplayName"] == "$(CAMPUS_DISPLAY_NAME)" and info["LSRequiresIPhoneOS"] is True
     assert info["ITSAppUsesNonExemptEncryption"] is False
     transport = info["NSAppTransportSecurity"]
     assert transport["NSAllowsLocalNetworking"] is True, "Local HTTP needs the ATS local-networking exception."
