@@ -114,7 +114,7 @@ def create_router(context):
         auto_classify()
         return result
 
-    def auto_classify(limit=6):
+    def auto_classify():
         """Classify newly arrived mail without waiting for a manual review.
 
         Runs only where the AI has no plugin tools (iOS), where the fallback is
@@ -135,14 +135,15 @@ def create_router(context):
                     if record and record.get("fingerprint") == prepared["fingerprint"]:
                         continue
                     pending.append(item["id"])
-                for message_id in pending[:limit]:
+                for message_id in pending:
                     if _intelligence.stopping.is_set() or _source.owner() != owner:
                         return
                     try:
                         _intelligence.review(message_id, "", force=True)
                     except Exception:
-                        return  # rate limited or unavailable: the next sync retries
-                    time.sleep(0.4)
+                        time.sleep(2)  # rate limited: keep the rest for the next pass
+                        continue
+                    time.sleep(0.3)
             except Exception:
                 return
 

@@ -99,7 +99,9 @@ enum ICSImporter {
         for block in unfolded.components(separatedBy: "BEGIN:VEVENT").dropFirst() {
             let body = block.components(separatedBy: "END:VEVENT").first ?? block
             var fields: [String: (value: String, params: [String: String])] = [:]
-            for line in body.components(separatedBy: "\r\n") + body.components(separatedBy: "\n") {
+            // Normalise first: splitting on both endings concatenated the
+            // \r-suffixed lines after the clean ones and overwrote DTSTART.
+            for line in body.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
                 guard let colon = line.firstIndex(of: ":") else { continue }
                 let head = String(line[line.startIndex..<colon])
                 let value = String(line[line.index(after: colon)...])
