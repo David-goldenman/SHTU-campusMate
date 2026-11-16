@@ -5,13 +5,22 @@ plain IMAP on 143).  Accounts are expected to use a client-specific password
 generated in Coremail rather than the account password.
 """
 import imaplib
+import re
 import ssl
+from fastapi import HTTPException
 
 from .protocols import LoginRequired
 
 IMAP_HOST = "imap.shanghaitech.edu.cn"
 DEFAULT_PORT = 993
 TIMEOUT = 20
+
+
+class ImapUnavailable(HTTPException):
+    """A transient mailbox failure, never proof that saved credentials expired."""
+
+    def __init__(self, message="邮箱连接暂时中断，已保留登录信息和缓存，将稍后重试。"):
+        super().__init__(502, message)
 
 
 def checked_port(value) -> int:
@@ -38,7 +47,7 @@ def ssl_context():
         return ssl.create_default_context()
 
 
-def connect(username: str, password: str, port=None, secure=True, *, readonly=True) -> imaplib.IMAP4:
+def connect(username: str, password: str, port=None, secure=True, *, readonly=True, timeout=TIMEOUT) -> imaplib.IMAP4:
     """Return a logged-in mailbox with INBOX selected.
 
     ``BODY.PEEK`` is used by callers so reading mail never marks it as seen.
@@ -52,25 +61,28 @@ def connect(username: str, password: str, port=None, secure=True, *, readonly=Tr
     try:
         if settings["ssl"]:
             mailbox = imaplib.IMAP4_SSL(settings["host"], settings["port"],
-                                       ssl_context=ssl_context(), timeout=TIMEOUT)
+                                       ssl_context=ssl_context(), timeout=timeout)
         else:
-            mailbox = imaplib.IMAP4(settings["host"], settings["port"], timeout=TIMEOUT)
+            mailbox = imaplib.IMAP4(settings["host"], settings["port"], timeout=timeout)
     except (OSError, ssl.SSLError, imaplib.IMAP4.error):
-        raise LoginRequired("无法连接学校 IMAP 服务，请检查网络、VPN、端口和 SSL 设置。") from None
+        raise ImapUnavailable("暂时无法连接学校 IMAP 服务，请检查网络、VPN、端口和 SSL 设置；登录信息已保留。") from None
     try:
         mailbox.login(username.strip(), password)
-    except imaplib.IMAP4.error:
+    except (imaplib.IMAP4.abort, OSError):
         try:
             mailbox.logout()
         except (OSError, imaplib.IMAP4.error):
             pass
-        raise LoginRequired("IMAP 登录未通过，请核对邮箱账号与客户端专用密码。") from None
-    except (OSError, ssl.SSLError):
+        raise ImapUnavailable() from None
+    except imaplib.IMAP4.error as error:
         try:
             mailbox.logout()
         except (OSError, imaplib.IMAP4.error):
             pass
-        raise LoginRequired("IMAP 登录连接中断，请稍后重试。") from None
+        rejected = re.search(r'authenticationfailed|authentication (?:has )?failed|login failed|invalid credentials|invalid password|password (?:is )?(?:incorrect|invalid)|用户名或密码错误|认证失败', str(error), re.I)
+        if rejected:
+            raise LoginRequired("IMAP 登录未通过，请核对邮箱账号与客户端专用密码。") from None
+        raise ImapUnavailable() from None
     try:
         status, data = mailbox.select("INBOX", readonly=readonly)
         if status != "OK":
@@ -80,7 +92,7 @@ def connect(username: str, password: str, port=None, secure=True, *, readonly=Tr
             mailbox.logout()
         except (OSError, imaplib.IMAP4.error):
             pass
-        raise LoginRequired("IMAP 已登录，但无法读取收件箱。") from None
+        raise ImapUnavailable("IMAP 已登录，但暂时无法读取收件箱；登录信息已保留。") from None
     return mailbox
 
 

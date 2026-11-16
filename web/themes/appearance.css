@@ -14,7 +14,7 @@
 .art-theme-choice:hover .art-theme-card { border-color:var(--link); }
 .art-theme-card>img { display:block; width:100%; height:152px; object-fit:cover; background:var(--art-paper); border-bottom:1px solid var(--border); }
 .default-theme-preview { display:flex; gap:12px; height:152px; padding:18px; background:#eceff4; border-bottom:1px solid var(--border); }
-.default-theme-preview>i { width:30%; background:#2e3440; border-radius:6px; }
+.default-theme-preview>i { width:30%; background:#e1e8f1; border:1px solid #d8dee9; border-radius:6px; }
 .default-theme-preview>span { flex:1; display:grid; gap:8px; }
 .default-theme-preview b { display:block; background:#fff; border:1px solid #d8dee9; border-radius:6px; }
 .art-companion-section[hidden] { display:none; }

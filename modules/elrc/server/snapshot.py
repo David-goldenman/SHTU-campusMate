@@ -33,6 +33,7 @@ def with_library(context, snapshot):
             text = "\n".join(row["text"] for row in content.get("transcript", []))
             summary = "\n".join(row["text"] for row in content.get("summary", []))
             lessons[key] = {"id": key, "source": "elrc", "course_id": cid, "title": item["name"] + " · " + lesson["label"], "body_text": text, "summary_text": summary, "term": lesson.get("semester_id") or term, "url": lesson["source_url"], "updated_at": content.get("updated_at"), "stale": content.get("voice_state") == "stale"}
+            lessons[key]['stream_ids'] = [stream['id'] for stream in lesson.get('streams', [])]
     data.update(courses=list(courses.values()), materials=list(materials.values()), lessons=list(lessons.values()))
     data["metadata"]["semester"] = catalog.get("current_semester") or {}
     data["metadata"]["library"] = "cached_lessons"

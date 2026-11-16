@@ -25,6 +25,10 @@ def compact(snapshot):
 def create_router(context):
     router = APIRouter()
 
+    @router.get('/view-state')
+    def view_state():
+        return {'account_revision': account_revision(context)}
+
     @router.get("/snapshot")
     async def snapshot():
         owner = account_revision(context)

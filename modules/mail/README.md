@@ -2,7 +2,25 @@
 
 邮箱以分类文件夹和紧凑单行列表作为默认视图，打开邮件后主区域用于正文阅读；返回后聚焦对应邮件行，加载或失败时也可返回。阅读组织参考 [Thunderbird 邮件前端](https://github.com/thunderbird/developer-docs/blob/master/thunderbird-development/codebase-overview/mail-front-end.md)，使用项目 Nord 样式。左侧包含重点关注、兴趣推荐、一般通知、已筛选、收件箱、未读及日／周总结。分类为本地智能文件夹，原邮件保留在学校邮箱；页面和单封邮件均提供官方网页入口。正文保留段落、列表、表格、对齐、强调和适当字号，过滤脚本、追踪图片及任意样式。已有正文缓存继续用于离线阅读。
 
+## 后台自动同步
+
+本地服务运行且邮箱模块启用时，IMAP 自动同步默认开启，与网页是否打开无关。启动后立即检查，此后每 60 秒通过只读 `UID SEARCH ALL` 和最近 100 封的 `UID FLAGS` 比较邮件及已读状态；数量相同但 UID 改变也会触发同步。无变化不重新下载标题或正文、不调用 AI。发现变化后复用原同步队列，最多保存最近 100 封；手动与后台请求合并，分类、通知继续遵循已有偏好。
+
+iOS 等不支持模型工具的运行环境在新快照成功发布后启动已有的语义分类；支持原生工具的环境继续由后台助手队列复核。`checks/check_tools_free_sync.py` 用合成数据验证首次同步和完成回调，不调用真实模型。
+
+网络断开、超时或服务端临时错误保留密码和缓存，按 1、2、4、5 分钟（此后固定 5 分钟）重试。只有明确的认证拒绝才暂停并提示检查登录；更新凭据或成功检查连接后恢复。连接使用加密保存的专用密码；模块不持久保存连接和明文密码。电脑休眠、关机或服务停止期间不检查，恢复后补查。
+
+- `GET /auto-sync`：返回 `enabled/configured/mode/interval_seconds/state/message/last_checked_at/last_synced_at/next_check_at/owner/session_revision/uid_validity/revision`。时间为 ISO 8601；固定间隔 60 秒，`mode=polling`。`state` 为 `starting/watching/syncing/retrying/login_required/paused/not_configured`。`revision` 仅在账号、设置、数据或连接状态改变时变化，无变化的检查时间更新不会触发页面重画。
+- `PUT /auto-sync {enabled,owner?}`：按账号版本保存开关，默认开启；携带 `owner` 时若账号已切换返回 409。暂停会关闭后台检查和纯自动同步的活动连接，仍允许手动同步；已合并的手动任务继续完成。停用模块或退出服务时终止同步线程和连接。
+- 邮箱页提供开关及最近检查时间。常驻 `web/background.js` 每 5 秒读取本地状态，发出 `campus:mail-status`，仅在版本变化时发出 `campus:mail-updated`。邮箱和首页通过通用 `sourcePanel(...,{refreshEvent})` 接收更新，不因每次心跳请求完整资料。读取邮件、搜索、滚动位置及未保存的分类偏好保留；切换账号或 UID 有效期改变时关闭旧邮件和旧账号编辑框。
+
+每次连接复核账号及凭据版本，丢弃旧结果；检测到变更后关闭旧连接。暂停自动同步保留最近成功记录和诊断状态，临时检查失败也保留最近成功时间并记录诊断编号。检测到 `UIDVALIDITY` 改变时重建依赖 UID 的正文、分类和复核缓存，保留用户偏好；正文缓存标记 UID 有效期，读取和写回均校验代次；同步已确认新有效期但新快照尚未发布时，旧正文及分类写回返回 409。旧版 IMAP 缓存没有有效期时先同步确认，只重建依赖 UID 的缓存；非 IMAP 正文与用户偏好保留。旧有效期或凭据的外部 Agent 令牌失效。正文仍使用 `BODY.PEEK[]`，不修改原站已读状态。
+
+合成检查 `checks/check_auto_sync.py`、`checks/check_auto_sync_web.py` 覆盖批量来信、同数量 UID 变化、状态变化、重试、登录拒绝、账号与凭据切换、UID 重置、暂停/清理和并发队列；共享认证错误分类由 `checks/check_imap_errors.py` 验证。
+
 ## 文件夹与日／周总结 API
+
+IMAP 已配置但当前账号尚无同步记录时，来源状态为 `not_synced`（等待首次同步），不会提示重新登录。首页批量同步识别 IMAP 连接；同一邮箱更新专用密码继续保留当前邮件缓存和分类。专用密码由共享认证服务加密保存，不写入模块数据或返回前端。
 
 - `GET /folders`：`folders[{id,name,count}]`、`scope:local-inbox`、`cached_count`。分类详情继续读取 `/intelligence` 中的 `messages[].classification`，手动分类优先。
 - `GET /digests?period=day|week&anchor=YYYY-MM-DD`：返回北京时间的 `start/end`、按文件夹的 `counts`、`entries`、`coverage`、`fingerprint` 和已保存的 `report`；默认当天，周一至周日。每条邮件带稳定 ID、分类、已有摘要、学校网页和 `workbench_url`。GET 使用本地缓存，不调用模型。
@@ -22,7 +40,7 @@
 
 ## 偏好与语义复核
 
-`GET/PUT /preferences` 管理按邮箱账号保存的学段、年级、专业、在修课程、形策／心理健康完成状态、兴趣及完整自然语言要求；GET 返回 `{preferences,buckets,interests}`，PUT 接收完整 preferences。兴趣模式为 `follow/digest/hide`；完成状态为 `unknown/required/done/na`。初始资料留待用户填写，兴趣类别独立保存。`GET /intelligence` 返回 `{messages:[{...message,classification}],preferences,buckets,interests}`。
+`GET/PUT /preferences` 管理按邮箱账号保存的学段、年级、专业、在修课程、形策／心理健康完成状态、兴趣及完整自然语言要求；GET 返回 `{preferences,buckets,interests}`，PUT 接收完整 preferences。兴趣模式为 `follow/digest/hide`；完成状态为 `unknown/required/done/na`。初始资料留待用户填写，兴趣类别独立保存。`GET /intelligence` 返回 `{owner,session_revision,uid_validity,messages:[{...message,classification}],preferences,buckets,interests}`，响应在聚合前后核对邮箱归属、凭据代次和 UID 有效期，任一变化返回 409。`GET /snapshot` 增加本模块专属的 `account_revision/session_revision`；页面发布前核对快照、分类结果和最新自动同步状态中的账号、凭据及 UID 有效期一致。页面以此 owner 绑定已显示内容；快照请求临时失败时，只有轻量状态再次确认同一邮箱归属、凭据和 UID 有效期才保留阅读区和未保存偏好，否则关闭并禁用旧表单、清理旧内容后重建。
 
 本地分类每批只读取一次邮件快照、有效偏好和 AI 配置，避免对每封邮件重复读取加密存储；下次请求重新取得这些输入。单封复核和批量分类使用相同的输入版本计算，手动标签优先，账号在批量处理期间变化时返回 409。
 

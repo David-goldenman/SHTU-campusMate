@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const base=process.argv[2] || 'http://127.0.0.1:16666';
 const bootstrap=await(await fetch(base+'/api/v1/bootstrap')).json();
 const themeCatalog=await(await fetch(base+'/api/v1/themes')).json();
 const modules=bootstrap.modules.filter(item=>['dashboard','academic-assistant'].includes(item.id));
-const profile=resolve('.codex/tmp/chat-web-'+process.pid);await mkdir(profile,{recursive:true});
+await mkdir(resolve('.codex/tmp'),{recursive:true});
+const profile=await mkdtemp(resolve('.codex/tmp/chat-web-'));
 function browser(action){const r=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true});assert.equal(r.status,0,r.stderr);}
 function fixture(modules,categories, themeCatalog){
  const original=window.fetch.bind(window),state=window.chatCheck={mode:'answer',unexpected:[],messages:[],chats:[],aborts:0,clipboard:'',profile:{major:'合成专业',cohort_year:2025,direction:'',weekly_hours:null,notes:''}};
@@ -14,7 +15,8 @@ function fixture(modules,categories, themeCatalog){
  const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json'}});
  state.files={mode:'workspace',workspace:'C:/学习/workspace',revision:'v1',account_revision:'synthetic-owner'};
  state.decisions=[];
- const text='## 本周学习计划\n\n先复习 **向量叠加**，再安排作业。[1]\n\n- 阅读课件\n- 完成自检\n\n| 日期 | 内容 | 建议时长 | 说明 |\n| --- | --- | --- | --- |\n| 周一 | 向量复习 | 30 分钟 | 估计时长 |\n| 周二 | 练习 | 40 分钟 | 自行调整 |\n\n```python\nprint("review")\n```\n\n<script>bad()</script> [危险](javascript:alert(1)) ![外部图片](https://example.edu/tracker.png)\n\n'+Array.from({length:12},(_,i)=>'第 '+(i+1)+' 步：阅读课件后用自己的话解释这个概念，标出还需要补充的问题。').join('\n\n');
+ let text='## 本周学习计划\n\n先复习 **向量叠加**，再安排作业。[1]\n\n- 阅读课件\n- 完成自检\n\n| 日期 | 内容 | 建议时长 | 说明 |\n| --- | --- | --- | --- |\n| 周一 | 向量复习 | 30 分钟 | 估计时长 |\n| 周二 | 练习 | 40 分钟 | 自行调整 |\n\n```python\nprint("review")\n```\n\n<script>bad()</script> [危险](javascript:alert(1)) ![外部图片](https://example.edu/tracker.png)\n\n'+Array.from({length:12},(_,i)=>'第 '+(i+1)+' 步：阅读课件后用自己的话解释这个概念，标出还需要补充的问题。').join('\n\n');
+ text += '\n\n' + String.raw`$ \mathbf F=q(\mathbf E+\mathbf u\times\mathbf B) $` + '\n\n' + String.raw`\[\frac{1}{2}+\sqrt{x}\]`;
  window.fetch=async(url,options={})=>{
   const target=new URL(url,location.origin);if(!target.pathname.startsWith('/api/v1/'))return original(url,options);
   const path=target.pathname.replace('/api/v1',''),method=options.method||'GET';
@@ -100,7 +102,13 @@ try{
  assert(await evaluate(`document.activeElement===document.querySelector('[data-open-assistant]') && !document.querySelector('.module-zone').classList.contains('module-focus')`),'Returning to priorities restores launcher focus');
  await evaluate(`document.querySelector('[data-open-assistant]').click();true`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'desktop input visible');
- await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.study-prompts').open=true;document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
+ await evaluate(`document.querySelector('[data-profile-toggle]').click();document.querySelector('[name=direction]').value='保留草稿';document.querySelector('[data-profile-form]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#study-message').value='我自己输入的要求';document.querySelector('[data-example="0"]').click();document.querySelector('[data-example="1"]').click();true`);
+ assert.equal(await evaluate(`document.querySelector('#study-message').value`),'我自己输入的要求','Mode switching preserves user input');
+ assert.equal(await evaluate(`document.querySelectorAll('[data-mode][aria-pressed="true"]').length`),1,'Exactly one mode is selected');
+ assert.equal(await evaluate(`document.querySelector('[data-mode-prompt]').textContent`),'准备合成复习');
+ await evaluate(`document.querySelector('[data-mode=""]').click();true`);
+ assert.equal(await evaluate(`document.querySelector('#study-message').value`),'我自己输入的要求','Free question preserves user text');
+ await evaluate(`document.querySelector('[data-example="0"]').click();document.querySelector('[data-chat-form]').requestSubmit();true`);
  await evaluate(`waitFor(()=>document.querySelector('.study-streaming h2'))`);
  assert(await evaluate(`document.querySelector('#study-message').disabled && !document.querySelector('[data-stop]').hidden`));
  await evaluate(`(()=>{const node=document.querySelector('[data-messages]');node.scrollTop=0;node.dispatchEvent(new Event('scroll'));return true;})()`);
@@ -112,14 +120,17 @@ try{
  await writeFile(resolve('.codex/tmp/chat-markdown-desktop.png'),Buffer.from((await command('Page.captureScreenshot')).data,'base64'));
  assert(await evaluate(`document.querySelector('[data-messages]').clientHeight>=350`),'Focused conversation uses the viewport height');
  assert(await evaluate(`(()=>{const width=document.querySelector('.study-assistant .study-text').getBoundingClientRect().width;return width>=600&&width<=800;})()`),'Desktop reply keeps a comfortable reading width');
+ assert(await evaluate(`document.querySelectorAll('.study-assistant .katex').length>=2 && document.querySelector('.study-assistant .katex-mathml math') && document.querySelector('.study-assistant .katex-display')`),'Completed streamed inline and display formulas render accessible KaTeX');
+ await evaluate(`document.fonts.ready.then(()=>true)`);
+ assert(await evaluate(`getComputedStyle(document.querySelector('.study-assistant .katex')).fontFamily.includes('KaTeX')`),'Formula fonts are served by local KaTeX CSS');
  await evaluate(`document.querySelector('[data-new-chat]').click();waitFor(()=>chatCheck.chats.length===2&&!!document.querySelector('.study-welcome'))`);
  assert(await evaluate(`document.querySelector('.module-zone').classList.contains('module-focus')`),'Explicit new chat opens the composer even when empty');
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>document.querySelectorAll('[data-open-chat]').length===2).then(()=>document.querySelectorAll('[data-open-chat]')[1].click()).then(()=>waitFor(()=>document.querySelectorAll('.study-message').length===2))`);
  await evaluate(`document.querySelector('[data-history-toggle]').click();waitFor(()=>!document.querySelector('.study-history').hidden).then(()=>{const search=document.querySelector('[data-history-search]');search.value='不存在的对话';search.dispatchEvent(new Event('input'));})`);
  assert.equal(await evaluate(`document.querySelectorAll('[data-open-chat]').length`),0,'History search filters the visible list');
- await evaluate(`(()=>{const search=document.querySelector('[data-history-search]');search.value='';search.dispatchEvent(new Event('input'));const button=[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id);button.closest('details').open=true;button.click();return waitFor(()=>chatCheck.chats[0].archived);})()`);
+ await evaluate(`(()=>{const search=document.querySelector('[data-history-search]');search.value='';search.dispatchEvent(new Event('input'));const button=[...document.querySelectorAll('[data-archive-chat]')].find(node=>node.dataset.archiveChat===chatCheck.active_id);button.closest('details').open=true;button.click();return waitFor(()=>chatCheck.chats[0].archived && document.querySelector('[data-send]').disabled);})()`);
  assert(await evaluate(`document.querySelector('[data-send]').disabled`),'Archived conversation is readable and cannot receive messages');
- await evaluate(`document.querySelector('[data-history-filter=archived]').click();document.querySelector('[data-archive-chat]').closest('details').open=true;document.querySelector('[data-archive-chat]').click();waitFor(()=>!chatCheck.chats[0].archived)`);
+ await evaluate(`document.querySelector('[data-history-filter=archived]').click();document.querySelector('[data-archive-chat]').closest('details').open=true;document.querySelector('[data-archive-chat]').click();waitFor(()=>!chatCheck.chats[0].archived && !document.querySelector('[data-send]').disabled)`);
  await evaluate(`(()=>{document.querySelector('[data-history-filter=active]').click();const button=[...document.querySelectorAll('[data-delete-chat]')].find(node=>node.dataset.deleteChat!==chatCheck.active_id);button.closest('details').open=true;button.click();return waitFor(()=>document.querySelector('dialog[open] [value=confirm]')).then(()=>document.querySelector('dialog[open] [value=confirm]').click()).then(()=>waitFor(()=>chatCheck.chats.length===1)).then(()=>document.querySelector('[data-history-close]').click());})()`);
  await command('Emulation.setDeviceMetricsOverride',{width:1366,height:768,deviceScaleFactor:1,mobile:false});await evaluate(`new Promise(r=>setTimeout(r,200))`);
  assert(await evaluate(`document.querySelector('#study-message').getBoundingClientRect().bottom<innerHeight`),'small desktop input visible');

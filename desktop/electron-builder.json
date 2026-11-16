@@ -1,0 +1,11 @@
+{
+  "appId": "edu.shanghaitech.campusmate",
+  "productName": "campusMate",
+  "electronVersion": "45.1.0",
+  "asar": true,
+  "files": ["*.cjs", "package.json"],
+  "extraResources": [{"from": "../.codex/windows-release/bundle", "to": "campus"}],
+  "directories": {"output": "../.codex/windows-release/desktop"},
+  "win": {"target": "dir", "signAndEditExecutable": false},
+  "publish": null
+}

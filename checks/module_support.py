@@ -45,7 +45,7 @@ class Auth:
         return self.mailbox is not None
 
     @contextmanager
-    def imap_connection(self, provider):
+    def imap_connection(self, provider, **kwargs):
         yield self.mailbox
 
     @contextmanager

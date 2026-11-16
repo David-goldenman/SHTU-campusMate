@@ -57,10 +57,10 @@ class Digests:
                     'bucket': item['classification']['bucket'], 'category': item['classification']['category'],
                     'summary': item['classification']['summary'], 'by': item['classification']['by'],
                     'needs_check': item['classification'].get('needs_check', False)} for item in items]
-        fingerprint = digest([self.source.owner(), period, start.isoformat(), entries, 'classification-summary-v2'])
+        metadata = self.source.snapshot()['data']['metadata']
+        fingerprint = digest([self.source.owner(), period, start.isoformat(), entries, 'classification-summary-v2'] + ([metadata['uid_reset']] if metadata.get('uid_reset') else []))
         key = self.intelligence.key('digest:' + period + ':' + start.isoformat())
         saved = self.context.store.read(key, {})
-        metadata = self.source.snapshot()['data']['metadata']
         if owner != self.source.owner():
             raise HTTPException(409, '邮箱账号已变化，请重新读取。')
         return {'period': period, 'start': start.isoformat(), 'end': (end - timedelta(days=1)).isoformat(),

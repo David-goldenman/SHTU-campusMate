@@ -1,6 +1,9 @@
 .mail-view .mail-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0 0 16px; }
 .mail-toolbar input { flex:1; min-width:180px; max-width:640px; }
 .mail-toolbar [data-progress]:empty { display:none; }
+.mail-auto-sync { display:flex; flex-wrap:wrap; align-items:center; gap:8px 18px; margin:0 0 14px; color:var(--muted); font-size:12px; }
+.mail-auto-sync label { display:inline-flex; align-items:center; gap:7px; margin:0; color:var(--text); white-space:nowrap; }
+.mail-auto-sync input { width:auto; margin:0; }
 .mail-options { position:relative; font-size:13px; color:var(--muted); }
 .mail-options summary { padding:8px 10px; cursor:pointer; }
 .mail-options>div { position:absolute; z-index:10; right:0; top:100%; width:210px; display:grid; gap:4px; padding:8px 12px; background:var(--paper); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); }

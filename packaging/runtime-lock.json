@@ -1,0 +1,9 @@
+{
+  "python": "3.12.10",
+  "node": "24.18.0",
+  "harness": "0.1.5rc1",
+  "pnpm": "11.22.0",
+  "electron": "45.1.0",
+  "electron_builder": "26.18.0",
+  "nsis_bundle": "1.2.1"
+}

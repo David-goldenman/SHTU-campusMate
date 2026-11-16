@@ -6,6 +6,10 @@
 
 Enter 发送，Shift + Enter 换行；兼容 Ctrl／Command + Enter，中文输入法确认候选词不会触发发送。主动点击“新对话”或“历史对话”展开聊天区域，空会话也可重新打开。在工作台内切换页面时，当前回答继续生成；返回首页会恢复原问题、工具进度与已生成内容，离开期间完成的回答只展示一次。未发送的输入也会恢复。只有主动停止、模块卸载或整个网页关闭／刷新才取消当前请求；旧模型仍在清理时，新建与选择会话立即可用。
 
+输入区提供“自由提问、讲懂知识、分步解题、读懂课件、考前自测、安排 DDL、检查作业”单选切换，开始对话后仍可使用。按钮只改变当前学习方式，不向正文追加文字；用户正文与辅助说明分开保存，后者可展开查看。发送时组合一次，用户具体要求优先，切回自由提问只去掉辅助说明。选择学习方式后可直接发送，或补充自己的要求；组合后仍遵循 8000 字上限，超限提示缩短正文或切回自由提问，不截断用户内容。
+
+正文草稿和所选方式按账号、会话独立保存在页面会话状态中；切页、切换对话、失败和停止后恢复原正文及选择，重试不会重复叠加说明。发送成功清空正文并保留当前方式。新对话默认自由提问，换号和模块卸载清空临时状态。`GET /presets` 每项增加稳定 `id` 与简短 `description`，保留 `label/prompt`；旧字段格式仍可显示。模式切换检查位于 `checks/check_prompt_modes.py` 与会话检查中。
+
 ## 多会话接口
 
 `GET /conversations` 返回 `{items:[{id,title,created_at,updated_at,archived}],active_id}`；`POST /conversations` 新建并选中，201；`POST /conversations/{id}/select` 返回 `{conversation,messages}`；`PUT /conversations/{id}` 接收 `{archived?,title?}`；`DELETE /conversations/{id}` 删除本地对话及消息。标识为 32 位十六进制，账号外的记录返回 404。`GET /chat` 返回 `{messages,conversation_id,owner}`，`owner` 是共享账号组合版本，用于隔离页面内的草稿和生成状态；`POST /chat` 和 `/chat/stream` 可带 `conversation_id`，省略时使用当前对话或创建首段对话。向已归档对话发送返回 409。

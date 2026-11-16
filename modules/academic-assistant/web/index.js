@@ -1,7 +1,7 @@
 import {link, time} from '/assets/campus.js';
-import {renderMarkdown} from '/assets/markdown.js';
+import {renderMarkdownInto} from '/assets/markdown.js';
 import {openingLine} from '/assets/opening-lines.js';
-import {sendOnEnter, fitComposer} from './composer.js';
+import {sendOnEnter, fitComposer, promptModes, composeMessage} from './composer.js';
 import {chatSession} from './session.js';
 import {changeCards, showWorkspace} from './workspace.js';
 import {showReaderSettings} from './reader-settings.js';
@@ -38,6 +38,9 @@ export async function mount(container, context) {
   chatSession.bindOwner(history.owner);
   let activeId = history.conversation_id, archived = false, showArchived = false;
   const drafts = chatSession.drafts;
+  const modes = promptModes(presets.items);
+  let modeId = chatSession.composerModes.get(activeId || '') || '';
+  const selectedMode = () => modes.find(mode=>mode.id===modeId);
   container.classList.add('academic-chat');
   context.ui.bindMenus(container,context.signal);
   card.classList.add('study-chat-card');
@@ -58,8 +61,9 @@ export async function mount(container, context) {
       <div class="study-composer"><details class="study-progress" data-progress hidden><summary><span class="spinner" aria-hidden="true"></span><span data-progress-text role="status"></span></summary><ol data-steps></ol></details>
         <form data-chat-form><label class="visually-hidden" for="study-message">发消息</label>
           <textarea id="study-message" name="message" rows="2" maxlength="8000" placeholder="给学习助手发消息…" aria-describedby="study-send-hint" required></textarea>
-          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><details class="study-prompts" data-action-menu><summary>${icon('prompts')}<span>常用问题</span></summary><div>${presets.items.map((item,index) => `<button class="text-button" data-example="${index}" type="button">${e(item.label)}</button>`).join('')}</div></details><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
-        </form><div class="study-starters">${presets.items.map((item,index) => `<button type="button" data-example="${index}">${e(item.label)}<span aria-hidden="true">↗</span></button>`).join('')}</div><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p><div data-study-copy></div>
+          <div class="study-starters" role="group" aria-label="选择学习方式"><button type="button" data-mode="" aria-pressed="true">自由提问</button>${modes.map((item,index) => `<button type="button" data-mode="${e(item.id)}" data-example="${index}" aria-pressed="false" title="${e(item.description)}">${e(item.label)}</button>`).join('')}</div><div class="study-mode-preview" data-mode-preview hidden><p data-mode-description></p><details><summary>查看本次辅助说明</summary><p data-mode-prompt></p></details></div><p class="field-hint study-mode-hint">切换学习方式只替换辅助说明，你输入的正文会保留。</p><p class="danger-text" data-mode-limit role="status" hidden></p>
+          <div class="study-error-row"><p class="study-error danger-text" data-error role="alert"></p><button class="text-button" data-retry type="button" hidden>重新发送</button></div><div class="study-send"><span class="field-hint" id="study-send-hint">Enter 发送 · Shift + Enter 换行</span><button class="study-send-button" data-stop type="button" aria-label="停止生成" title="停止生成" hidden>${icon('stop')}</button><button class="study-send-button" data-send type="submit" aria-label="发送" title="发送（Enter）" disabled>${icon('send')}</button></div>
+        </form><p class="study-privacy">${configured ? '所需学习资料将发送至 ' + e(ai.display_name || 'DeepSeek') : '<a href="#settings?tab=ai">配置并启用 AI 后开始对话 →</a>'}</p><div data-study-copy></div>
       </div>
     </section>
     <aside class="study-profile" aria-label="我的学习档案" hidden><div class="study-profile-heading"><h3>学习档案</h3><button class="text-button" data-profile-close type="button">返回对话</button></div><p class="field-hint">保存在本机，供连续学习建议使用。</p><form data-profile-form><fieldset><label>专业<input name="major" maxlength="120"></label><label>入学年份<input name="cohort_year" type="number" min="2000" max="2100" placeholder="例如 2025"></label><label>未来方向<input name="direction" maxlength="1200" placeholder="例如机器人、芯片设计或继续深造"></label><label>每周可用学习时间（小时）<input name="weekly_hours" type="number" min="0" max="168" step="0.5"></label><label>补充偏好<textarea name="notes" rows="3" maxlength="4000" placeholder="学习节奏、关注领域或希望保留的背景"></textarea></label><div class="form-actions"><button class="button button-secondary" type="submit">保存档案</button><button class="text-button danger-text" data-clear-profile type="button">清除档案</button></div></fieldset></form><p class="field-hint" data-academic-records></p><p class="study-error danger-text" data-profile-error role="alert"></p></aside></div><span class="visually-hidden" data-announcement role="status"></span>`;
@@ -99,7 +103,11 @@ export async function mount(container, context) {
   container.querySelector('.study-menu>div').append(filesButton);
   filesButton.onclick=context.ui.safeAction(filesButton,()=>showFileSettings(context));
   input.value = drafts.get(activeId || '') || '';
-  saveDraft = () => {if (!busy) drafts.set(activeId || '',input.value);};
+  saveDraft = () => {
+    if (busy) return;
+    drafts.set(activeId || '',input.value);
+    if (selectedMode()) chatSession.composerModes.set(activeId || '',modeId);else chatSession.composerModes.delete(activeId || '');
+  };
   const retry = container.querySelector('[data-retry]');
   const returnRunning = document.createElement('button');
   returnRunning.type='button';returnRunning.className='text-button';returnRunning.textContent='返回正在生成的对话';returnRunning.hidden=true;
@@ -108,7 +116,23 @@ export async function mount(container, context) {
   returnRunning.onclick=context.ui.safeAction(returnRunning,()=>openConversation(chatSession.current.conversationId));
   const search = container.querySelector('[data-history-search]');
   const generating = () => chatSession.current?.status==='running';
-  function resizeInput() {conversation.classList.toggle('is-drafting',!!input.value.trim());fitComposer(input);send.disabled=!configured||archived||generating()||!input.value.trim();}
+  function resizeInput() {
+    const mode = selectedMode(), message = composeMessage(input.value,mode);
+    conversation.classList.toggle('is-drafting',!!message);fitComposer(input);
+    input.required=!mode;
+    input.setCustomValidity(message.length>8000?'正文与学习方式说明合计超过 8000 字，请缩短正文或选择自由提问。':'');
+    const limit=container.querySelector('[data-mode-limit]');limit.hidden=message.length<=8000;limit.textContent=input.validationMessage;
+    send.disabled=!configured||archived||generating()||!message;
+    container.querySelectorAll('[data-mode]').forEach(button=>{button.setAttribute('aria-pressed',String(button.dataset.mode===(mode?.id || '')));button.disabled=busy||archived;});
+  }
+  function drawMode() {
+    const mode=selectedMode();
+    container.querySelector('[data-mode-preview]').hidden=!mode;
+    container.querySelector('[data-mode-description]').textContent=mode?.description || '';
+    container.querySelector('[data-mode-prompt]').textContent=mode?.prompt || '';
+    resizeInput();
+  }
+  drawMode();
   input.addEventListener('input',resizeInput,{signal:context.signal});
   input.addEventListener('blur',() => drawStudyCopy(studyCopyText(history.messages,input.value)),{signal:context.signal});
   search.addEventListener('input',drawConversations,{signal:context.signal});
@@ -129,14 +153,14 @@ export async function mount(container, context) {
   container.querySelectorAll('[data-history-filter]').forEach(button => button.onclick=()=>{showArchived=button.dataset.historyFilter==='archived';drawConversations();});
   async function refreshConversations() {conversations=await context.api('/conversations');if (!context.signal.aborted) drawConversations();}
   async function openConversation(identity) {
-    if(!busy)drafts.set(activeId || '',form.elements.message.value);
+    saveDraft();
     const value=await context.api('/conversations/'+identity+'/select',{method:'POST'});
     if (context.signal.aborted) return;
     activeId=identity;archived=value.conversation.archived;busy=false;displayedTurn=undefined;
     cancelAnimationFrame(frame);frame=null;container.querySelector('.study-composer').prepend(progress);messages.replaceChildren();
     history = {...history,messages:value.messages,conversation_id:identity};
     if(value.messages.length)value.messages.forEach(append);else empty();
-    form.elements.message.value=drafts.get(identity)||'';drawStudyCopy(studyCopyText(value.messages,input.value));resizeInput();retry.hidden=true;
+    form.elements.message.value=drafts.get(identity)||'';modeId=chatSession.composerModes.get(identity)||'';drawMode();drawStudyCopy(studyCopyText(value.messages,input.value));retry.hidden=true;
     errorNode.textContent=archived?'这段对话已归档。恢复后可以继续提问。':'';
     focusChat(true);scrollToLatest();drawConversations();showHistory(false);
     restoreTurn(chatSession.current);
@@ -159,8 +183,8 @@ export async function mount(container, context) {
   }
   async function deleteConversation(identity) {
     if (!await context.ui.confirmDialog('删除对话','删除这段对话及其本地消息，学习档案继续保留。','删除对话')) return;
-    await context.api('/conversations/'+identity,{method:'DELETE'});drafts.delete(identity);chatSession.forget(identity);await refreshConversations();
-    if(activeId===identity){form.elements.message.value='';history.messages=[];const next=conversations.active_id;activeId=null;if(next)await openConversation(next);else{archived=false;empty();resizeInput();focusChat(true);}}
+    await context.api('/conversations/'+identity,{method:'DELETE'});drafts.delete(identity);chatSession.composerModes.delete(identity);chatSession.forget(identity);await refreshConversations();
+    if(activeId===identity){form.elements.message.value='';modeId='';drawMode();history.messages=[];const next=conversations.active_id;activeId=null;if(next)await openConversation(next);else{archived=false;empty();resizeInput();focusChat(true);}}
   }
   newChat.onclick=context.ui.safeAction(newChat,async()=>{const item=await context.api('/conversations',{method:'POST'});await refreshConversations();await openConversation(item.id);form.elements.message.focus({preventScroll:true});});
   observer = new ResizeObserver(() => {container.style.setProperty('--study-top',Math.max(0,card.getBoundingClientRect().top + window.scrollY) + 'px');resizeInput();});
@@ -188,7 +212,7 @@ export async function mount(container, context) {
     return citations.length ? `<details class="study-references"><summary>参考资料 <span>${groups.size} 份 · ${citations.length} 处引文</span></summary><div class="study-reference-list">${[...groups.values()].map(source => `<article><h4>${e(source.title)}</h4>${source.quotes.map(quote => `<div class="study-quote-label">[${quote.index}]${quote.page && quote.kind !== 'text' ? ' · 第 ' + quote.page + ' 页' : ''}${quote.evidence_type === 'model_interpretation' ? ' · 图像解释（AI）' : quote.read_method === 'vision' ? ' · 识图转录' : quote.read_method === 'ocr' ? ' · OCR 转录' : ''}</div>${quote.uncertain ? '<p class="field-hint">待核对：' + e(quote.uncertain) + '</p>' : ''}<blockquote>${e(quote.quote)}</blockquote>`).join('')}<div class="study-source-links">${source.url ? link(source.url,'打开来源 ↗',e) : ''}${source.download_url ? link(source.download_url,'下载原文件',e) : ''}</div></article>`).join('')}</div></details>` : '';
   }
   function renderBody(node, text, settled = false) {
-    node.innerHTML = renderMarkdown(text);
+    renderMarkdownInto(node,text);
     node.querySelectorAll('table').forEach(table => {const wrapper=document.createElement('div');wrapper.className='study-table';wrapper.tabIndex=0;wrapper.setAttribute('aria-label','表格，可横向滚动');table.replaceWith(wrapper);wrapper.append(table);});
     if (settled) node.querySelectorAll('pre').forEach(pre => {
       const button = document.createElement('button');button.type='button';button.className='text-button study-copy-code';button.textContent='复制代码';
@@ -255,7 +279,7 @@ export async function mount(container, context) {
       pending=append({role:'user',text:value.message});draft=append({role:'assistant',text:''});
       const approvals=document.createElement('div');approvals.dataset.fileApprovals='';draft.prepend(approvals);
       draft.querySelector('.study-text').before(progress);draft.classList.add('study-streaming');
-      input.value=value.message;retry.hidden=true;errorNode.textContent='';showProfile(false);
+      input.value=value.composer?.text ?? value.message;modeId=value.composer?.modeId || '';drawMode();retry.hidden=true;errorNode.textContent='';showProfile(false);
       container.querySelector('[data-announcement]').textContent='';
       progress.open=false;scrollToLatest();
     }
@@ -285,7 +309,7 @@ export async function mount(container, context) {
     } else {
       pending.remove();if(!messages.children.length)empty();
       if(value.changes?.length)append({role:'assistant',text:'以下本地修改已保存。',changes:value.changes});
-      input.value=value.message;errorNode.textContent=value.error;retry.hidden=value.status==='stopped';
+      input.value=value.composer?.text ?? value.message;modeId=value.composer?.modeId || '';drawMode();errorNode.textContent=value.error;retry.hidden=value.status==='stopped';
     }
     chatSession.forget(activeId);
     displayedTurn=undefined;resizeInput();
@@ -297,13 +321,17 @@ export async function mount(container, context) {
   form.onsubmit=event=>{
     event.preventDefault();
     if(generating()||archived||!configured||!form.reportValidity())return;
-    const message=input.value.trim();if(!message)return;
-    showHistory(false);focusChat(true);container.querySelector('.study-prompts').open=false;
-    try {chatSession.start(activeId,message,history.messages);}
+    const message=composeMessage(input.value,selectedMode());if(!message)return;
+    showHistory(false);focusChat(true);
+    try {chatSession.start(activeId,message,history.messages,{text:input.value,modeId:selectedMode()?.id || ''});}
     catch(error) {errorNode.textContent=error.message;}
   };
   form.elements.message.addEventListener('keydown',event => sendOnEnter(event,form),{signal:context.signal});
-  container.querySelectorAll('[data-example]').forEach(button => {button.onclick = () => {if (!busy) {focusChat(true);form.elements.message.value=[form.elements.message.value,presets.items[Number(button.dataset.example)].prompt].filter(Boolean).join('\n');drawStudyCopy(input.value);resizeInput();container.querySelector('.study-prompts').open=false;form.elements.message.focus({preventScroll:true});}};});
+  container.querySelectorAll('[data-mode]').forEach(button => {button.onclick = () => {
+    if (busy || archived) return;
+    modeId=button.dataset.mode;drawMode();saveDraft();focusChat(true);
+    drawStudyCopy(input.value);input.focus({preventScroll:true});
+  };});
   clearChat.onclick = context.ui.safeAction(clearChat,async () => {
     if(activeId)await deleteConversation(activeId);latest.hidden=true;container.querySelector('.study-menu').open=false;
   });

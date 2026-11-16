@@ -1,4 +1,5 @@
 import {bindSyncNetwork} from './sync-network.js';
+import {readView} from './view-cache.js';
 
 // Generic presentation helper; callers own the palette and record matching.
 export function applyAccent(element, appearance = {}) {
@@ -37,28 +38,93 @@ export function records(items, escape) {
   }).join('') + '</div>' : '<p class="field-hint">当前范围没有内容。</p>';
 }
 
-export async function sourcePanel(container, context, render, {snapshotPath = '/snapshot'} = {}) {
-  let timer;
+export async function sourcePanel(container, context, render, {snapshotPath = '/snapshot', refreshEvent, cache = false, retainContentOnError} = {}) {
+  let timer, refreshing, again=false;
   container.innerHTML = '<div class="source-toolbar"><details class="source-state"><summary><span class="source-indicator" aria-hidden="true"></span><span data-status role="status"></span></summary><div class="source-state-body"><p data-updated></p><div data-issues role="status"></div><div data-network hidden></div></div></details><div class="source-actions"><a class="text-button" href="#settings?tab=accounts" data-connect hidden>连接账号</a><button class="text-button" data-sync type="button">同步</button></div></div><div data-content></div>';
   const button = container.querySelector('[data-sync]');
   const networkHost = container.querySelector('[data-network]');
   const diagnose = bindSyncNetwork(networkHost,context,async () => {await context.api('/sync',{method:'POST'});await refresh();});
-  const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'后台同步中，可离开此页', error:'同步失败', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
-  async function refresh() {
-    clearTimeout(timer);
-    const snapshot = await context.api(snapshotPath);
-    if (context.signal.aborted) return;
+  const labels = {ready:'已同步', partial:'部分数据可用', cached:'本地缓存', syncing:'后台同步中，可离开此页', error:'同步失败', not_synced:'等待首次同步', not_connected:'尚未连接', login_required:'需要登录', verification_required:'需要验证'};
+  function refresh() {
+    if (context.signal.aborted) return Promise.resolve();
+    if (refreshing) {again=true;return refreshing;}
+    refreshing=(async()=>{
+      do {again=false;await refreshOnce();} while(again && !context.signal.aborted);
+    })().finally(()=>{refreshing=null;});
+    return refreshing;
+  }
+  function showStatus(snapshot, preview = false) {
     button.disabled = snapshot.status === 'syncing';
     container.querySelector('[data-connect]').hidden = !['not_connected','login_required','verification_required'].includes(snapshot.status);
     const state = container.querySelector('.source-state');
     const issues = snapshot.data.issues.length;
     state.dataset.state = snapshot.status === 'ready' && issues ? 'partial' : snapshot.status;
-    container.querySelector('[data-status]').textContent = snapshot.status === 'ready' ? issues ? `${issues} 项来源提示` : '数据状态' : labels[snapshot.status] || snapshot.status;
-    container.querySelector('[data-updated]').textContent = snapshot.updated_at ? '最近同步：' + time(snapshot.updated_at) : '连接账号后可同步资料。';
+    container.querySelector('[data-status]').textContent = preview ? '已显示缓存 · 正在更新' : snapshot.status === 'ready' ? issues ? `${issues} 项来源提示` : '数据状态' : labels[snapshot.status] || snapshot.status;
+    container.querySelector('[data-updated]').textContent = snapshot.updated_at ? '最近同步：' + time(snapshot.updated_at) : '尚无成功同步记录。';
     container.querySelector('[data-issues]').textContent = [snapshot.message, ...(snapshot.data.issues || [])].filter(Boolean).join('；');
     diagnose.update(snapshot.network_failure ? [snapshot.network_failure] : snapshot.network_failures || []);
-    await render(container.querySelector('[data-content]'), snapshot, context, refresh);
-    if (!context.signal.aborted && snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
+  }
+  let first = true, displayedOwner;
+  async function renderSnapshot(content,snapshot) {
+    const scroll = displayedOwner===snapshot.account_revision && typeof window!=='undefined' ? [window.scrollX,window.scrollY] : null;
+    const filters = cache && displayedOwner === snapshot.account_revision ? ['[data-current]','[data-search]'].flatMap(selector=>{
+      const field=content.querySelector(selector);
+      return field ? [{selector,field,value:field.value,checked:field.checked,focused:document.activeElement===field,
+        start:field.selectionStart,end:field.selectionEnd}] : [];
+    }) : [];
+    await render(content,snapshot,context,refresh);
+    if (context.signal.aborted) return;
+    displayedOwner = snapshot.account_revision;
+    for (const saved of filters) {
+      const field=content.querySelector(saved.selector);
+      if (!field || field===saved.field) continue;
+      const checkbox=field.type==='checkbox', key=checkbox?'checked':'value';
+      if (field[key]!==saved[key]) {field[key]=saved[key];field.dispatchEvent(new Event(checkbox?'change':'input',{bubbles:true}));}
+      if (saved.focused && [document.body,saved.field,field].includes(document.activeElement)) {
+        field.focus({preventScroll:true});
+        if (saved.start!==null && saved.start!==undefined) field.setSelectionRange(saved.start,saved.end);
+      }
+    }
+    if (scroll) window.scrollTo(...scroll);
+  }
+  async function refreshOnce() {
+    clearTimeout(timer);
+    const content = container.querySelector('[data-content]');
+    try {
+      let result;
+      if (cache) result = await readView(context,snapshotPath,first ? async snapshot => {
+        showStatus(snapshot,true);
+        await renderSnapshot(content,snapshot);
+      } : undefined);
+      else result = {value:await context.api(snapshotPath),unchanged:false};
+      if (context.signal.aborted) return;
+      first = false;
+      const snapshot = result.value;
+      showStatus(snapshot);
+      if (!result.unchanged) await renderSnapshot(content,snapshot);
+      if (result.cached) {
+        container.querySelector('[data-status]').textContent='刷新失败 · 显示上次数据（待核实）';
+        container.querySelector('[data-issues]').textContent=[result.error.message,...snapshot.data.issues||[]].join('；');
+        const state=container.querySelector('.source-state');state.dataset.state='cached';state.open=true;
+        button.disabled=false;
+      }
+      if (!result.cached && !context.signal.aborted && snapshot.status === 'syncing') timer = setTimeout(() => refresh().catch(error => { if (!context.signal.aborted) context.ui.toast(error.message); }), 1200);
+    } catch (error) {
+      let retain = false;
+      if (typeof retainContentOnError === 'function') {
+        try {retain = await retainContentOnError(error) === true;}
+        catch { /* Without verified ownership the previous view must be cleared. */ }
+      }
+      if ([401,403,409].includes(error.status) || error.name === 'AbortError') retain = false;
+      if (!context.signal.aborted) {
+        if (!retain) {content.replaceChildren();displayedOwner=undefined;}
+        container.querySelector('[data-status]').textContent=retain?'读取失败 · 保留当前页面（待核实）':'读取失败 · 请重试';
+        container.querySelector('[data-issues]').textContent=error.message;
+        const state=container.querySelector('.source-state');state.dataset.state='error';state.open=true;
+        button.disabled=false;
+      }
+      throw error;
+    }
   }
   button.addEventListener('click', async () => {
     button.disabled = true;
@@ -66,6 +132,8 @@ export async function sourcePanel(container, context, render, {snapshotPath = '/
     catch (error) { if (!context.signal.aborted) { context.ui.toast(error.message); button.disabled = false; } }
   }, {signal:context.signal});
   context.signal.addEventListener('abort', () => clearTimeout(timer), {once:true});
+  const onRefresh=()=>{void refresh().catch(()=>{/* Background refresh retries on the next update. */});};
+  if (refreshEvent) window.addEventListener(refreshEvent,onRefresh,{signal:context.signal});
   await refresh();
-  return () => clearTimeout(timer);
+  return () => {clearTimeout(timer);if(refreshEvent)window.removeEventListener(refreshEvent,onRefresh);};
 }

@@ -227,7 +227,14 @@ async def check(data):
             for mid in ('elrc', 'education', 'piazza'):
                 assert (await client.get(f'/api/v1/modules/{mid}/openapi.json')).status_code == 200
                 disabled = await client.put('/api/v1/modules/' + mid, json={'enabled': False})
-                assert disabled.status_code == 200
+                # A background consumer can still be finishing a legitimate read.
+                # The host must remain busy until it releases that request.
+                for _ in range(40):
+                    if disabled.status_code != 409 or '仍有请求' not in disabled.json().get('detail', ''):
+                        break
+                    await asyncio.sleep(.05)
+                    disabled = await client.put('/api/v1/modules/' + mid, json={'enabled': False})
+                assert disabled.status_code == 200, (mid, disabled.text)
                 assert (await client.get(f'/api/v1/modules/{mid}/openapi.json')).status_code == 404
                 assert (await client.put('/api/v1/modules/' + mid, json={'enabled': True})).status_code == 200
             reloaded = (await client.post('/api/v1/modules/reload')).json()['modules']

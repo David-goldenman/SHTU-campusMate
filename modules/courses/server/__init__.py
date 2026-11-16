@@ -25,17 +25,37 @@ class Group(BaseModel):
 
 class Groups(BaseModel):
     groups: list[Group] = Field(max_length=200)
+    account_revision: str = Field(min_length=1, max_length=100)
 
 
 def create_router(context):
     router = APIRouter()
+
+    # Claim unscoped legacy data once at initialization, never on a later account's read.
+    with context.store.lock:
+        if context.store.read('groups') is not None and context.store.read('groups:legacy_owner') is None:
+            context.store.write('groups:legacy_owner', account_revision(context))
+
+    def saved_groups(owner):
+        value = context.store.read('groups:' + owner)
+        if value is not None:
+            return value
+        return context.store.read('groups', []) if context.store.read('groups:legacy_owner') == owner else []
+
+    @router.get('/view-state')
+    def view_state():
+        return {'account_revision': account_revision(context)}
+
+    @router.get('/view-state')
+    def view_state():
+        return {'account_revision': account_revision(context)}
 
     @router.get("/identities")
     async def identities(current: bool = True):
         """Course identity only; never reads group facts or calls back into group messages."""
         owner = account_revision(context)
         values, unavailable = await snapshots(context, {name: provider for name, provider in SOURCES.items() if name != 'mail'})
-        data = combine(values, context.store.read('groups', []), current_semester(values))
+        data = combine(values, saved_groups(owner), current_semester(values))
         if owner != account_revision(context):
             raise HTTPException(409, '账号已更新，请刷新课程列表。')
         fields = ('id', 'title', 'title_source', 'title_source_id', 'aliases', 'code', 'term', 'current', 'course_ids')
@@ -63,7 +83,7 @@ def create_router(context):
                 pass  # Optional plan metadata must not hide readable courses.
         if owner != account_revision(context):
             raise HTTPException(409, "账号已更新，请刷新课程资料。")
-        data = combine(values, context.store.read("groups", []), current_semester(values))
+        data = combine(values, saved_groups(owner), current_semester(values))
         local_response = await context.api('assignments', '/handling', reuse_key=owner)
         local = local_response.json() if local_response.status_code == 200 else {}
         if owner != account_revision(context) or local.get('account_revision', owner) != owner:
@@ -79,7 +99,7 @@ def create_router(context):
         status = ("syncing" if any(value.get("status") == "syncing" for value in values.values()) else
                   "partial" if any(value.get("network_failure") for value in values.values()) else
                   "ready" if values else "not_connected")
-        return {"status": status, "data": data, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable,
+        return {"status": status, "data": data, "account_revision": owner, "updated_at": max((value["updated_at"] for value in values.values() if value.get("updated_at")), default=None), "unavailable": unavailable,
                 "network_failures": [value["network_failure"] for value in values.values() if value.get("network_failure")]}
 
     @router.get("/appearance")
@@ -101,7 +121,7 @@ def create_router(context):
     async def sync():
         async def dispatch(source, provider):
             account = context.auth.get_status(provider)
-            if not account.get("has_session") and not account.get("has_password"):
+            if not (account.get("has_session") or account.get("has_password") or account.get("automatic_recovery")):
                 return source, {"status": "not_connected"}
             response = await context.api(source, "/sync", method="POST")
             return source, response.json() if response.status_code == 202 else {"status": "unavailable"}
@@ -127,16 +147,26 @@ def create_router(context):
 
     @router.get("/groups")
     def groups():
-        return {"groups": context.store.read("groups", [])}
+        owner = account_revision(context)
+        values = saved_groups(owner)
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已更新，请重新打开课程分组。')
+        return {"groups": values, "account_revision": owner}
 
     @router.put("/groups")
     async def set_groups(body: Groups):
+        owner = body.account_revision
+        if owner != account_revision(context):
+            raise HTTPException(409, '账号已更新，请重新打开课程分组。')
         data = (await snapshot())["data"]
         known = {member for item in data["courses"] for member in item["course_ids"]}
         members = [member for group in body.groups for member in group.course_ids]
         if len(set(members)) != len(members) or len({group.id for group in body.groups}) != len(body.groups) or not set(members) <= known:
             raise HTTPException(422, "课程组标识应唯一，每门已知课程只能属于一个手动分组。")
-        context.store.write("groups", [group.model_dump() for group in body.groups])
+        with context.store.lock:
+            if owner != account_revision(context):
+                raise HTTPException(409, '账号已更新，请重新打开课程分组。')
+            context.store.write('groups:' + owner, [group.model_dump() for group in body.groups])
         return {"saved": True}
 
     return router

@@ -68,9 +68,10 @@ async def check():
             assert [item['id'] for item in pending['items']] == ['gradescope:a']
             assert (await client.get('/course?course_id=missing')).status_code == 404
             assert (await client.get('/catalog/posts?pending=true')).status_code == 400
-            assert (await client.put('/groups',json={'groups':[{'id':'one','title':'合成分组','course_ids':['gradescope:1','timetable:2']}]})).status_code == 200
+            owner=(await client.get('/groups')).json()['account_revision']
+            assert (await client.put('/groups',json={'account_revision':owner,'groups':[{'id':'one','title':'合成分组','course_ids':['gradescope:1','timetable:2']}]})).status_code == 200
             assert (await client.get('/snapshot')).json()['data']['courses'][0]['title'] == '合成分组'
-            assert (await client.put('/groups',json={'groups':[{'id':'bad','title':'错误分组','course_ids':['gradescope:1','gradescope:1']}]})).status_code == 422
+            assert (await client.put('/groups',json={'account_revision':owner,'groups':[{'id':'bad','title':'错误分组','course_ids':['gradescope:1','gradescope:1']}]})).status_code == 422
             assert (await client.post('/sync')).status_code == 202
             selected = await client.post('/context',json={'context_ids':[]})
             assert selected.status_code == 200 and selected.json()['items'] == []

@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import * as composer from '../web/composer.js';
+assert.equal(typeof composer.promptModes,'function','Composer exposes normalized single-select modes');
+assert.equal(typeof composer.composeMessage,'function','Composer composes mode instructions only at send time');
+const {promptModes,composeMessage}=composer;
+
+const modes=promptModes(JSON.parse(await readFile(new URL('../harness/prompts.json',import.meta.url),'utf8')));
+assert.equal(modes.length,6);assert.equal(new Set(modes.map(mode=>mode.id)).size,modes.length);
+for(const mode of modes)assert(mode.description && mode.label && mode.prompt);
+const ownText='  请用中文解释这个公式，保留我的符号 α₁。\n我只学过微积分，请举一个电路例子。  ';
+const [first,second]=modes;
+const firstMessage=composeMessage(ownText,first),secondMessage=composeMessage(ownText,second);
+assert(firstMessage.startsWith(ownText.trim()));assert(secondMessage.startsWith(ownText.trim()));
+assert(firstMessage.includes(first.prompt));assert(!secondMessage.includes(first.prompt));assert(secondMessage.includes(second.prompt));
+assert.equal(composeMessage(ownText,first),firstMessage,'Selecting the same mode is idempotent');
+assert.equal(composeMessage(ownText,null),ownText.trim(),'Free question removes only generated instructions');
+const customWithPreset='我自己输入的说明：'+first.prompt;
+assert(composeMessage(customWithPreset,second).startsWith(customWithPreset),'User text matching another preset must never be removed');
+assert.equal(composeMessage('',first),first.prompt,'A mode can start a useful task without extra text');
+assert.equal(composeMessage('  ',null),'');
+const long='文'.repeat(8000);
+assert(composeMessage(long,first).length>8000,'Composition must not silently truncate a long draft');
+assert.equal(composeMessage(long,null).length,8000);
+const legacy=promptModes([{label:'旧入口',prompt:'旧格式说明'},{label:'invalid'}]);
+assert.equal(legacy.length,1);assert.equal(legacy[0].id,'preset-0');
+console.log('Prompt modes: practical presets, single-mode composition, unchanged user text, identical user wording, idempotence, clear, limits and legacy format passed');

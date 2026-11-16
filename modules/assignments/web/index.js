@@ -232,6 +232,6 @@ export async function mount(container,context) {
     body.querySelector('[data-current]').onchange = draw;
     body.querySelector('[data-search]').oninput = draw;
     draw();
-  });
+  }, {cache:true});
   return () => {cleanup();removeStyle();container.classList.remove('assignment-center');};
 }

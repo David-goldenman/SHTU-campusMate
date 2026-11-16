@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import {useStyle, escape, api, moduleApi, setToken, confirmDialog} from '../web/shared.js';
+import './check_markdown_math.mjs';
+import './check_view_cache.mjs';
+import './check_runtime_status.mjs';
+import {useStyle, escape, api, moduleApi, setToken, confirmDialog, safeAction} from '../web/shared.js';
 import {renderMarkdown} from '../web/markdown.js';
 import {sendOnEnter, fitComposer} from '../modules/academic-assistant/web/composer.js';
 import {cleanupAll} from '../web/lifecycle.js';
@@ -7,7 +10,15 @@ import {navigationChanged} from '../web/navigation.js';
 import {renderNetwork} from '../web/network.js';
 import {submissionLabel, records} from '../web/campus.js';
 import {bindSyncNetwork, syncNetworkReports} from '../web/sync-network.js';
-import {schoolServices} from '../web/school-login.js';
+import {schoolServices, recoveryHint} from '../web/school-login.js';
+
+// Cache checks share a module singleton; run them after the static imports finish.
+await import('./check_source_panel.mjs');
+await import('./check_source_panel_retention.mjs');
+await import('./check_network_view_cache.mjs');
+assert.match(recoveryHint({id:'ids',automatic_recovery:true,recovery:{status:'paused'}}),/暂停/);
+assert.match(recoveryHint({id:'ids',automatic_recovery:true,recovery:{status:'running'}}),/正在恢复/);
+assert.match(recoveryHint({id:'ids',recovery:{status:'manual_required'}}),/验证/);
 
 const navigationState={csrf_token:'synthetic',categories:[{id:'courses',label:'Courses'}],modules:[{id:'courses',enabled:true,status:'ready',revision:'one',frontend_url:'/module-assets/courses/one/web/index.js',runtime:{active_requests:0}}]};
 const countersChanged=structuredClone(navigationState);countersChanged.modules[0].runtime={active_requests:3,last_request:{duration_ms:900}};
@@ -25,6 +36,15 @@ for(const change of [
   assert(navigationChanged(navigationState,updated),'Changed navigation or service identity must be reconciled');
 }
 console.log('navigation: ignore runtime counters; reconcile module changes, categories and restarted service identity');
+
+const busyAttributes=new Map(),busyControl={disabled:false,setAttribute:(key,value)=>busyAttributes.set(key,value),removeAttribute:key=>busyAttributes.delete(key)};
+let finishAction,actionCalls=0;
+const busyAction=safeAction(busyControl,()=>{actionCalls++;return new Promise(resolve=>{finishAction=resolve;});});
+const pendingAction=busyAction();
+assert.equal(busyControl.disabled,true);assert.equal(busyAttributes.get('aria-busy'),'true');
+await busyAction();assert.equal(actionCalls,1,'Repeated clicks cannot duplicate a pending action');
+finishAction();await pendingAction;
+assert.equal(busyControl.disabled,false);assert.equal(busyAttributes.has('aria-busy'),false);
 
 const schoolMarkup = schoolServices({connection:{status:'complete'},services:[
   {id:'blackboard',status:'ready'}, {id:'elrc',status:'verification_required',message:'<script>synthetic</script>'}

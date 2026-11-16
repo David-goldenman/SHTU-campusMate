@@ -192,6 +192,23 @@ def check_service(directory):
             verify.assert_called_once_with("synthetic-mail@example.edu", "synthetic-app-password", 993, True)
         assert imap_status["status"] == "ready" and imap_status["imap"]["configured"] and imap_status["imap"]["password_saved"]
         assert imap_status["automatic_recovery"] and service.imap_enabled("coremail")
+        original_mail_revision = imap_status["account_revision"]
+        with patch.object(imap_access, "verify"):
+            saved_again = service.save_imap("synthetic-mail@example.edu", "", 993, True)
+            assert saved_again["account_revision"] == original_mail_revision, "Saving the same IMAP account must preserve mail cache ownership"
+            assert saved_again["session_revision"] != imap_status["session_revision"]
+            try:
+                service.save_imap("another-mail@example.edu", "", 993, True)
+                raise AssertionError("A different account must supply its own client password")
+            except ValueError:
+                pass
+        assert service.get_account_revision("coremail") == original_mail_revision
+        # IMAP account changes keep per-account settings/cache ownership stable.
+        with patch.object(imap_access, "verify"):
+            other = service.save_imap("another-mail@example.edu", "other-client-password", 993, True)
+            assert other["account_revision"] != original_mail_revision
+            restored = service.save_imap("synthetic-mail@example.edu", "synthetic-app-password", 993, True)
+            assert restored["account_revision"] == original_mail_revision, "Returning to an IMAP account must preserve its explicit auto-sync settings"
         assert not vault.get("auth:credentials:coremail") and not vault.get("auth:session:coremail")
         class Mailbox:
             def __init__(self):

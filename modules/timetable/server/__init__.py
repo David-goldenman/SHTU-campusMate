@@ -68,6 +68,10 @@ def create_router(context):
     holidays = _holidays = Holidays(context, source)
     router = source.router()
 
+    @router.get('/view-state')
+    def view_state():
+        return {'account_revision': account_revision(context)}
+
     def settings_key():
         metadata = source.snapshot()['data']['metadata']
         return 'semester:' + source.owner() + ':' + metadata.get('semester_id', metadata.get('semester', ''))

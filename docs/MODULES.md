@@ -1,8 +1,24 @@
 # 模块开发接口
 
+核心页面的短期预览缓存仍为 60 秒。读取失败后，仅在重新调用 `/view-state` 确认账号未变、缓存未超时且未被写操作失效时保留缓存，返回 `{value,unchanged,cached:true,error}`。401/403/409、取消与版本失效不会回退；失效后的迟到响应也不能绘制。使用 `readView()` 的页面须显式显示“刷新失败／缓存待核实”，不能继续显示“正在更新”或空结果。共享 `sourcePanel()` 已处理该约定，首页、课程和作业复用它；时间表取消被新日期读取替代的请求。筛选、焦点与同账号阅读位置在刷新时保留，后台下载仍由常驻服务持有。
+
+`context.runtime.record_source(name,state,cached_at=...)` 登记独立来源结果，最多 16 个固定名称。仅复制状态、时间和安全诊断字段；共享 Source 已自动登记。`runtime.last_success_at` 仅表示 HTTP 请求成功，不能用作同步成功时间。
+
+首页初始化并发读取 bootstrap 与主题清单；常驻组件立即挂载自身生命周期，但其初始 GET 等待前景页面完成，避免通知、邮箱状态与首屏聚合争抢读取。侧栏悬停或键盘聚焦只预载对应页面脚本，不挂载模块、不调用业务 API；切换时立即更新导航状态，异步完成不抢走已进入页面的输入焦点。
+
+`sourcePanel(..., {cache:true})` 可启用当前浏览器页内的短时展示缓存；同一能力由 `/assets/view-cache.js` 的 `readView(context,path,preview)` 提供。它仅缓存带 `account_revision` 的成功响应，最多 12 条、每条 60 秒，不写浏览器持久存储。再次显示前先调用当前模块的 `GET /view-state` 核对账号，匹配后展示缓存并读取最新数据；该接口仅返回 `{account_revision}`，不聚合资料、不联网。写操作、服务令牌变化及其他标签页的写操作使缓存失效，失效期间的旧请求不能重新写回；模块资源版本和请求路径参与分区。未变化的响应保留现有 DOM；课程／作业筛选及输入焦点在更新时保留。缓存预览标记“正在更新”，不改变原站状态或本地修改的版本校验。
+
+共享认证的 `POST /auth/network/explain` 仅诊断网络故障，不修改账号或页面资料，因此其开始、成功和失败均不会使页面缓存失效；其余非 GET/HEAD 请求仍按写操作处理。
+
+首页初始化并发读取 bootstrap 与主题清单；常驻组件立即挂载自身生命周期，但其初始 GET 等待前景页面完成，避免通知、邮箱状态与首屏聚合争抢读取。侧栏悬停或键盘聚焦只预载对应页面脚本，不挂载模块、不调用业务 API；切换时立即更新导航状态，异步完成不抢走已进入页面的输入焦点。
+
+`sourcePanel(..., {cache:true})` 可启用当前浏览器页内的短时展示缓存；同一能力由 `/assets/view-cache.js` 的 `readView(context,path,preview)` 提供。它仅缓存带 `account_revision` 的成功响应，最多 12 条、每条 60 秒，不写浏览器持久存储。再次显示前先调用当前模块的 `GET /view-state` 核对账号，匹配后展示缓存并读取最新数据；该接口仅返回 `{account_revision}`，不聚合资料、不联网。写操作、服务令牌变化及其他标签页的写操作使缓存失效，失效期间的旧请求不能重新写回；模块资源版本和请求路径参与分区。未变化的响应保留现有 DOM；课程／作业筛选及输入焦点在更新时保留。缓存预览标记“正在更新”，不改变原站状态或本地修改的版本校验。
+
 单次 GET 请求可以通过 `context.api(module, path, reuse_key=账号或资料版本)` 显式复用只读调用。默认不复用；非 GET、有 body、HTTP 错误、不同模块实例或不同版本均不复用。请求结束释放结果，模块启停、并发计数和超时检查仍执行。调用方必须保留请求结束前的账号复核；有状态核对的接口（例如通知 `/snapshot`）不能标记为只读。模块内多个入口共用只读计算时，可使用 `backend.core.reads.read_once(context, key, revision, load)`，结果按调用者复制，版本变化返回 409。框架不声明业务模块名单。
 
 首页使用 `dashboard/summary`，保留全部待办的必要字段、统计、日程、通知引用、来源覆盖与错误提示；完整 `/snapshot` 保持原契约。公共 `sourcePanel` 的第四个参数可设置 `{snapshotPath:'/summary'}`，省略时仍读取 `/snapshot`。通知浮窗使用 `campus-agent/widget`，只返回浮窗需要的状态、通知预览及引用来源类型；通知核对仍执行，同账号并发核对只共享正在运行的任务，结束后释放。
+
+课程页录播默认通过原站链接在官方观看；次要入口「内嵌播放」通过 ELRC 的 `/playback`、`/playback/{token}/sources` 与 `/playback/{token}/media/{source_id}` 公开接口播放已知录播。来源模块负责课程权限、上游地址、短期会话及 Range 分段读取，课程模块负责课次/画面选择和原生视频控件；完整接口及隔离规则见 [ELRC 模块](../modules/elrc/README.md)。播放器按需加载，关闭或模块卸载时取消请求并释放视频。
 
 课表模块在自身 `SavedTimetable` 中按学期管理缓存：普通 `/sync` 复用同账号、本学期已保存课表，返回 `queued:false,reused:true`（仍为 HTTP 202）；用户主动更新用 `/sync?force=true`。时间经过不会触发课表重拉，首次同步及换学期仍正常读取。其他动态来源继续采用共享 Source 原有刷新规则。`/schedule.saved_timetable` 提供已保存课表及通过 ELRC/E 云公开快照核对课程代码与学期的记录；校历已有当前学期日期时也直接复用，自动失败只尝试一次，用户可手动重试。
 
@@ -53,6 +69,8 @@ modules/notes/
 模块列表的 `has_frontend` 表示代码目录提供了页面入口，独立于启停和加载状态；侧栏据此保留已启用页面的加载错误入口。`frontend_url` 仅在页面就绪时提供可导入的地址。
 
 ## 前端入口
+
+共享 Markdown：从 `/assets/markdown.js` 导入 `renderMarkdownInto(container,text)`，可同时显示 Markdown 与 LaTeX。支持 `$…$`、`$$…$$`、`\(…\)` 和 `\[…\]`；代码示例不排版。需要拼接 HTML 时先用 `renderMarkdown(text)`，插入后调用 `renderMath(container)`。主页面统一加载本地公式样式和字体；数学排版通过 DOM 属性设置，保持内容安全策略。学习助手和通知正文共同使用该接口。
 
 ```javascript
 export async function mount(container, context) {
@@ -155,6 +173,8 @@ def create_router(context):
 模块属于受信任本地代码，运行权限与框架一致。目录分层和注入上下文用于团队分工与状态隔离；安装模块前审核其代码及外部访问行为。
 
 ## 校园数据模块
+
+公共 `sourcePanel(container, context, render, {snapshotPath, refreshEvent, retainContentOnError})` 支持调用方指定 window 刷新事件；事件触发时重新读取快照，重叠请求合并为当前任务及至多一次后续更新，卸载时清理监听。邮箱和首页聚合使用此入口更新来源状态；具体事件及变化判断由业务模块拥有。可选异步 `retainContentOnError(error)` 在快照读取或渲染失败时核对所有权，只有返回 true 才保留当前 DOM，并明确显示读取失败；401/403/409 和取消始终不保留，仍调用回调清理旧账号闭包与对话框。`Source` 的 `stale_after=None` 可关闭通用缓存过期同步，供已有独立调度器的来源管理检查周期。
 
 来源可通过 `Source(..., network_target=共享认证目标)` 选择网络失败诊断；SDK 不选择具体业务目标。网络请求失败的 error/partial 快照附带 `network_failure:{id,target,kind,at,host?}`，重试启动或成功时清除；解析、登录和权限失败不携带该标记。标记按账号版本隔离，不保存原始异常或完整 URL。`Remote.network_error` 仅在内存保留最后一次重试仍失败的 RequestError，供 Source 识别局部失败。聚合页转发 `network_failures` 数组。共享 `sourcePanel` 自动显示，其他页面可用 `/assets/sync-network.js` 的 `bindSyncNetwork(host,context,retry?)`，调用返回对象的 `update(failures)`；同一故障去重，切页中止，恢复后清除。它通过 `context.services.auth.explainNetwork(failures)` 调用公开诊断 API；详见 [AUTH.md](AUTH.md)。结构化 HTTP 错误的 `detail.message` 显示为消息，原公开 detail 保存在前端 Error 的 `details`。
 

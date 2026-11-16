@@ -3,7 +3,7 @@ const extensions = {'application/pdf':'.pdf','application/zip':'.zip','text/plai
   'application/msword':'.doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'.docx',
   'image/png':'.png','image/jpeg':'.jpg'};
 
-function safeName(value) {
+export function safeName(value) {
   let name = (value || '课程资料').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,'_').replace(/[. ]+$/g,'').trim();
   if (!name || /^\.+$/.test(name)) name = '课程资料';
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) name = '_' + name;
@@ -42,83 +42,100 @@ async function localFile(directory,name) {
   catch(error) { if (error.name === 'NotFoundError' || error.name === 'TypeMismatchError') return null; throw error; }
 }
 
-async function unusedName(directory, wanted) {
+async function unusedName(directory, wanted, id) {
   const occupied = new Set();
   for await (const [name] of directory.entries()) occupied.add(name.toLowerCase());
   const dot = wanted.lastIndexOf('.'), stem = wanted.slice(0,dot), extension = wanted.slice(dot);
+  const distinct = `${stem.slice(0,110)} · ${safeName(id).slice(-16)}`;
   let name = wanted, number = 2;
-  while (occupied.has(name.toLowerCase())) name = `${stem} (${number++})${extension}`;
+  if (occupied.has(name.toLowerCase())) name = distinct + extension;
+  while (occupied.has(name.toLowerCase())) name = `${distinct} (${number++})${extension}`;
   return name;
 }
 
-async function existingName(directory,item,files) {
-  const wanted = safeName(item.title).toLowerCase(), candidates = [];
-  const claimed = new Set(Object.values(files).map(record=>record.name.toLowerCase()));
-  for await (const [name,handle] of directory.entries()) {
-    const lower = name.toLowerCase();
-    if (handle.kind !== 'file' || claimed.has(lower)) continue;
-    if (lower === wanted || (!/\.[a-z0-9]{1,10}$/i.test(wanted) && lower.replace(/\.[^.]+$/,'') === wanted)) candidates.push(name);
-  }
-  return candidates.length === 1 ? candidates[0] : null;
+const contentDigest = async blob => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),byte=>byte.toString(16).padStart(2,'0')).join('');
+async function unchanged(local,record) {
+  return local && record?.managed && local.file.size === record.size && local.file.lastModified === record.lastModified
+    && (!record.digest || await contentDigest(local.file) === record.digest);
 }
+const sameFile = (first, second) => first && second && first.file.size === second.file.size && first.file.lastModified === second.file.lastModified;
+const preserveError = () => Object.assign(new Error('检测到本地修改，已保留原文件并暂停此资料的自动更新。'),{preserve:true});
 
 /** Skip known versions before HTTP; replace only files we saved that remain unedited. */
-export async function downloadFiles({items, directory, revision, files = {}, signal, onRecord = async()=>{}, onProgress = ()=>{}, request = fetch}) {
+export async function downloadFiles({items, directory, legacyDirectory, revision, files = {}, signal, checkActive = async()=>{}, onRecord = async()=>{}, onProgress = ()=>{}, request = fetch}) {
   const manifest = {...files};
-  const result = {saved:[], skipped:[], failed:[], remaining:[], cancelled:false};
+  const result = {saved:[], skipped:[], preserved:[], failed:[], remaining:[], cancelled:false};
   for (let index = 0; index < items.length; index++) {
     const item = items[index], version = resourceVersion(item);
     if (signal.aborted) { result.cancelled = true; result.remaining = items.slice(index); break; }
     onProgress({...result, current:item.title, done:index, total:items.length});
-    let writer, name, created = false, committed = false;
+    let writer, name, createdFile, committed = false;
     try {
+      await checkActive();
       const path = '/api/v1/modules/piazza/file?';
       if (!item.download_url.startsWith(path)) throw new Error('课件下载地址无效，请重新同步。');
       const params = new URLSearchParams(item.download_url.slice(path.length));
       if (params.get('material_id') !== item.id) throw new Error('课件标识不匹配，请重新同步。');
-      let record = manifest[item.id], local = record ? await localFile(directory,record.name) : null;
-      if (!record) {
-        const adopted = await existingName(directory,item,manifest);
-        local = adopted ? await localFile(directory,adopted) : null;
-        if (local?.file.size) {
-          record = {name:adopted,version,size:local.file.size,lastModified:local.file.lastModified,managed:false};
-          signal.throwIfAborted(); await onRecord(item.id,record); manifest[item.id] = record;
-        }
-      }
-      if (record?.version === version && local?.file.size) {
+      const record = manifest[item.id], originalDirectory = record?.directory || (record?.legacy ? legacyDirectory : directory);
+      let local = record ? await localFile(originalDirectory,record.name) : null;
+      if (local && !await unchanged(local,record)) throw preserveError();
+      if (record?.version === version && local && !record.legacy) {
         result.skipped.push({id:item.id,name:record.name}); continue;
       }
-      params.set('account_revision',revision);
-      const response = await readResponse(await request(path+params,{signal:AbortSignal.any([signal,AbortSignal.timeout(120000)]),credentials:'same-origin',redirect:'error'}));
-      if (/^(text\/html|application\/(json|xhtml\+xml))\b/i.test(response.headers.get('content-type') || '')) throw new Error('来源返回了登录页或错误内容，请重新连接 Piazza。');
-      const blob = await response.blob();
+      let blob, wanted = record?.name;
+      if (record?.legacy && local && record.version === version) blob = local.file;
+      else {
+        await checkActive();
+        params.set('account_revision',revision);
+        const response = await readResponse(await request(path+params,{signal:AbortSignal.any([signal,AbortSignal.timeout(120000)]),credentials:'same-origin',redirect:'error'}));
+        if (/^(text\/html|application\/(json|xhtml\+xml))\b/i.test(response.headers.get('content-type') || '')) throw new Error('来源返回了登录页或错误内容，请重新连接 Piazza。');
+        blob = await response.blob(); wanted ||= fileName(response,item.title);
+      }
       if (!blob.size) throw new Error('来源返回了空文件。');
+      await checkActive();
       signal.throwIfAborted();
-      // Recheck after the network wait so edits made during downloading are preserved.
-      local = record ? await localFile(directory,record.name) : null;
-      const replace = record?.managed && local && local.file.size === record.size && local.file.lastModified === record.lastModified;
-      name = replace ? record.name : await unusedName(directory,fileName(response,item.title));
+      const digest = await contentDigest(blob);
+      local = record ? await localFile(originalDirectory,record.name) : null;
+      if (local && !await unchanged(local,record)) throw preserveError();
+      const replace = local && !record.legacy;
+      name = replace ? record.name : await unusedName(directory,wanted,item.id);
       signal.throwIfAborted();
       const handle = replace ? local.handle : await directory.getFileHandle(name,{create:true});
-      created = !replace;
-      writer = await handle.createWritable();
+      const before = await handle.getFile();
+      if (!replace && before.size) throw new Error('同名文件刚被创建，已保留，请再次检查。');
+      writer = await handle.createWritable({mode:'exclusive'});
+      if (!replace) createdFile = before;
       await writer.write(blob);
+      signal.throwIfAborted();
+      if (record && local && !await unchanged(await localFile(originalDirectory,record.name),record)) throw preserveError();
+      if (!sameFile({file:before},{file:await handle.getFile()})) throw preserveError();
+      await checkActive();
       signal.throwIfAborted();
       await writer.close(); writer = null; committed = true;
       const saved = await handle.getFile();
-      const next = {name,version,size:saved.size,lastModified:saved.lastModified,managed:true};
+      const next = {name,version,size:saved.size,lastModified:saved.lastModified,managed:true,digest};
       await onRecord(item.id,next); manifest[item.id] = next;
+      // Move only our unchanged legacy file, after the new file and manifest are safe.
+      if (record?.legacy && local) {
+        const latest = await localFile(originalDirectory,record.name);
+        if (sameFile(local,latest) && await unchanged(latest,record)) await originalDirectory.removeEntry(record.name);
+        else result.preserved.push({id:item.id,name:record.name,message:'旧目录中的文件刚被修改，已保留。'});
+      }
       result.saved.push({id:item.id,name});
     } catch (error) {
       if (writer) { try { await writer.abort(); } catch { /* Already closed. */ } }
-      if (created && !committed) { try { await directory.removeEntry(name); } catch { /* Report the original failure. */ } }
+      if (createdFile && !committed) {
+        try { const current = await localFile(directory,name); if (current?.file.size === 0 && current.file.lastModified === createdFile.lastModified) await directory.removeEntry(name); }
+        catch { /* Leave externally changed files in place. */ }
+      }
       if (signal.aborted) { result.cancelled = true; result.remaining = items.slice(index); break; }
+      if (error.preserve) { result.preserved.push({id:item.id,name:manifest[item.id]?.name,message:error.message}); continue; }
       result.failed.push({item,message:error.message});
       if ([401,403,409].includes(error.status) || error.name === 'NotAllowedError') {
         result.remaining = items.slice(index+1); break;
       }
     }
   }
-  onProgress({...result,current:'',done:result.saved.length+result.skipped.length+result.failed.length,total:items.length});
+  onProgress({...result,current:'',done:items.length-result.remaining.length,total:items.length});
   return result;
 }

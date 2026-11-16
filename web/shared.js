@@ -1,6 +1,8 @@
+import {invalidateViews} from './view-cache.js';
+
 let token = '';
 
-export function setToken(value) { token = value; }
+export function setToken(value) { if (value !== token) invalidateViews();token = value; }
 
 export function escape(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
@@ -13,7 +15,11 @@ export async function api(path, {onEvent, timeoutMs, idleTimeoutMs = 240000, ...
   const headers = new Headers(options.headers);
   headers.set('X-Framework-Token', token);
   const deadline = new AbortController();
-  const reading = !options.method || ['GET','HEAD'].includes(options.method.toUpperCase());
+  const method = (options.method || 'GET').toUpperCase();
+  const reading = ['GET','HEAD'].includes(method);
+  // This framework POST diagnoses supplied failures without changing account or view data.
+  const changesViews = !reading && !(method === 'POST' && url.pathname === '/api/v1/auth/network/explain');
+  if (changesViews) invalidateViews();
   const request = {...options, headers, signal:options.signal ? AbortSignal.any([options.signal,deadline.signal]) : deadline.signal};
   const expired = () => deadline.abort(new DOMException('请求等待超时，请先检查结果再重试。','TimeoutError'));
   const timer = setTimeout(expired,timeoutMs ?? (onEvent ? 600000 : reading ? 30000 : 120000));
@@ -64,14 +70,14 @@ export async function api(path, {onEvent, timeoutMs, idleTimeoutMs = 240000, ...
       const detail = typeof value?.detail === 'string' ? value.detail : Array.isArray(value?.detail) ? value.detail.map(item => (item.loc || []).filter(key => key !== 'body').join('.') + '：' + item.msg).join('；') : typeof value?.detail?.message === 'string' ? value.detail.message : '请求失败。';
       const message = [detail,value?.action,value?.request_id ? '错误编号：' + value.request_id : ''].filter(Boolean).join(' ');
       const error = new Error(message);
-      Object.assign(error,{status:response.status,code:value?.code,requestId:value?.request_id,action:value?.action,details:value?.detail});
+      Object.assign(error,{status:response.status,code:value?.code,requestId:value?.request_id,operationId:value?.operation_id,phase:value?.phase,action:value?.action,details:value?.detail});
       throw error;
     }
     return value;
   } catch(error) {
     if(deadline.signal.aborted)throw deadline.signal.reason;
     throw error;
-  } finally {clearTimeout(timer);clearTimeout(idle);}
+  } finally {clearTimeout(timer);clearTimeout(idle);if(changesViews)invalidateViews();}
 }
 
 export function moduleApi(id, signal) {
@@ -135,9 +141,10 @@ export function safeAction(control, action) {
     event?.preventDefault();
     if (control.disabled) return;
     control.disabled = true;
+    control.setAttribute?.('aria-busy','true');
     try { await action(); }
     catch (error) { if (error.name !== 'AbortError') toast(error.message); }
-    finally { control.disabled = false; }
+    finally { control.disabled = false;control.removeAttribute?.('aria-busy'); }
   };
 }
 

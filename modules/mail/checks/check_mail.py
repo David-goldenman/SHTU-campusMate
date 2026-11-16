@@ -35,9 +35,19 @@ IMAP_RAW = imap_message.as_bytes()
 
 class SyntheticImap:
     """Only the IMAP commands used by the module; no network or credentials."""
+    def select(self, folder, readonly=True):
+        assert readonly
+        return 'OK', [b'2']
+
+    def response(self, name):
+        assert name == 'UIDVALIDITY'
+        return name, [b'1']
+
     def uid(self, command, *args):
         if command == "SEARCH":
             return "OK", [b"10 11"]
+        if command == 'FETCH' and args[1] == '(UID FLAGS)':
+            return 'OK', [b'1 (UID 10 FLAGS ())', b'2 (UID 11 FLAGS (\\Seen))']
         if command == "FETCH" and "HEADER.FIELDS" in str(args[1]):
             parts = []
             for uid in str(args[0]).split(","):
@@ -61,6 +71,16 @@ with sandbox("mail", handler) as context:
         assert source.snapshot()["status"] == "partial"
         assert source.snapshot()["data"]["messages"][0]["received_at"].endswith('+08:00')
         with TestClient(app) as client:
+            assert client.get('/intelligence').json()['owner'] == source.owner(), 'Rendered mailbox data must identify its verified owner'
+            original_api, original_revision = context.api, context.auth.revision
+            async def changed_owner(module_id, path='/snapshot', **kwargs):
+                result = await original_api(module_id, path, **kwargs)
+                if module_id == 'campus-agent' and path == '/queue':
+                    context.auth.revision = 'changed-during-mail-aggregation'
+                return result
+            context.api = changed_owner
+            assert client.get('/intelligence').status_code == 409, 'Cross-account aggregation must reject mixed-owner results'
+            context.api, context.auth.revision = original_api, original_revision
             assert client.get('/labels').json()["labels"]["mail:m1"]["by"] == 'rule'
             assert client.get('/message',params={"message_id":"mail:m1"}).status_code == 200
             assert '课程' in source.snapshot()["data"]["messages"][0]["body_text"]
@@ -88,6 +108,8 @@ with sandbox("mail", handler) as context:
             assert client.get('/labels').json()["labels"] == {}
             assert client.get('/agent/pending',headers=headers).status_code == 401
         context.auth.mailbox = SyntheticImap()
+        assert source.snapshot()["status"] == "not_synced", "Configured IMAP without a current-account cache needs sync, not login"
+        assert "设置连接账号" not in source.snapshot()["message"]
         source.run()
         snapshot = source.snapshot()
         assert snapshot["status"] in {"ready", "partial"} and snapshot["data"]["metadata"]["transport"] == "imap"

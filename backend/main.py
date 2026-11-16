@@ -30,6 +30,7 @@ from .core.appearance import AppearanceUpdate, read_appearance, patch_appearance
 from .core import share as share_access
 from .core.themes import catalog as theme_catalog
 from .core.errors import PublicError, catch_errors, error_response, file_error, http_error, storage_error
+from .core.diagnostics import operation_scope
 from .services.ai import AIService, create_router as ai_router
 from .services.ai.harness import Harness
 from .services.auth import AuthService, LoginRequired, VerificationRequired, create_router as auth_router
@@ -147,9 +148,16 @@ def create_app(*, active_port=None, store=None, vault=None, modules_root=MODULES
             response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         return response
 
+    @app.middleware('http')
+    async def correlate_operation(request: Request, call_next):
+        with operation_scope(new=True) as operation:
+            response = await call_next(request)
+            response.headers['X-Operation-ID'] = operation.id
+            return response
+
     def settings():
         value = {"port": 16666, **store.read("settings", {})}
-        return {**value, "active_port": active_port, "restart_required": value["port"] != active_port, "appearance": read_appearance(store), "storage": {"directory": ".private", "encryption": "Windows DPAPI / CurrentUser"}}
+        return {**value, "active_port": active_port, "restart_required": value["port"] != active_port, "appearance": read_appearance(store), "storage": {"directory": str(data_dir), "encryption": "Windows DPAPI / CurrentUser"}}
 
     @app.get("/api/v1/bootstrap", tags=["框架"], summary="初始化网页与模块清单")
     def bootstrap():

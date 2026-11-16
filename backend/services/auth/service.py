@@ -5,8 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import httpx
+from fastapi import HTTPException
 
 from ...core.paths import RUNTIME
+from ...core.diagnostics import operation_metadata, operation_scope
 from . import imap as imap_access
 from . import protocols
 from .browser import VerificationBrowser
@@ -25,6 +27,8 @@ class AuthService:
         self.store = store
         self.browser = VerificationBrowser(runtime_dir / 'auth')
         self.locks = {provider: threading.RLock() for provider in protocols.PROVIDERS}
+        self._renewal_versions = {provider: 0 for provider in protocols.PROVIDERS}
+        self._recovery_activity = {}
         self.device = DeviceCredential(vault)
         self.setup_cancelled = threading.Event()
         self.setup_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ids-device")
@@ -123,6 +127,17 @@ class AuthService:
                 "password_saved": bool(imap.get("password")), "verified_at": imap.get("verified_at"),
             }
         result["automatic_recovery"] = bool(provider != "coremail" and credentials.get("password")) or bool(provider == "coremail" and imap.get("password")) or bool(provider == "ids" and result["device"]["configured"] and result["device"]["enabled"])
+        activity = self._recovery_activity.get(provider, {})
+        paused = saved.get('blocked') or (provider == 'ids' and self.store.read('auth:recovery:ids', {}).get('blocked'))
+        recovery_status = ('running' if activity.get('status') == 'running' else
+                           'manual_required' if saved.get('status') == 'verification_required' and paused else
+                           'paused' if paused else 'available' if result['automatic_recovery'] else 'manual_required')
+        result['recovery'] = {**activity, 'status': recovery_status, 'automatic': result['automatic_recovery']}
+        if provider == 'ids':
+            for item in result['services']:
+                target_state = self._saved_state(provider, item['id'])
+                item['recovery_status'] = ('manual_required' if item['status'] == 'verification_required' else
+                                           'paused' if target_state.get('blocked') else recovery_status)
         return result
 
     def providers(self):
@@ -149,18 +164,22 @@ class AuthService:
         settings = imap_access.checked_settings(port, secure)
         with self.locks[provider]:
             previous = self.vault.get("auth:imap:" + provider)
-            password = password or previous.get("password", "")
+            same_account = previous.get("username", "").strip().casefold() == username.casefold()
+            password = password or (previous.get("password", "") if same_account else "")
             if not password:
                 raise ValueError("请填写学校邮箱的客户端专用密码。")
             imap_access.verify(username, password, settings["port"], settings["ssl"])
             self._drop_official_mail()
-            self.vault.delete("auth:identity:" + provider)
-            self.store.write("auth:revision:" + provider, secrets.token_hex(12))
+            # Keep verified IMAP accounts in the ownership registry so returning
+            # to an account also restores its saved per-account preferences.
+            # A switch from web mail still starts an isolated IMAP namespace.
+            if not previous.get("username"):
+                self.vault.delete("auth:identity:" + provider)
             self.vault.save("auth:imap:" + provider, {
                 "host": settings["host"], "port": settings["port"], "ssl": settings["ssl"],
                 "username": username, "password": password, "verified_at": now(),
             })
-            self._adopt_identity(provider, username.casefold())
+            self._adopt_identity(provider, username.casefold(), migrate=same_account)
             self.store.write("auth:session_revision:" + provider, secrets.token_hex(12))
             self._record(provider, "ready", message="已使用 IMAP 登录学校邮箱。", checked_at=now())
         return self.get_status(provider)
@@ -176,30 +195,47 @@ class AuthService:
             except LoginRequired as error:
                 self._record(provider, "login_required", message=str(error), blocked=True)
                 raise
+            except imap_access.ImapUnavailable as error:
+                self._record(provider, "error", message=str(error.detail), checked_at=now())
+                raise
             if not self.vault.get("auth:identity:" + provider).get("subject"):
                 self._adopt_identity(provider, saved["username"].casefold())
             self._record(provider, "ready", message="IMAP 连接正常。", checked_at=now())
         return self.get_status(provider)
 
     @contextmanager
-    def imap_connection(self, provider: str = "coremail"):
+    def imap_connection(self, provider: str = "coremail", *, timeout=None):
         """Yield a logged-in, read-only IMAP mailbox; credentials stay in Vault."""
         protocols.checked_target(provider)
         if provider != "coremail":
             raise ValueError("只有学校邮箱支持 IMAP。")
-        saved = self.vault.get("auth:imap:" + provider)
+        with self.locks[provider]:
+            saved = self.vault.get("auth:imap:" + provider)
+            revision = (self.get_account_revision(provider), self.store.read("auth:session_revision:" + provider, "initial"))
         if not saved.get("username") or not saved.get("password"):
             raise VerificationRequired("请先使用 IMAP 登录学校邮箱。")
+        def record(status, message, blocked=False):
+            with self.locks[provider]:
+                current = (self.get_account_revision(provider), self.store.read("auth:session_revision:" + provider, "initial"))
+                if current == revision:
+                    self._record(provider, status, message=message, blocked=blocked, checked_at=now())
+
+        mailbox = None
         try:
-            mailbox = imap_access.connect(saved["username"], saved["password"], saved.get("port"), saved.get("ssl", True))
-        except LoginRequired as error:
-            self._record(provider, "login_required", message=str(error), blocked=True)
-            raise
-        try:
+            options = {} if timeout is None else {"timeout": timeout}
+            mailbox = imap_access.connect(saved["username"], saved["password"], saved.get("port"), saved.get("ssl", True), **options)
             yield mailbox
+            record("ready", "IMAP 连接正常。")
+        except LoginRequired as error:
+            record("login_required", str(error), True)
+            raise
+        except imap_access.ImapUnavailable as error:
+            record("error", str(error.detail))
+            raise
         finally:
             try:
-                mailbox.logout()
+                if mailbox is not None:
+                    mailbox.logout()
             except Exception:
                 pass
 
@@ -285,9 +321,28 @@ class AuthService:
                 if provider == "ids":
                     self.store.delete("auth:recovery:ids")
             self.vault.save("auth:credentials:" + provider, {"username": username, "password": password})
+            self.store.write('auth:credentials_revision:' + provider, secrets.token_hex(12))
+            self._recovery_activity.pop(provider, None)
+            keys = ['auth:state:' + provider]
+            if provider == 'ids':
+                keys.extend('auth:target:ids:' + target for target in protocols.SERVICES)
+            for key in keys:
+                state = self.store.read(key, {})
+                if state.get('blocked'):
+                    self.store.write(key, {**state, 'blocked': False, 'status': 'login_required', 'message': '凭据已更新，可重新连接。'})
         return self.get_status(provider)
 
     def _login(self, provider, target, client, state):
+        with operation_scope('auth', 'login'):
+            activity = {'status': 'running', 'target': target, 'started_at': now(), **operation_metadata()}
+            self._recovery_activity[provider] = activity
+            try:
+                return self._perform_login(provider, target, client, state)
+            finally:
+                if self._recovery_activity.get(provider) is activity:
+                    self._recovery_activity[provider] = {**activity, 'status': 'idle', 'finished_at': now()}
+
+    def _perform_login(self, provider, target, client, state):
         if provider == "ids":
             paused = self.store.read("auth:recovery:ids", {})
             if paused.get("blocked"):
@@ -304,6 +359,7 @@ class AuthService:
                 raise
             self.store.delete("auth:recovery:ids")
             self._check_school_identity(provider, subject)
+            self._renewal_versions[provider] += 1
             # Keep renewed SSO cookies even if this particular service later needs extra verification.
             self._save_session(provider, client, state)
             verified = protocols.validate(client, provider, target, state)
@@ -321,6 +377,7 @@ class AuthService:
             if provider == "ids":
                 self.store.write("auth:recovery:ids", {"blocked": True, "message": str(error)})
             raise
+        self._renewal_versions[provider] += 1
         if provider == "ids":
             self.store.delete("auth:recovery:ids")
         return protocols.validate(client, provider, target, state)
@@ -396,6 +453,7 @@ class AuthService:
                     raise
                 if provider == "ids":
                     self.school.cancel()
+                self._renewal_versions[provider] += 1
                 self._save_session(provider, client, state)
                 if not self._adopt_identity(provider, subject):
                     self.store.write("auth:revision:" + provider, secrets.token_hex(12))
@@ -537,13 +595,20 @@ class AuthService:
                     raise
                 self._adopt_identity(provider, subject, migrate=verified_existing)
                 self._record(provider, "ready", target, checked_at=now())
+                owner = self.get_account_revision(provider)
+                credentials_revision = self.store.read('auth:credentials_revision:' + provider)
+                renewal = self._renewal_versions[provider]
                 try:
                     yield client
                 except LoginRequired as error:
-                    self._record(provider, "verification_required" if isinstance(error, VerificationRequired) else "login_required", target, str(error), blocked=isinstance(error, VerificationRequired))
+                    if owner == self.get_account_revision(provider) and renewal == self._renewal_versions[provider]:
+                        self._record(provider, "verification_required" if isinstance(error, VerificationRequired) else "login_required", target, str(error), blocked=isinstance(error, VerificationRequired))
                     raise
                 finally:
-                    self._save_session(provider, client, state)
+                    if owner != self.get_account_revision(provider) or credentials_revision != self.store.read('auth:credentials_revision:' + provider):
+                        raise HTTPException(409, '读取期间账号或凭据已更新，请重试。')
+                    if renewal == self._renewal_versions[provider]:
+                        self._save_session(provider, client, state)
 
     def refresh(self, provider: str, target: str | None = None):
         """Explicit recovery also clears a previous automatic-login pause."""
@@ -568,16 +633,30 @@ class AuthService:
     def read_with_recovery(self, provider, operation, *, target=None, cancelled=None):
         """Retry one idempotent reader after a source detects expiry mid-request."""
         target = protocols.checked_target(provider, target)
+        request_identity = None
         for attempt in range(2):
+            owner = None
             try:
                 with self.authenticated_client(provider, target=target, cancelled=cancelled) as client:
+                    owner = self.get_account_revision(provider)
+                    credentials_revision = self.store.read('auth:credentials_revision:' + provider)
+                    identity = (owner, credentials_revision)
+                    if request_identity is None:
+                        request_identity = identity
+                    elif identity != request_identity:
+                        raise HTTPException(409, '重试前账号或凭据已更新，请重新读取。')
+                    renewal = self._renewal_versions[provider]
                     return operation(client)
             except VerificationRequired:
                 raise
             except LoginRequired:
-                if attempt or self._saved_state(provider, target).get("blocked"):
+                if attempt or owner is None or self._saved_state(provider, target).get("blocked"):
                     raise
-                self.login(provider, target, force=True)
+                with self._client_lock(provider, cancelled):
+                    if owner != self.get_account_revision(provider) or credentials_revision != self.store.read('auth:credentials_revision:' + provider):
+                        raise HTTPException(409, '恢复期间账号或凭据已更新，请重试。') from None
+                    if renewal == self._renewal_versions[provider]:
+                        self.login(provider, target, force=True)
 
     def session_parameters(self, provider: str):
         protocols.checked_target(provider)

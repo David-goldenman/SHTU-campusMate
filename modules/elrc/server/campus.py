@@ -4,12 +4,14 @@ from backend.services.campus import Remote, Source
 from backend.services.campus.accounts import AccountCache
 from .reader import fetch, recording, transcript
 from .snapshot import with_library
+from .playback import Playback
 
 _source = None
+_playback = None
 
 
 def create_router(context):
-    global _source
+    global _source, _playback
     _source = Source(context, "ids", ["elrc.shanghaitech.edu.cn"], fetch, target="elrc", state_prefix="campus:", network_target="elrc")
     accounts = AccountCache(context, "ids")
     router = APIRouter()
@@ -60,9 +62,13 @@ def create_router(context):
             context.store.write(_source.snapshot_key, cached)
         return value
 
+    _playback = Playback(context, _source, snapshot)
+    router.include_router(_playback.router)
     return router
 
 
 def stop(context):
+    if _playback is not None:
+        _playback.close()
     if _source is not None:
         _source.close()

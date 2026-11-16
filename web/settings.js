@@ -3,16 +3,12 @@ import {aiSettingsPanel, mountAISettings} from './ai-settings.js';
 import {networkPanel, bindNetwork} from './network.js';
 import {generatePassword} from './password-generator.js';
 import {appearancePanel, bindAppearance} from './themes/appearance.js';
-import {schoolServices} from './school-login.js';
+import {schoolServices, recoveryHint} from './school-login.js';
+import {renderRuntime as runtimeInfo, diagnosticSummary} from './runtime-status.js';
 
 const authStatuses = {not_connected:'待连接',ready:'已连接',verification_required:'等待验证',login_required:'需要登录',error:'暂不可用'};
 const moduleStatuses = {ready:'已加载',disabled:'已停用',error:'异常',stopping:'正在停止'};
 let selectedTab = 'accounts';
-
-function recoveryHint(provider) {
-  if (provider.id === 'coremail' && provider.imap?.configured) return 'IMAP 专用密码已加密保存，读取邮件时直接连接，无需每次在浏览器验证。';
-  return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '登录一次即可自动连接校内服务；绑定本机设备或保存密码后，可在统一登录过期时自动恢复。' : provider.id === 'coremail' ? '邮箱单独连接；会话失效时，请重新打开官方登录窗口。' : '当前使用平台独立账号。仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
-}
 
 function imapPanel(provider) {
   const imap = provider.imap || {};
@@ -95,16 +91,9 @@ function providerCard(provider) {
 
 const localTime = value => value ? new Date(value).toLocaleString('zh-CN',{hour12:false}) : '暂无';
 
-function runtimeInfo(runtime) {
-  if (!runtime) return '';
-  const last = runtime.last_request, error = runtime.last_error;
-  const workers = {running:'运行中',stopped:'已退出',idle:'已结束',cancelled:'已取消',error:'失败'};
-  return `<details class="module-runtime"><summary class="${error ? 'danger-text' : ''}">运行详情${error ? ' · 最近有失败' : ''}</summary><div><p>进行中请求 ${runtime.active_requests} · 等待调用 ${runtime.pending_calls}</p><p>最近接口成功：${escape(localTime(runtime.last_success_at))}${last ? ' · 最近请求 ' + last.status + ' / ' + last.duration_ms + ' ms' : ''}</p>${runtime.workers.map(worker => `<p class="${['stopped','error'].includes(worker.status) ? 'danger-text' : ''}">${worker.kind === 'thread' ? '后台线程' : '后台任务'} · ${escape(worker.name)}：${escape(workers[worker.status])}</p>`).join('')}${error ? `<p class="danger-text">最近失败：${escape(localTime(error.at))} · HTTP ${error.status}${error.request_id ? ' · 错误编号 ' + escape(error.request_id) : ''}</p>` : ''}</div></details>`;
-}
-
 function moduleManager(modules, labels) {
   return `<section class="panel settings-section settings-compact" id="module-manager">
-    <div class="section-heading"><div><h2>模块与插件</h2><p>管理工作台功能及 AI 插件。</p></div><div class="form-actions"><button class="button button-secondary" id="settings-status" type="button">刷新状态</button><button class="button button-secondary" id="settings-reload" type="button">重新加载</button></div></div>
+    <div class="section-heading"><div><h2>模块与插件</h2><p>管理工作台功能及 AI 插件。</p></div><div class="form-actions"><button class="button button-secondary" id="settings-status" type="button">刷新状态</button><button class="button button-secondary" id="settings-diagnostics" type="button">复制诊断摘要</button><button class="button button-secondary" id="settings-reload" type="button">重新加载</button></div></div>
     ${modules.length ? '<div class="module-list">' + modules.map(module => `<article class="module-row"><div class="module-info"><div><h3>${escape(module.name)}</h3><span class="module-status status-${escape(module.status)}">${moduleStatuses[module.status]}</span></div><p><span>${escape(module.id)} · v${escape(module.version)}</span>${module.harness ? '<span>AI 插件</span>' : !module.frontend_url && module.status === 'ready' ? '<span>后台模块</span>' : ''}${module.frontend_url ? `<a href="#${escape(module.category)}">打开${escape(labels.get(module.category) || '页面')}</a>` : ''}</p>${module.error ? `<p class="danger-text">${escape(module.error)}</p>` : ''}${runtimeInfo(module.runtime)}</div><label class="settings-switch"><input type="checkbox" role="switch" data-module-toggle="${escape(module.id)}" aria-label="${escape(module.name)}启用状态" ${module.enabled ? 'checked' : ''}><span aria-hidden="true"></span></label></article>`).join('') + '</div>' : empty('模块目录已准备就绪','添加模块后，刷新列表即可在这里启用和管理。')}
     <p class="settings-updated">状态更新于 ${escape(localTime(new Date().toISOString()))}</p>
   </section>`;
@@ -173,6 +162,18 @@ export async function mount(container, context) {
   selectTab(groups.some(([id]) => id === requestedTab) ? requestedTab : selectedTab);
 
   function bindModules() {
+    const copyDiagnostics = container.querySelector('#settings-diagnostics');
+    copyDiagnostics.onclick = safeAction(copyDiagnostics,async () => {
+      const result = await request('/modules');
+      if (context.signal.aborted) return;
+      const summary = diagnosticSummary(result.modules);
+      try {
+        await navigator.clipboard.writeText(summary);
+        if (!context.signal.aborted) toast('已复制运行状态与诊断编号，不含账号和资料正文。');
+      } catch {
+        if (!context.signal.aborted) dialog('诊断摘要',`<textarea readonly aria-label="诊断摘要" rows="12">${escape(summary)}</textarea>`);
+      }
+    });
     container.querySelector('#settings-reload').onclick = safeAction(container.querySelector('#settings-reload'),context.reload);
     container.querySelector('#settings-status').onclick = safeAction(container.querySelector('#settings-status'),async () => {
       const result = await request('/modules');

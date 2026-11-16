@@ -4,6 +4,10 @@
 
 ## 本地访问规则
 
+错误响应兼容保留 `detail/code/action/request_id`，另含 `operation_id/component/phase`；响应头 `X-Operation-ID` 与操作编号一致。编号由框架生成，同一次请求的嵌套模块读取、认证恢复和来源同步共用编号；`request_id` 仍标识具体错误。模块运行记录可以通过 `failure_component/failure_phase` 指向下游失败位置。前端 Error 另含 `operationId/phase`。诊断与复制摘要不包含账号、URL、凭据、请求参数或资料正文。
+
+模块 `runtime.sources` 以固定任务名提供独立同步状态：`status/started_at/finished_at/last_success_at/cached_at` 与安全诊断字段。成功读取状态接口只更新 HTTP 请求记录，不会清除来源同步失败。共享 Source 的业务同步记录持久化；重启时遗留的 `syncing` 转为 `source_interrupted`，缓存仍按原账号归属校验。
+
 服务仅绑定 `127.0.0.1`，校验 Host 与 Origin。先调用 `GET /api/v1/bootstrap` 获取本次服务的 `csrf_token`，后续 POST、PUT、PATCH 和 DELETE 都在请求头带 `X-Framework-Token: <csrf_token>`。服务重启后重新获取。浏览器共享 `api()` 及模块注入的 API 客户端自动处理该请求头。
 
 JSON 请求使用 `Content-Type: application/json`。成功响应是直接 JSON；框架错误处理器返回 `{detail,code,action,request_id}`，`detail` 保持原有字符串或校验错误数组结构（`loc/msg/type`）。`action` 给出下一步操作，`request_id` 与响应头 `X-Request-ID` 一致；诊断日志只记编号、状态、错误代码与异常类型，不记录异常原文、URL、请求体或私人响应。共享前端保留 Error 的 `status/code/requestId/action`，展示字段位置、操作提示和编号。模块应通过 `HTTPException` 提供可公开说明；未知异常使用通用 500，不能直接回显异常文本。流式响应开始后的错误继续沿用模块自己的事件协议。
@@ -58,7 +62,7 @@ patch 和合并后的完整外观各限制为 UTF-8 JSON 64 KiB、最多 8 层�
 
 `ModuleInfo` 包含 `id`、`name`、`version`、`category`、`navigation`（可空）、`enabled`、`status`、`has_frontend`、`frontend_url`、`background_url`。`has_frontend` 表示模块目录提供页面入口；侧栏根据启用状态和该字段显示分类，加载失败的页面仍保留错误入口。有效入口另有 `api_version:1` 和 `harness` 布尔值，已就绪模块包含当前 `revision`；失败时包含可公开的 `error`。状态为 `ready`、`disabled` 或 `error`。后端或纯插件模块的 `frontend_url` 为 `null`。`harness:true` 表示模块提供原生 Harness 入口。
 
-`runtime` 为本次模块实例的内存状态：`loaded_at,active_requests,pending_calls,last_request:{at,status,duration_ms}|null,last_success_at,last_error,workers`。最近错误保留至重新加载，即使后来请求成功也不会抹去；若来自统一错误处理器，还带 `code/request_id`。状态页手动读取，不用高频轮询；`ready` 只表示加载成功。worker 为 `{name,kind:thread|task,status:running|stopped|idle|cancelled|error}`；线程存活不代表一次业务检查成功，Future 的 idle 只表示正常结束，来源同步结果仍以业务 snapshot 为准。刷新与重启重置状态，不落盘保存历史。
+`runtime` 含 `loaded_at,active_requests,pending_calls,last_request:{at,status,duration_ms,operation_id,component,phase}|null,last_success_at,last_error,workers,sources`。请求计数、最近请求和 worker 属于当前实例内存，重新加载时重置；最近 HTTP 错误不会被随后成功的请求抹去。`sources` 单独表达同步结果和缓存时间，共享 Source 会从业务存储恢复这部分状态。状态页手动读取，不用高频轮询；`ready` 只表示加载成功。worker 为 `{name,kind:thread|task,status:running|stopped|idle|cancelled|error}`；线程存活和 Future 正常结束都不能替代业务同步成功。
 
 前端资源入口由服务返回，例如 `/module-assets/notes/<revision>/web/index.js`。`revision` 是模块 `web/` 目录文件路径与内容的指纹；资源内容不变时，重载、重新启用与重启沿用同一地址，任一子资源变化产生新版本。模块应原样使用入口地址和相对导入，版本路径覆盖其子资源。成功的模块资源响应使用 `private, max-age=31536000, immutable`；API、共享界面资源及错误响应使用 `no-store`。停用模块或过期版本的源站请求返回 404；浏览器可复用此前已缓存的静态文件，业务 API 仍遵守模块启停状态。后端每次加载使用独立导入命名空间。模块接口热切换前要求相关请求完成；有执行中请求返回 409，调用方在完成后重试。
 

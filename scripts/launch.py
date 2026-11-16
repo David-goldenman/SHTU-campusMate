@@ -4,7 +4,6 @@ import ctypes
 from ctypes import wintypes
 from contextlib import contextmanager
 from datetime import datetime
-import importlib.metadata
 import importlib.util
 import json
 import os
@@ -19,7 +18,6 @@ import time
 import tomllib
 from urllib.request import ProxyHandler, build_opener
 import uuid
-import webbrowser
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / ".private" / "runtime"
@@ -152,6 +150,8 @@ def release_version(value):
 
 
 def check_runtime():
+    import importlib.metadata
+
     if sys.version_info < (3, 12):
         raise RuntimeError("需要已有的 Python 3.12 或以上版本。")
     missing = []
@@ -263,15 +263,19 @@ def ready(port, launch_id=None, *, connect_timeout=None):
 def port_busy(port):
     if os.name == "nt":
         # An unused Windows port can take the entire connect timeout to refuse.
-        # Exclusive bind proves it is free without waiting or sending traffic.
-        with socket.socket() as probe:
-            probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        # Check both stacks: Windows can allow IPv4 binding beside a dual-stack
+        # IPv6 listener. Close each probe before checking the other stack.
+        for family, address in ((socket.AF_INET, '0.0.0.0'), (socket.AF_INET6, '::')):
             try:
-                probe.bind(("127.0.0.1", port))
+                with socket.socket(family) as probe:
+                    probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                    if family == socket.AF_INET6:
+                        probe.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                    probe.bind((address, port))
             except OSError:
-                pass
-            else:
-                return False
+                break
+        else:
+            return False
     # A closed server can leave TCP state that prevents exclusive bind. Keep
     # the connection check so an immediate restart is not mistaken for a clash.
     with socket.socket() as client:
@@ -283,6 +287,8 @@ def show_browser(port, no_browser):
     url = f"http://127.0.0.1:{port}/"
     print("网页已就绪：" + url, flush=True)
     if not no_browser:
+        import webbrowser
+
         try:
             if not webbrowser.open(url, new=2):
                 print("浏览器未自动打开，请手动打开上面的地址。", flush=True)

@@ -2,7 +2,7 @@ from typing import Literal
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import Field
-from .models import Decision, ExtractRequest, QQConnection, Selection, Strict, WechatConnection
+from .models import Decision, ExtractRequest, MatchRequest, QQConnection, Selection, Strict, WechatConnection
 from .service import Service
 from . import wechat
 
@@ -51,6 +51,15 @@ def create_router(context):
     @router.post('/sources/{source}/sync')
     def sync(source: SourceName):
         return service.queue('sync', source)
+
+    @router.post('/sources/{source}/match', include_in_schema=False)
+    async def match_names(source: SourceName, body: MatchRequest):
+        return await service.request_match(source, body)
+
+    @router.delete('/sources/{source}/match', include_in_schema=False)
+    def cancel_match(source: SourceName):
+        service.matcher.cancel(source)
+        return service.status()
 
     @router.post('/wechat/compatibility')
     def compatibility():
