@@ -14,6 +14,10 @@ class WechatConnection(Strict):
     acknowledge_local_read: Literal[True]
 
 
+class MatchRequest(Strict):
+    expected_revision: str = Field(min_length=1, max_length=100)
+
+
 class QQConnection(Strict):
     base_url: str = Field(default='http://127.0.0.1:3000', max_length=300)
     access_token: str = Field(min_length=1, max_length=4096)
@@ -29,8 +33,9 @@ class GroupPreference(Strict):
 
     @model_validator(mode='after')
     def automatic(self):
-        if self.auto_apply and (not self.auto_extract or not self.trusted_senders):
-            raise ValueError('自动应用需要自动整理，并指定可信的老师或助教。')
+        if self.auto_apply and not self.auto_extract:
+            raise ValueError('自动更新需要先开启自动提取。')
+        # Trust gates application, not saving: sync must run before senders can be chosen.
         if any(not value.strip() or len(value) > 200 for value in self.trusted_senders):
             raise ValueError('请选择有效的发送者。')
         return self

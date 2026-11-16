@@ -5,6 +5,8 @@ import uuid
 
 from fastapi.responses import JSONResponse
 
+from .diagnostics import operation_metadata
+
 logger = logging.getLogger('campus.errors')
 
 
@@ -26,14 +28,19 @@ STATUS = {
 }
 
 
+def failure_metadata(code, action):
+    return {'code': code, 'action': action, 'request_id': uuid.uuid4().hex[:12], **operation_metadata()}
+
+
 def error_response(request, status, detail, *, code=None, action=None, error=None, headers=None):
     default_code, default_action = STATUS.get(status, STATUS[500])
-    request_id = uuid.uuid4().hex[:12]
-    body = {'detail': detail, 'code': code or default_code, 'action': action or default_action, 'request_id': request_id}
-    request.scope.setdefault('state', {})['public_error'] = {key: body[key] for key in ('code', 'request_id')}
+    body = {'detail': detail, **failure_metadata(code or default_code, action or default_action)}
+    request.scope.setdefault('state', {})['public_error'] = {key: body[key] for key in ('code', 'request_id', 'operation_id', 'component', 'phase')}
     # No URL, exception text, traceback, account, or request/response bodies.
-    logger.warning('request_failed id=%s status=%s code=%s type=%s', request_id, status, body['code'], type(error).__name__ if error else 'HTTPError')
-    return JSONResponse(body, status_code=status, headers={**(headers or {}), 'X-Request-ID': request_id})
+    logger.warning('request_failed id=%s operation=%s component=%s phase=%s status=%s code=%s type=%s',
+                   body['request_id'], body['operation_id'], body['component'], body['phase'], status,
+                   body['code'], type(error).__name__ if error else 'HTTPError')
+    return JSONResponse(body, status_code=status, headers={**(headers or {}), 'X-Request-ID': body['request_id'], 'X-Operation-ID': body['operation_id']})
 
 
 async def http_error(request, error):

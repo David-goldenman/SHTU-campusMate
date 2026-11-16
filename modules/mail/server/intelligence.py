@@ -183,7 +183,7 @@ class Intelligence:
         text = {key: re.sub(r'(?<!\d)1[3-9]\d{9}(?!\d)', '[联系电话]', re.sub(r'[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}', '[邮箱地址]', value)) for key, value in text.items()}
         preliminary_value = preliminary(item, preferences)
         route = ai['model'] if ai.get('provider', 'deepseek') == 'deepseek' else [ai['provider'], ai['model'], ai.get('base_url')]
-        fingerprint = digest([owner, text, preferences, route, PROMPT])
+        fingerprint = digest([owner, text, preferences, route, PROMPT] + ([item['uid_reset']] if item.get('uid_reset') else []))
         return {'message_id': item['id'], 'fingerprint': fingerprint, 'notification': text, 'sender': item.get('sender', ''),
                 'received_at': item.get('received_at'), 'preferences': preferences, 'preliminary': preliminary_value,
                 'instruction': PROMPT}

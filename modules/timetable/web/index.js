@@ -1,4 +1,5 @@
 import {link, time, applyAccent} from '/assets/campus.js';
+import {readView} from '/assets/view-cache.js';
 import {bindSyncNetwork} from '/assets/sync-network.js';
 import {mountCampusMoment} from '/assets/themes/campus-moments.js';
 import {applyLessonPositions, campusMapUrl, compareEvents, eventGroup, isCancelledClass, isLesson, lessonLayout, matchesFilter, periodsFor} from './planner.js';
@@ -17,11 +18,11 @@ export async function mount(container, context) {
   const e = context.ui.escape;
   const removeStyle = context.ui.useStyle(new URL('./styles.css',import.meta.url),context.signal);
   container.classList.add('week-planner');
-  let current = dayOf(Date.now()), snapshot, timer, midnight, request = 0, filter = 'all', showCancelled = false, calendarAutoTried = false;
+  let current = dayOf(Date.now()), snapshot, timer, midnight, reading, request = 0, filter = 'all', showCancelled = false, calendarAutoTried = false;
   const requestedDay=new URLSearchParams(location.hash.split('?')[1]||'').get('date');
   if(/^\d{4}-\d{2}-\d{2}$/.test(requestedDay||'')&&Number.isFinite(Date.parse(requestedDay))&&new Date(requestedDay).toISOString().startsWith(requestedDay))current=requestedDay;
   let removeMoment = () => {};
-  const cleanup = () => {removeMoment();clearTimeout(timer);clearTimeout(midnight);removeStyle();};
+  const cleanup = () => {reading?.abort();removeMoment();clearTimeout(timer);clearTimeout(midnight);removeStyle();};
   context.signal.addEventListener('abort',cleanup,{once:true});
   const networkHost = document.createElement('div');
   networkHost.hidden = true;
@@ -96,13 +97,38 @@ export async function mount(container, context) {
     }, Math.max(1000,next - now + 1000));
   }
   async function refresh() {
+    if (context.signal.aborted) return;
     clearTimeout(timer);
+    reading?.abort();reading=new AbortController();
+    const signal=AbortSignal.any([context.signal,reading.signal]);
+    const readContext={...context,signal,api:(path,options={})=>context.api(path,{...options,signal})};
     const version = ++request;
-    const value = await context.api('/schedule?' + new URLSearchParams({week_start:current}));
+    let result;
+    try {
+      result = await readView(readContext,'/schedule?' + new URLSearchParams({week_start:current}),value=>{
+        if (signal.aborted || version !== request) return;
+        snapshot=value;current=value.calendar.week_start;draw();
+        container.querySelector('[data-status]').textContent='已显示缓存 · 正在更新';
+      });
+    } catch (error) {
+      if (signal.aborted || version !== request) return;
+      snapshot=undefined;
+      container.innerHTML='<div class="module-error" role="alert"><h3>时间表暂时无法读取</h3><p>'+e(error.message)+'</p><button type="button" class="button button-secondary" data-retry>重新读取</button></div>';
+      const retry=container.querySelector('[data-retry]');retry.onclick=context.ui.safeAction(retry,refresh);
+      return;
+    }
+    const value = result.value;
     if (context.signal.aborted || version !== request) return;
+    const scroll=snapshot?.account_revision===value.account_revision && snapshot?.calendar.week_start===value.calendar.week_start ? [window.scrollX,window.scrollY] : null;
     snapshot = value;
     current = value.calendar.week_start;
-    draw();
+    if (!result.unchanged) draw();
+    else container.querySelector('[data-status]').textContent=(value.status === 'syncing' ? '正在同步…' : value.updated_at ? '更新于 ' + time(value.updated_at) : '尚未同步课程来源') + ' · 北京时间';
+    if (scroll) window.scrollTo(...scroll);
+    if (result.cached) {
+      container.querySelector('[data-status]').textContent='刷新失败 · 显示上次数据（待核实） · '+result.error.message;
+      return;
+    }
     if (value.school_calendar?.due && !calendarAutoTried) {
       calendarAutoTried = true;
       void context.api('/calendar/refresh?force=false',{method:'POST'}).then(()=>refresh()).catch(error => {if (!context.signal.aborted) context.ui.toast(error.message);});

@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 from deepseek_harness import DeepSeekHarness
@@ -16,6 +17,23 @@ from deepseek_harness_runtime import resolve_bundled_launch_args
 from fastapi import HTTPException
 
 from .catalog import runtime_route
+from ...core.paths import PROJECT, PACKAGED
+
+BUNDLED_HARNESS = PROJECT / 'runtime' / 'harness-home'
+
+
+def copy_bundled_home(home, entries, *, streaming):
+    """Each task gets writable configuration; only selected plugins are activated later."""
+    try:
+        manifest = json.loads((BUNDLED_HARNESS / 'campus-template.json').read_text(encoding='utf-8'))
+        required = {entry.harness['name']: json.loads((entry.harness['folder'] / 'package.json').read_text(encoding='utf-8'))['version'] for entry in entries}
+        if streaming:
+            required['campus-harness-stream'] = json.loads(Path(__file__).with_name('stream').joinpath('package.json').read_text(encoding='utf-8'))['version']
+        if manifest['sdk'] != version('deepseek-harness-sdk') or any(manifest['plugins'].get(name) != value for name,value in required.items()):
+            raise ValueError('Unbundled plugin version')
+        shutil.copytree(BUNDLED_HARNESS, home)
+    except (OSError, ValueError, KeyError):
+        raise HTTPException(503, '安装包缺少匹配的 AI 插件依赖，请修复安装或更新完整安装包。') from None
 
 
 def prepare(command, *, cwd, env, timeout, check_cancelled):
@@ -109,12 +127,12 @@ class Harness:
                 if rules.is_file():
                     instructions.append(rules.read_text(encoding='utf-8'))
             (workspace / 'AGENTS.md').write_text('\n\n'.join(instructions), encoding='utf-8')
-            env = {**os.environ, "PATH": pnpm_path(runtime_root), "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
+            env = {**os.environ, "PATH": os.environ.get('PATH','') if PACKAGED else pnpm_path(runtime_root), "DSH_HOME": str(home), "TMPDIR": str(temporary), "TMP": str(temporary), "TEMP": str(temporary),
                    "XDG_CACHE_HOME": str(runtime_root / 'cache'), "COREPACK_HOME": str(runtime_root / 'corepack'),
                    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
                    "npm_config_store_dir": str(runtime_root / 'pnpm-store'), "npm_config_cache": str(runtime_root / 'npm-cache'),
                    "npm_config_auto_install_peers": "false", "npm_config_update_notifier": "false", **(plugin_env or {})}
-            if not shutil.which("pnpm", path=env["PATH"]):
+            if not PACKAGED and not shutil.which("pnpm", path=env["PATH"]):
                 raise HTTPException(503, "AI 插件安装需要 pnpm；请安装 pnpm，或使用带 Corepack 的 Node.js 22+。")
             bypass = env.get("no_proxy", env.get("NO_PROXY", "")) + ",127.0.0.1,localhost"
             env.update(NO_PROXY=bypass, no_proxy=bypass)
@@ -144,14 +162,17 @@ class Harness:
                         raise HTTPException(504, 'AI 任务超过等待时限，已停止；请缩小任务范围后重试。')
 
                 check_cancelled()
-                command = resolve_bundled_launch_args()
-                prepare([*command, "--profile", "sdk-minimal", "--dump-default-config"], cwd=workspace, env=env, timeout=60, check_cancelled=check_cancelled)
-                check_cancelled()
-                folders = [entry.harness['folder'] for entry in entries]
-                if on_event:
-                    folders.append(Path(__file__).with_name('stream'))
-                prepare([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
-                        cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
+                if PACKAGED:
+                    copy_bundled_home(home, entries, streaming=bool(on_event))
+                else:
+                    command = resolve_bundled_launch_args()
+                    prepare([*command, "--profile", "sdk-minimal", "--dump-default-config"], cwd=workspace, env=env, timeout=60, check_cancelled=check_cancelled)
+                    check_cancelled()
+                    folders = [entry.harness['folder'] for entry in entries]
+                    if on_event:
+                        folders.append(Path(__file__).with_name('stream'))
+                    prepare([*command, "plugin", "--profile", "sdk-minimal", "add", *["file:" + folder.as_posix() for folder in folders]],
+                            cwd=workspace, env=env, timeout=120, check_cancelled=check_cancelled)
                 check_cancelled()
                 with DeepSeekHarness(profile="sdk-minimal", dsh_home=str(home), cwd=str(workspace), env=env, patches=(str(patch),),
                                      provider=route, model=model, api_key=api_key if route == 'deepseek-official' else None,

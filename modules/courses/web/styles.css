@@ -54,7 +54,7 @@
 .course-hub .course-recording-row>div{flex:1;min-width:0}
 .course-hub .course-recording-row h4{font-size:15px;line-height:1.7;margin:0;overflow-wrap:anywhere}
 .course-hub .course-recording-row p{font-size:12px;color:var(--muted);margin:4px 0 0}
-.course-hub .course-recording-open{font-size:12px;flex-shrink:0}
+.course-hub .course-recording-open{font-size:12px;flex-shrink:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .course-hub .course-recording-open a{display:inline-flex;align-items:center;min-height:44px}
 .course-hub .course-content-empty{text-align:center;padding:48px 16px;color:var(--muted)}
 .course-hub .course-content-empty :is(h3,h4){font-size:18px;color:var(--text);margin:12px 0 8px}
@@ -86,3 +86,6 @@
 .course-download-toolbar ul{max-height:180px;overflow:auto;padding-left:22px;font-size:13px}
 .course-download-toolbar .course-download-actions{display:flex;flex-wrap:wrap;gap:10px;flex:1 1 100%;align-items:center}
 .course-download-auto{display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;font-size:14px}
+.course-download-root{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:16px;border:1px solid var(--border);border-radius:8px;margin-bottom:20px;overflow-wrap:anywhere}
+.course-download-root>div:first-child{flex:1 1 300px;min-width:0}.course-download-root p{margin:6px 0 0}.course-download-root .course-download-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.course-download-root button{white-space:normal}
+.course-download-interval{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:14px}.course-download-interval select{width:auto;min-width:100px}

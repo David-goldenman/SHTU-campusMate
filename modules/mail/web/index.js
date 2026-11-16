@@ -1,4 +1,5 @@
 import {sourcePanel, link, time} from '/assets/campus.js';
+import {autoSyncLabel} from './auto-sync.js';
 
 export async function mount(container, context) {
   const e = context.ui.escape;
@@ -8,18 +9,111 @@ export async function mount(container, context) {
   let selected = new URLSearchParams(location.hash.split('?')[1] || '').get('message'), bucket = selected ? 'all' : 'focus', query = '', busy = false;
   let view = 'messages', readVersion = 0, anchor = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai'}).format(new Date());
   let reviewTimer, contentVersion = 0;
+  let updateContent, autoState, loadedOwner, loadedSession, loadedEpoch, autoBusy=false;
+  const dialogs=new Set();
+  function closeDialogs() {
+    for(const dialog of dialogs) {
+      for(const form of dialog.querySelectorAll('form'))form.onsubmit=event=>event.preventDefault();
+      for(const field of dialog.querySelectorAll('button,input,select,textarea'))field.disabled=true;
+      dialog.close();
+    }
+    dialogs.clear();
+  }
+  function resetContent() {
+    clearTimeout(reviewTimer);contentVersion++;readVersion++;
+    closeDialogs();updateContent=undefined;selected=undefined;loadedOwner=undefined;loadedSession=undefined;loadedEpoch=undefined;
+    autoState=undefined;query='';view='messages';bucket='all';busy=false;
+  }
+  async function retainContentOnError(error) {
+    if(!context.signal.aborted && ![401,403,409].includes(error.status) && error.name!=='AbortError') {
+      const owner=loadedOwner, session=loadedSession, epoch=loadedEpoch, version=contentVersion;
+      try {
+        const confirmed=await context.api('/auto-sync');
+        if(owner && confirmed.owner===owner && confirmed.session_revision===session && (confirmed.uid_validity??null)===(epoch??null) && loadedOwner===owner && loadedSession===session && version===contentVersion && !context.signal.aborted)return true;
+      } catch { /* A failed ownership probe cannot authorize cached content. */ }
+    }
+    resetContent();return false;
+  }
+  function validateMailbox(snapshot, intelligence, status) {
+    if(!intelligence.owner || !intelligence.session_revision ||
+       snapshot.account_revision!==intelligence.owner || snapshot.session_revision!==intelligence.session_revision ||
+       status.owner!==intelligence.owner || status.session_revision!==intelligence.session_revision ||
+       ((snapshot.data.metadata.uid_validity??null)!==(intelligence.uid_validity??null) || (status.uid_validity??null)!==(intelligence.uid_validity??null))) {
+      throw Object.assign(new Error('邮箱账号、凭据或邮件标识已更新，请重新读取。'),{status:409});
+    }
+  }
+  function showAutoState(value) {
+    autoState=value;
+    const status=container.querySelector('[data-mail-auto-status]'), toggle=container.querySelector('[data-mail-auto-toggle]');
+    if (status) status.textContent=autoSyncLabel(value)+(value?.last_checked_at?' · 最近检查 '+time(value.last_checked_at):'');
+    if (toggle) {toggle.checked=!!value?.enabled;toggle.disabled=autoBusy || !value?.configured || value.state==='unavailable';}
+  }
+  window.addEventListener('campus:mail-status',event=>showAutoState(event.detail),{signal:context.signal});
   context.signal.addEventListener('abort',()=>clearTimeout(reviewTimer),{once:true});
-  const dispose = await sourcePanel(container, context, async body => {
+  const dispose = await sourcePanel(container, context, async (body,snapshot) => {
+    if (updateContent) {await updateContent(snapshot);return;}
     clearTimeout(reviewTimer);
     const version = ++contentVersion;
     let state = await context.api('/intelligence');
+    const confirmed=await context.api('/auto-sync');
+    validateMailbox(snapshot,state,confirmed);
+    if(context.signal.aborted)return;
+    showAutoState(confirmed);
+    loadedOwner=state.owner;loadedSession=state.session_revision;loadedEpoch=snapshot.data.metadata.uid_validity;
     const back = '<button class="text-button mail-back" data-mail-back type="button">← 返回邮件列表</button>';
     body.innerHTML = `<div class="mail-toolbar"><input data-search type="search" aria-label="搜索当前文件夹" placeholder="搜索邮件主题、发件人或摘要"><button class="button button-secondary" data-preferences type="button">分类偏好</button><details class="mail-options" data-action-menu><summary>更多操作</summary><div><button class="text-button" data-batch type="button">AI 复核最近邮件</button><a href="https://mail.shanghaitech.edu.cn/coremail/" target="_blank" rel="noopener noreferrer">打开学校邮箱</a></div></details><span data-progress role="status"></span></div>
       <div class="mail-columns"><nav class="mail-folders" aria-label="邮件文件夹"><h3>智能分类</h3><div data-filters></div><h3>邮箱</h3><div data-inbox-folders></div><h3>邮件总结</h3><button class="mail-folder" type="button" data-digest="day">日总结</button><button class="mail-folder" type="button" data-digest="week">周总结</button><a class="mail-official" href="https://mail.shanghaitech.edu.cn/coremail/" target="_blank" rel="noopener noreferrer">学校邮箱 ↗</a></nav>
       <section class="mail-inbox" aria-label="邮件列表"><header class="mail-list-heading"><div><h3 data-folder-title>重点关注</h3><p data-folder-description></p></div><span data-folder-count></span></header><div class="mail-table-heading" aria-hidden="true"><span></span><span>发件人</span><span>主题与摘要</span><span>分类</span><span>日期</span></div><div data-messages></div></section><section class="mail-reader" data-reader aria-label="邮件阅读区"></section></div>`;
+    const auto=document.createElement('div');auto.className='mail-auto-sync';
+    auto.innerHTML='<label class="checkbox-label"><input type="checkbox" data-mail-auto-toggle>后台自动同步</label><span data-mail-auto-status role="status"></span>';
+    body.prepend(auto);showAutoState(autoState);
+    const autoToggle=auto.querySelector('[data-mail-auto-toggle]');
+    autoToggle.onchange=async()=>{
+      autoBusy=true;autoToggle.disabled=true;
+      try {const value=await context.api('/auto-sync',{method:'PUT',body:{enabled:autoToggle.checked,owner:autoState?.owner}});if(!context.signal.aborted)showAutoState(value);}
+      catch(error){if(!context.signal.aborted){showAutoState(autoState);context.ui.toast(error.message);}}
+      finally {autoBusy=false;if(!context.signal.aborted)showAutoState(autoState);}
+    };
     const search = body.querySelector('[data-search]'); search.value = query;
     const filtered = () => state.messages.filter(item => (bucket === 'all' || bucket === 'unread' && item.unread === true || item.classification.bucket === bucket) && [item.title,item.sender,item.classification.summary].join(' ').toLowerCase().includes(query.toLowerCase()));
-    const refresh = async () => { state = await context.api('/intelligence'); if (!context.signal.aborted && version === contentVersion) {draw();scheduleReview();} };
+    let recordsVersion=0;
+    const refresh = async snapshot => {
+      const request=++recordsVersion, value=await context.api('/intelligence');
+      const confirmed=await context.api('/auto-sync');
+      const current=snapshot || await context.api('/snapshot');
+      validateMailbox(current,value,confirmed);
+      if(context.signal.aborted || version!==contentVersion || request!==recordsVersion)return false;
+      showAutoState(confirmed);
+      const accountChanged=value.owner!==loadedOwner;
+      if(loadedOwner && (accountChanged || value.session_revision!==loadedSession || (value.uid_validity??null)!==(loadedEpoch??null))) {
+        closeDialogs();readVersion++;selected=undefined;view='messages';bucket='all';
+        if(accountChanged){query='';search.value='';}
+        body.querySelector('.mail-columns').classList.remove('mail-reading');body.querySelector('[data-reader]').replaceChildren();
+      }
+      loadedOwner=value.owner;loadedSession=value.session_revision;loadedEpoch=value.uid_validity;state=value;draw();scheduleReview();return true;
+    };
+    updateContent=async next=>{
+      const focus=document.activeElement, message=focus?.dataset?.message, folder=focus?.dataset?.bucket;
+      const scrollNodes=[...body.querySelectorAll('.mail-inbox,.mail-reader,.mail-folders,[data-messages]')];
+      for(let node=body;node;node=node.parentElement)scrollNodes.push(node);
+      const scrolls=scrollNodes.map(node=>[node,node.scrollTop]);
+      const epoch=next.data.metadata.uid_validity, previousOwner=loadedOwner;
+      const epochChanged=loadedEpoch && epoch && loadedEpoch!==epoch;
+      if(!await refresh(next))return;
+      if(context.signal.aborted)return;
+      const accountChanged=previousOwner && previousOwner!==loadedOwner;
+      if(epochChanged) {
+        closeDialogs();readVersion++;selected=undefined;view='messages';bucket='all';
+        body.querySelector('.mail-columns').classList.remove('mail-reading');draw();
+      }
+      loadedEpoch=epoch;
+      if(accountChanged || epochChanged || !selected && view==='messages') await read(false);
+      if(!accountChanged && !epochChanged){
+        for(const [node,top] of scrolls)node.scrollTop=top;
+        const replacement=message?[...body.querySelectorAll('[data-message]')].find(node=>node.dataset.message===message):folder?[...body.querySelectorAll('[data-bucket]')].find(node=>node.dataset.bucket===folder):null;
+        replacement?.focus({preventScroll:true});
+      }
+    };
     function scheduleReview() {
       clearTimeout(reviewTimer);
       if (busy) return;
@@ -77,6 +171,7 @@ export async function mount(container, context) {
         const form = document.createElement('form');form.className = 'campus-form';
         form.innerHTML = `<label>显示位置<select name="bucket">${Object.entries(state.buckets).map(([id,title]) => `<option value="${id}" ${c.bucket === id ? 'selected' : ''}>${e(title)}</option>`).join('')}</select></label><label>分类名称<input name="label" required maxlength="32" value="${e(c.category)}"></label><p class="field-hint">手动分类优先于自动复核。</p><button class="button button-primary">保存分类</button>`;
         const dialog = context.ui.dialog('调整邮件分类',form);
+        dialogs.add(dialog);dialog.addEventListener('close',()=>dialogs.delete(dialog),{once:true});
         form.onsubmit = async event => {event.preventDefault();try {await context.api('/labels',{method:'POST',body:{message_id:identity,label:form.elements.label.value,bucket:form.elements.bucket.value,by:'manual'}});dialog.close();await refresh();await read();}catch(error){if (!context.signal.aborted)context.ui.toast(error.message);}};
         context.signal.addEventListener('abort',() => dialog.close(),{once:true});
       };
@@ -121,11 +216,12 @@ export async function mount(container, context) {
       hint.textContent=`本科一、二年级优先关注形策，本科一年级优先关注心理活动；完成状态以你的选择为准。${effective.year && !p.year ? `已从学习档案读取当前年级：${effective.year}。` : ''}课程中心已连接的在修课程自动参与分类，可在此补充课程。保存后立即更新规则，并在后台逐批复核本地邮件。`;
       form.prepend(hint);
       const dialog = context.ui.dialog('邮件筛选偏好',form);
+      dialogs.add(dialog);dialog.addEventListener('close',()=>dialogs.delete(dialog),{once:true});
       form.onsubmit = async event => {event.preventDefault();const f = form.elements;try {await context.api('/preferences',{method:'PUT',body:{degree:f.degree.value,year:f.year.value ? Number(f.year.value) : null,major:f.major.value,courses:f.courses.value.split(/[,，\n]/).map(v => v.trim()).filter(Boolean),shape:f.shape.value,mental:f.mental.value,requirements:f.requirements.value,interests:Object.fromEntries(Object.keys(state.interests).map(id => [id,f['interest_' + id].value]))}});dialog.close();await refresh();await read();}catch(error){if (!context.signal.aborted)context.ui.toast(error.message);}};
       context.signal.addEventListener('abort',() => dialog.close(),{once:true});
     };
     if (selected) body.querySelector('.mail-columns').classList.add('mail-reading');
     draw(); scheduleReview(); await read();
-  });
+  }, {refreshEvent:'campus:mail-updated',retainContentOnError});
   return () => {clearTimeout(reviewTimer);dispose?.();removeStyle();};
 }

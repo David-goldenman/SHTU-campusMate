@@ -13,6 +13,7 @@ from . import extraction, matching, qq, wechat
 from .effects import Effects
 from .messages import Messages, identity, stamp
 from .native.crypto import NativeError
+from .name_matching import NameMatcher
 
 SOURCES = ('wechat', 'qq')
 ERRORS = {
@@ -38,9 +39,11 @@ class Service:
         self.lock = threading.RLock()
         self.stopping, self.cancelled, self.wake = threading.Event(), threading.Event(), threading.Event()
         self.thread, self.queued, self.running = None, None, None
+        self.active_task = None
         self.next_sync, self.next_extract, self.next_version = {}, {}, {}
         self.messages = Messages(context.data_dir)
         self.effects = Effects(self)
+        self.matcher = NameMatcher(self)
 
     def owner(self):
         return account_revision(self.context)
@@ -138,8 +141,22 @@ class Service:
             matches = {}
             for source, config in self.sources(owner).items():
                 saved = {row['id']: row for row in config['selected']}
-                matches[source] = {row['id']: matching.suggest(row, catalog['items'], catalog['current_semester'], saved.get(row['id'])) for row in config['groups']}
+                matches[source] = {row['id']: self.matcher.suggestion(owner, source, config, row, catalog,
+                    matching.suggest(row, catalog['items'], catalog['current_semester'], saved.get(row['id']))) for row in config['groups']}
         return {**catalog, 'matches': matches}
+
+    async def request_match(self, source, body):
+        owner = self.owner()
+        with self.lock:
+            if self.configuration(owner, source)['revision'] != body.expected_revision:
+                raise HTTPException(409, '来源设置已变化，请刷新后重试匹配。')
+        catalog = await self.course_catalog(owner)
+        with self.lock:
+            self.check(owner)
+            if self.configuration(owner, source)['revision'] != body.expected_revision:
+                raise HTTPException(409, '来源设置已变化，请刷新后重试匹配。')
+            self.matcher.observe(owner, catalog, retry=source)
+        return self.status()
 
     def all_items(self, owner):
         return self.context.store.read('items:' + owner, {})
@@ -184,7 +201,10 @@ class Service:
                     public[source]['error'] = self.context.store.read('connection-error:' + owner + ':' + source)
             ai = self.context.ai.settings()
             return {'sources': public, 'running': copy.deepcopy(self.running) if self.running and self.running['owner'] == owner else None,
-                    'queued': bool(self.queued and self.queued['owner'] == owner), 'account_revision': owner,
+                    'matching': self.matcher.status(owner, values),
+                    'queued': bool(self.queued and self.queued['owner'] == owner),
+                    'queued_task': {key: self.queued[key] for key in ('kind', 'source')} if self.queued and self.queued['owner'] == owner else None,
+                    'account_revision': owner,
                     'ai': {key: ai.get(key) for key in ('enabled', 'provider', 'model', 'key_saved')},
                     'notice': '只处理已关联本学期课程的所选群。每次同步更新近 7/30 天的聊天窗口；提取事项及引用保留至清除模块数据。图片、语音和附件正文暂未读取。'}
 
@@ -192,9 +212,13 @@ class Service:
         if source not in SOURCES:
             raise HTTPException(404, '未知消息来源。')
         with self.lock:
-            if self.running or self.queued:
-                raise HTTPException(409, '正在处理上一项操作，可先暂停并等待结束。')
             owner = self.owner()
+            if kind in {'connect', 'snapshot'}:
+                for task, queued in ((self.queued, True), (self.active_task, False)):
+                    if task and (queued or not self.cancelled.is_set()) and task['owner'] == owner and task['kind'] == kind and task['source'] == source and task.get('body') == body:
+                        return {'queued': queued, 'running': not queued}
+            if self.queued or self.running and self.running['kind'] != 'deliver':
+                raise HTTPException(409, '正在处理上一项操作，可先暂停并等待结束。')
             if kind == 'extract':
                 self.selected_group(owner, source, body.group_id)
             elif kind in {'sync', 'compatibility'}:
@@ -275,6 +299,7 @@ class Service:
                 raise HTTPException(409, '正在停止读取，请等待结束后移除连接。')
             owner = self.owner()
             config = self.configuration(owner, source)
+            self.matcher.cancel(source)
             self.context.secrets.delete(self.secret_key(owner, source, config['connection']))
             values = self.sources(owner)
             values.pop(source, None)
@@ -306,7 +331,7 @@ class Service:
             result, secret = qq.connect(body, self.cancelled)
         with self.lock:
             self.check(owner, job=True)
-            # Reauthorizing the same account keeps stable message IDs, but requires a fresh selection.
+            # The same chat account retains confirmed mappings; synchronization awaits a fresh save.
             same = old and (source == 'qq' and old.get('account') == result.get('account') or source == 'wechat' and
                            old.get('mode') == result.get('mode') and (old.get('database_dir') or old.get('snapshot')) == (result.get('database_dir') or result.get('snapshot')))
             if same:
@@ -314,6 +339,10 @@ class Service:
             config = {**result, 'connection': connection, 'revision': uuid4().hex, 'selected': [], 'enabled': False,
                       'allow_ai': False, 'interval_seconds': 300 if source == 'wechat' else 20, 'history_days': 7, 'coverage': {}, 'error': None,
                       'account_label': ('QQ · ' + result['account'][-4:]) if source == 'qq' else '已连接的本机微信'}
+            if same:
+                names = {row['id']: row['name'] for row in config['groups']}
+                config['selected'] = [{**row, 'name': names[row['id']]} for row in old.get('selected', []) if row['id'] in names]
+                config.update({key: old[key] for key in ('allow_ai', 'interval_seconds', 'history_days') if key in old})
             if secret:
                 self.context.secrets.save(self.secret_key(owner, source, connection), secret)
             if old and old.get('connection') != connection:
@@ -439,7 +468,8 @@ class Service:
 
     async def deliver(self, owner):
         try:
-            await self.refresh_course_scope(owner)
+            catalog = await self.refresh_course_scope(owner)
+            self.matcher.observe(owner, catalog)
         except HTTPException:
             self.check(owner, job=True)
         for item in self.all_items(owner).values():
@@ -521,6 +551,7 @@ class Service:
                 if task is None:
                     continue
                 self.cancelled.clear()
+                self.active_task = task
                 self.running = {'kind': task['kind'], 'source': task['source'], 'owner': owner, 'phase': 'working'}
             try:
                 if task['kind'] in {'connect', 'snapshot'}:
@@ -549,6 +580,7 @@ class Service:
             finally:
                 with self.lock:
                     self.running = None
+                    self.active_task = None
 
     def start(self):
         with self.lock:
@@ -558,6 +590,7 @@ class Service:
                     config.update(enabled=False, revision=uuid4().hex, error='上次服务异常退出，请核对范围后重新开启同步。')
                     self.save_source(owner, source, config)
             self.context.store.write('session-running', True)
+        self.matcher.start()
         self.thread = threading.Thread(target=self.loop, name='group-messages', daemon=True)
         self.thread.start()
         if getattr(self.context, 'runtime', None):
@@ -565,6 +598,7 @@ class Service:
 
     def close(self):
         self.stopping.set(); self.cancelled.set(); self.wake.set()
+        self.matcher.close()
         if self.thread:
             self.thread.join()
         self.context.store.write('session-running', False)

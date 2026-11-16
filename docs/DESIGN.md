@@ -6,6 +6,8 @@
 
 ## 设计依据与信息层级
 
+默认主题的视觉减压样式位于 `web/themes/default/quiet.css`，由主题清单加载，仅作用于 `data-theme="default"`。浅色侧栏、单层 AI 入口、次级按钮和轻分隔线减少同时争夺注意的元素；正文对比、键盘焦点、来源提示、紧急状态和手机触摸目标继续保留。主题卸载时该样式随主题生命周期释放。
+
 默认界面采用 Material 3 的信息组织与交互原则，配色使用 Nord。设计依据包括 [自适应页面结构](https://m3.material.io/foundations/layout/canonical-examples/overview)、[列表](https://m3.material.io/components/lists/guidelines)、[按钮层级](https://m3.material.io/components/buttons/guidelines)、[卡片边界](https://m3.material.io/components/cards/guidelines)、[字体角色](https://m3.material.io/styles/typography/applying-type) 和 [表面色角色](https://m3.material.io/styles/color/the-color-system)。列表与详情按当前任务切换；相关内容通过分区、留白和分隔线归组，卡片承载独立对象。低频操作放入菜单，常用入口提供可见文字。UI/UX Pro Max 的可访问性与桌面密度规则用于核对焦点、目标尺寸、对比度和窄屏行为。
 
 | 使用场景 | 页面组织 | 信息优先级 |

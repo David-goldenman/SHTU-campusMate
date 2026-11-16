@@ -35,11 +35,12 @@ def main():
     javascript_checks = ("check_frontend.mjs", "check_device_guide.mjs", "check_browser_network.mjs", "check_appearance.mjs", "check_campus_moments.mjs", "check_password_generator.mjs", "check_observatory_contrast.mjs", "check_campus_copy.mjs", "check_home_slogans.mjs", "check_study_copy.mjs", "check_sounds.mjs", "check_timetable_visibility.mjs", "check_appearance_persistence.mjs")
     for name in javascript_checks:
         run([node, str(Path("checks") / name)], name)
+    run([node, str(Path('checks') / 'check_desktop_host.cjs')], 'Desktop backend ownership')
     run([windows_tool("powershell"), "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
          "-File", windows_path(PROJECT / "checks" / "check_launcher.ps1")], "Windows launcher")
 
-    sources = sorted(path for folder in ("web", "modules", "scripts", "checks")
-                     for path in (PROJECT / folder).rglob("*") if path.suffix in {".js", ".mjs"})
+    sources = sorted(path for folder in ("web", "modules", "scripts", "checks", "desktop")
+                     for path in (PROJECT / folder).rglob("*") if path.suffix in {".js", ".mjs", ".cjs"})
     for path in sources:
         run([node, "--check", str(path.relative_to(PROJECT))], "JavaScript syntax: " + str(path.relative_to(PROJECT)))
     print(f"\nPASS: {len(python_checks)} Python checks, {len(javascript_checks)} JavaScript checks, Windows launcher and {len(sources)} JavaScript syntax checks", flush=True)

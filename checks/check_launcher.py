@@ -1,5 +1,6 @@
 """Exercise the Windows launcher without accounts, downloads or the user's data."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -28,6 +29,29 @@ def free_port():
 
 
 def check(project):
+    spec = importlib.util.spec_from_file_location('launcher_probe_check', project / 'scripts/launch.py')
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    free = free_port()
+    assert not launcher.port_busy(free)
+    with socket.socket() as released:
+        released.bind(('127.0.0.1', free))
+        released.listen()
+    for host in ('127.0.0.1', '0.0.0.0'):
+        for option in (None, socket.SO_REUSEADDR, socket.SO_EXCLUSIVEADDRUSE):
+            with socket.socket() as listener:
+                if option is not None:
+                    listener.setsockopt(socket.SOL_SOCKET, option, 1)
+                listener.bind((host, 0))
+                listener.listen()
+                assert launcher.port_busy(listener.getsockname()[1]), (host, option)
+    if socket.has_ipv6:
+        with socket.socket(socket.AF_INET6) as listener:
+            listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            listener.bind(('::', 0))
+            listener.listen()
+            assert launcher.port_busy(listener.getsockname()[1]), 'IPv6 dual-stack listener must protect its IPv4 port'
+
     def command(*arguments, good=True):
         result = subprocess.run(
             [PS, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",

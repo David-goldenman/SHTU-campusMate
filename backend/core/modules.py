@@ -23,7 +23,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .context import ModuleContext, ModuleSecrets
 from .paths import DATA, MODULES
-from .errors import PublicError, catch_errors, error_response
+from .errors import PublicError, catch_errors, error_response, failure_metadata
+from .diagnostics import operation_metadata, operation_scope
 from .runtime import RuntimeStatus
 from .reads import current_batch, request_reads
 
@@ -331,7 +332,10 @@ class ModuleManager:
                 return await client.request(method, "/" + module_id + path, json=body)
 
         def unavailable(status, message):
-            return httpx.Response(status, json={'detail': message}, request=httpx.Request(method, 'http://modules.local/' + module_id + path))
+            with operation_scope(module_id, 'request'):
+                detail = {'detail': message, **failure_metadata('module_timeout' if status == 504 else 'module_unavailable',
+                                                               '检查模块运行状态，完成后重试。')}
+            return httpx.Response(status, json=detail, request=httpx.Request(method, 'http://modules.local/' + module_id + path))
 
         with self.lock:
             entry = self.entries.get(module_id)
@@ -395,8 +399,9 @@ class ModuleManager:
             await send(message)
 
         try:
-            with request_reads(scope.get('method') == 'GET'):
+            with operation_scope(module_id, 'request'), request_reads(scope.get('method') == 'GET'):
+                operation = operation_metadata()
                 await entry.app(nested, receive, recorded_send)
         finally:
-            entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'))
+            entry.runtime.record(status, time.monotonic() - started, nested['state'].get('public_error'), operation=operation)
             await run_in_threadpool(self._end_request, entry)

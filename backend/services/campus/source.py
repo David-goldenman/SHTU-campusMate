@@ -1,4 +1,5 @@
 import threading
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -9,6 +10,8 @@ from ..auth import LoginRequired, VerificationRequired
 from ..auth.network import failure_context
 from .data import digest, validate_bundle
 from .remote import Remote
+from ...core.diagnostics import operation_metadata, operation_scope
+from ...core.errors import failure_metadata
 
 REFRESH_SECONDS = 60
 
@@ -27,11 +30,31 @@ class Source:
         self.future = None
         state = context.store.read(self.sync_key, {})
         if state.get("status") == "syncing":
-            context.store.write(self.sync_key, {**state, "status": "error", "message": "上次同步已中断，请再次同步。"})
+            with operation_scope(context.id, 'sync', new=True):
+                state = {**state, 'status': 'error', 'message': '上次同步已中断，请再次同步。',
+                         'diagnostic': failure_metadata('source_interrupted', '上次运行未完成，请重新同步；已有缓存仍可查看。')}
+                context.store.write(self.sync_key, state)
         self.refresh_thread = threading.Thread(target=self.refresh_loop, name=context.id + '-refresh', daemon=True)
         self.refresh_thread.start()
         if getattr(context, 'runtime', None):
             context.runtime.watch('缓存刷新', self.refresh_thread)
+        saved = self.context.store.read(self.snapshot_key, {})
+        if state.get('owner') == self.owner():
+            self._report(state, saved.get('updated_at') if saved.get('owner') == self.owner() else None)
+
+    def _report(self, state, cached_at=None):
+        runtime = getattr(self.context, 'runtime', None)
+        if runtime is not None and hasattr(runtime, 'record_source'):
+            runtime.record_source(self.sync_key, state, cached_at=cached_at)
+
+    def _last_success(self, owner):
+        state = self.context.store.read(self.sync_key, {})
+        if state.get('owner') != owner:
+            return None
+        if state.get('last_success_at'):
+            return state['last_success_at']
+        cached = self.context.store.read(self.snapshot_key, {})
+        return cached.get('updated_at') if state.get('status') == 'ready' and cached.get('owner') == owner else None
 
     def refresh_loop(self):
         while not self.cancelled.wait(REFRESH_SECONDS):
@@ -46,7 +69,10 @@ class Source:
             owner = self.owner()
             state = self.context.store.read(self.sync_key, {})
             if state.get("owner") != owner:
-                state = {"status": "not_connected", "message": "请在设置连接账号，然后同步。"}
+                if self.direct is not None and self.direct():
+                    state = {"status": "not_synced", "message": "账号已配置，点击同步读取资料，无需重新登录。"}
+                else:
+                    state = {"status": "not_connected", "message": "请在设置连接账号，然后同步。"}
             if saved.get("owner") != owner:
                 saved = {"data": validate_bundle({}), "updated_at": None}
             result = {key: value for key, value in {**state, "data": saved["data"], "updated_at": saved["updated_at"]}.items() if key != "owner"}
@@ -60,7 +86,7 @@ class Source:
             return result
 
     def _is_stale(self, saved):
-        if not saved.get("updated_at"):
+        if self.stale_after is None or not saved.get("updated_at"):
             return False
         try:
             updated = datetime.fromisoformat(saved["updated_at"].replace("Z", "+00:00"))
@@ -74,15 +100,27 @@ class Source:
                 raise HTTPException(409, "模块正在停止。")
             if self.future is not None and not self.future.done():
                 return {"queued": False, "status": "syncing"}
-            self.context.store.write(self.sync_key, {"status": "syncing", "owner": self.owner()})
-            self.future = self.executor.submit(self.run)
+            with operation_scope(self.context.id, 'sync'):
+                owner = self.owner()
+                state = {'status': 'syncing', 'owner': owner, 'last_success_at': self._last_success(owner),
+                         'started_at': datetime.now(timezone.utc).isoformat(), 'diagnostic': operation_metadata()}
+                self.context.store.write(self.sync_key, state)
+                cached = self.context.store.read(self.snapshot_key, {})
+                self._report(state, cached.get('updated_at') if cached.get('owner') == owner else None)
+                self.future = self.executor.submit(copy_context().run, self.run)
             if getattr(self.context, 'runtime', None):
                 self.context.runtime.watch(self.sync_key, self.future)
             return {"queued": True, "status": "syncing"}
 
     def run(self):
+        with operation_scope(self.context.id, 'sync'):
+            self._run()
+
+    def _run(self):
         owner = self.owner()
-        previous = self.snapshot()["data"]
+        snapshot = self.snapshot()
+        previous = snapshot['data']
+        last_success = self._last_success(owner)
         observed_network_error = None
         try:
             def read(client):
@@ -98,15 +136,23 @@ class Source:
                 data = self.context.auth.read_with_recovery(self.provider, read, target=self.target, cancelled=self.cancelled)
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
+                    self._report({'status': 'cancelled', 'diagnostic': operation_metadata()})
                     return
-                self.context.store.write(self.snapshot_key, {"owner": owner, "data": data, "updated_at": datetime.now(timezone.utc).isoformat()})
+                updated_at = datetime.now(timezone.utc).isoformat()
+                self.context.store.write(self.snapshot_key, {"owner": owner, "data": data, "updated_at": updated_at})
                 state = {"status": "partial" if data["issues"] else "ready", "owner": owner}
                 if self.network_target and observed_network_error is not None:
                     state.update(status="partial", message="部分来源网络请求失败，已保留可用内容。",
                                  network_failure=failure_context(observed_network_error, self.network_target))
+                state.update(finished_at=updated_at, last_success_at=updated_at if state['status'] == 'ready' else last_success,
+                             diagnostic=operation_metadata())
+                if state['status'] == 'partial':
+                    state['diagnostic'].update(code='source_partial', action='部分资料未能更新，请查看来源状态后重试。')
                 self.context.store.write(self.sync_key, state)
+                self._report(state, updated_at)
         except Exception as error:
             if self.cancelled.is_set():
+                self._report({'status': 'cancelled', 'diagnostic': operation_metadata()}, snapshot.get('updated_at'))
                 return
             status = "verification_required" if isinstance(error, VerificationRequired) else "login_required" if isinstance(error, LoginRequired) else "error"
             if isinstance(error, LoginRequired):
@@ -121,13 +167,26 @@ class Source:
                 message = "来源数据处理失败（" + type(error).__name__ + "），已保留缓存。"
             with self.lock:
                 if self.cancelled.is_set() or owner != self.owner():
+                    self._report({'status': 'cancelled', 'diagnostic': operation_metadata()})
                     return
-                state = {"status": status, "message": message, "owner": owner}
+                if isinstance(error, VerificationRequired):
+                    code, action = 'verification_required', '请到账号连接完成验证，再重新同步。'
+                elif isinstance(error, LoginRequired):
+                    code, action = 'login_required', '请检查账号连接，再重新同步。'
+                elif observed_network_error is not None or isinstance(error, httpx.RequestError):
+                    code, action = 'source_network_error', '请检查网络与来源连接，已保存资料仍可查看。'
+                elif isinstance(error, (httpx.HTTPStatusError, HTTPException)):
+                    code, action = 'source_service_error', '来源未能完成请求，请检查来源状态后重试。'
+                else:
+                    code, action = 'source_parse_error', '来源资料未能处理，请保留诊断编号并检查来源是否变化。'
+                state = {'status': status, 'message': message, 'owner': owner, 'last_success_at': last_success,
+                         'finished_at': datetime.now(timezone.utc).isoformat(), 'diagnostic': failure_metadata(code, action)}
                 if self.network_target and status == "error":
                     failure = failure_context(error if isinstance(error, httpx.RequestError) else observed_network_error, self.network_target)
                     if failure:
                         state["network_failure"] = failure
                 self.context.store.write(self.sync_key, state)
+                self._report(state, snapshot.get('updated_at'))
 
     def router(self):
         router = APIRouter()

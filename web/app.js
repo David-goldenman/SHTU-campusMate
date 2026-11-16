@@ -20,6 +20,29 @@ const selectedViews = new Map();
 
 let labels = new Map();
 const moduleStatuses = {ready:'可用',disabled:'已停用',error:'加载失败'};
+const warmedViews = new Map();
+
+function warmNavigation(event) {
+  const category=event.target.closest('[data-nav]')?.dataset.nav;
+  if (!state || !category) return;
+  const visible=state.modules.filter(module=>module.category===category && module.enabled && module.status==='ready' && module.has_frontend);
+  const layout=state.categories.find(item=>item.id===category)?.layout;
+  const selected=visible.find(module=>module.id===(selectedViews.get(category)||category)) || visible[0];
+  const targets=layout==='primary'||layout==='tabs' ? selected?[selected]:[] : visible;
+  const urls=targets.map(module=>({path:viewURL(module.id)||module.frontend_url,prefix:viewURL(module.id)?'/assets/themes/':'/module-assets/'+encodeURIComponent(module.id)+'/'}));
+  if (category==='settings') urls.push({path:viewURL('settings')||'/assets/settings.js',prefix:'/assets/'});
+  for (const item of urls) {
+    if(typeof item.path!=='string')continue;
+    let url;try {url=new URL(item.path,location.origin);}catch {continue;}
+    if(url.origin!==location.origin || !url.pathname.startsWith(item.prefix) || warmedViews.has(url.href))continue;
+    const preload=document.createElement('link');preload.rel='modulepreload';preload.href=url.href;preload.fetchPriority='low';
+    document.head.append(preload);
+    warmedViews.set(url.href,preload);
+    while(warmedViews.size>24){const [key,node]=warmedViews.entries().next().value;node.remove();warmedViews.delete(key);}
+  }
+}
+document.querySelector('#navigation').addEventListener('pointerover',warmNavigation);
+document.querySelector('#navigation').addEventListener('focusin',warmNavigation);
 
 function closeMenu() {
   document.body.classList.remove('menu-open');
@@ -70,7 +93,7 @@ function services(signal) {
   });
 }
 
-async function mountModule(module, container, scope, background = false) {
+async function mountModule(module, container, scope, background = false, foregroundReady = Promise.resolve()) {
   const body = document.createElement('div');
   body.className = 'module-mount';
   body.dataset.moduleId = module.id;
@@ -99,8 +122,12 @@ async function mountModule(module, container, scope, background = false) {
     if (scope.controller.signal.aborted) return;
     if (typeof entry.mount !== 'function') throw new Error('模块入口需要导出 mount(container, context)。');
     body.replaceChildren();
+    const request = moduleApi(module.id,lifetime.signal);
     const moduleContext = {
-      api:moduleApi(module.id,lifetime.signal), ui, navigate, module:{...module},
+      api:background ? async (path,options={}) => {
+        if (!options.method || ['GET','HEAD'].includes(options.method.toUpperCase())) await foregroundReady;
+        return request(path,{priority:'low',...options});
+      } : request, ui, navigate, module:{...module},
       focus:active => {card.classList.toggle('module-focused',active);container.classList.toggle('module-focus',!!container.querySelector('.module-focused'));},
       signal:lifetime.signal, services:services(lifetime.signal),
       theme:themeContext(),
@@ -137,7 +164,7 @@ async function stopBackground(id) {
   return failed;
 }
 
-async function syncBackground(current) {
+async function syncBackground(current, foregroundReady) {
   const modules=state.modules.filter(item=>item.enabled&&item.status==='ready'&&item.background_url);
   await Promise.all([...backgroundScopes].filter(([id,scope])=>!modules.some(module=>module.id===id&&module.background_url===scope.url)).map(([id])=>stopBackground(id)));
   if (current !== revision) return;
@@ -145,7 +172,7 @@ async function syncBackground(current) {
     const root=document.createElement('div');document.body.append(root);
     const scope={controller:new AbortController(),cleanups:[],root,url:module.background_url};
     backgroundScopes.set(module.id,scope);
-    return mountModule(module,root,scope,true);
+    return mountModule(module,root,scope,true,foregroundReady);
   }));
 }
 
@@ -211,9 +238,14 @@ document.addEventListener('click', event => {
 
 async function render(refreshMetadata = false) {
   const current = ++revision;
+  const destination = location.hash.slice(1).split('?')[0];
+  document.querySelectorAll('[data-nav]').forEach(link => {
+    const active = link.dataset.nav === destination;
+    link.classList.toggle('active',active);
+    if (active) link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  });
+  if (labels.has(destination)) document.querySelector('#page-label').textContent = labels.get(destination);
   await dispose();
-  if (current !== revision) return;
-  void syncBackground(current).catch(error => {if (current === revision) toast(error.message);});
   if (current !== revision) return;
   const navigation = state.categories.map(item => [item.id,item.icon,item.label]);
   labels = new Map(navigation.map(([id,,label]) => [id,label]));
@@ -236,6 +268,10 @@ async function render(refreshMetadata = false) {
   main.innerHTML = '<div class="page-heading"><h1>' + escape(labels.get(page)) + '</h1></div><div id="settings-area"></div><div class="module-zone" id="module-area"></div>';
   const scope = {controller:new AbortController(),cleanups:[]};
   pageScope = scope;
+  let releaseBackground;
+  const foregroundReady = new Promise(resolve => {releaseBackground=resolve;});
+  scope.controller.signal.addEventListener('abort',releaseBackground,{once:true});
+  void syncBackground(current,foregroundReady).catch(error => {if (current === revision) toast(error.message);});
   if (refreshMetadata) void refreshNavigationMetadata(current,scope.controller.signal);
   const zone = main.querySelector('#module-area');
   const visible = enabled.filter(module => module.category === page);
@@ -299,8 +335,9 @@ async function render(refreshMetadata = false) {
     main.querySelector('#settings-area').remove();
     if (!visible.length) zone.innerHTML = empty('这个分类已准备好接入模块','在设置中启用此分类的模块后，内容会显示在这里。','<a class="button button-secondary" href="#settings">管理模块 →</a>');
   }
-  await Promise.all(work);
-  if (current === revision) main.focus({preventScroll:true});
+  try {await Promise.all(work);}
+  finally {releaseBackground();scope.controller.signal.removeEventListener('abort',releaseBackground);}
+  if (current === revision && !main.contains(document.activeElement) && !document.querySelector('dialog[open]')) main.focus({preventScroll:true});
 }
 
 async function reloadModules() {
@@ -329,14 +366,15 @@ async function refresh() {
 }
 
 async function start() {
-  state = await api('/bootstrap');
+  const [bootstrap,catalog] = await Promise.all([api('/bootstrap'),api('/themes')]);
+  state = bootstrap;
   setToken(state.csrf_token);
   const appearanceBridge=state.settings?.appearance ? {
     record:state.settings.appearance,
     save:body=>api('/settings/appearance',{method:'PATCH',body}),
     read:async()=> (await api('/settings')).appearance,
   } : undefined;
-  const themeMessage=await initializeThemes(await api('/themes'),appearanceBridge);
+  const themeMessage=await initializeThemes(catalog,appearanceBridge);
   if(themeMessage)toast(themeMessage);
   document.querySelector('#workspace-date').textContent = new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date());
   await render();

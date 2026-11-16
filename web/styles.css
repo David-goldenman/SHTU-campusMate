@@ -88,6 +88,8 @@ main { width:100%; max-width:1580px; min-width:0; flex:1; margin:0 auto; padding
 .eyebrow { margin-bottom:10px; color:var(--muted); font-size:13px; font-weight:600; letter-spacing:1.3px; }
 .button { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:44px; padding:9px 15px; border:1px solid transparent; border-radius:7px; font-size:14px; font-weight:500; line-height:1.5; text-align:center; }
 .button:hover { text-decoration:none; }
+.button[aria-busy=true], .text-button[aria-busy=true] { cursor:progress; }
+.button[aria-busy=true]::after, .text-button[aria-busy=true]::after { content:""; display:inline-block; width:12px; height:12px; flex:none; margin-left:5px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
 .button-primary { background:var(--link); border-color:var(--link); color:#fff; }
 .button-primary:hover { background:#365578; }
 .button-secondary { background:var(--paper); border-color:#9caec4; color:var(--link); }

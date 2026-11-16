@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {fileName, courseFiles, downloadFiles} from '../web/downloads.js';
 import {downloadKey} from '../web/download-store.js';
 import {courseDownloader, downloadNoticeMessage} from '../web/download-panel.js';
+import {directoryAt, installLocks, memoryStore} from './download-fixture.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../..','.codex','tmp');
 await fs.mkdir(root,{recursive:true});
@@ -12,23 +13,8 @@ const folder = await fs.mkdtemp(path.join(root,'course-downloads-'));
 const fixture = (id,title=id)=>({id,title,updated_at:'2026-10-01',source:'piazza',course_id:'piazza:class',resource_type:'file',download_url:'/api/v1/modules/piazza/file?material_id='+encodeURIComponent(id)});
 const pdf = (name,body='%PDF-synthetic')=>new Response(body,{headers:{'content-type':'application/pdf','content-disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`}});
 let onWrite = ()=>{};
-const directory = {
-  name:'Synthetic course folder',
-  async queryPermission(){return 'granted';},
-  async *entries(){ for(const name of await fs.readdir(folder)) yield [name,{kind:(await fs.stat(path.join(folder,name))).isFile()?'file':'directory'}]; },
-  async getFileHandle(name,options={}){
-    assert.equal(path.basename(name),name);
-    const target=path.join(folder,name);
-    try { if ((await fs.stat(target)).isDirectory()) throw new DOMException('Directory','TypeMismatchError'); }
-    catch(error) { if(error.code!=='ENOENT') throw error; if(!options.create) throw new DOMException('Missing','NotFoundError'); await fs.writeFile(target,'',{flag:'wx'}); }
-    return {async getFile(){const stat=await fs.stat(target);return {size:stat.size,lastModified:stat.mtimeMs};},async createWritable(){let content;return {
-      async write(blob){content=Buffer.from(await blob.arrayBuffer());onWrite();},
-      async close(){await fs.writeFile(target,content);},
-      async abort(){},
-    };}};
-  },
-  async removeEntry(name){await fs.unlink(path.join(folder,name));},
-};
+const directory = directoryAt(folder,{onWrite:()=>onWrite()});
+installLocks();
 try {
   assert.equal(fileName(pdf('课件.pdf'),'title'),'课件.pdf');
   assert.equal(fileName(pdf('LAB1'),'title'),'LAB1.pdf');
@@ -51,8 +37,8 @@ try {
   };
   const run=options=>downloadFiles({directory,files,revision:'batch-owner',signal:new AbortController().signal,request,onRecord:async(id,record)=>{files[id]=record;},...options});
   const first=await run({items:[a,b]});
-  assert.deepEqual(first.skipped,[{id:'one',name:'INTRO.pdf'}]);assert.equal(first.failed[0].message,'模拟来源失败');
-  assert.deepEqual(attempts,['two'],'Existing files never request file bytes');
+  assert.deepEqual(first.saved,[{id:'one',name:'Intro · one.pdf'}]);assert.equal(first.failed[0].message,'模拟来源失败');
+  assert.deepEqual(attempts,['one','two'],'Unknown local files are preserved, not treated as another resource');
   broken=false;assert.equal((await run({items:[a,b]})).saved[0].name,'LAB1.pdf');
   const before=attempts.length;
   const restored=JSON.parse(JSON.stringify(files));
@@ -61,11 +47,12 @@ try {
   const b2={...b,updated_at:'2026-10-02'};
   assert.equal((await run({items:[b2]})).saved[0].name,'LAB1.pdf','Unedited managed file updates in place');
   await fs.writeFile(path.join(folder,'LAB1.pdf'),'my annotated notes');
-  assert.equal((await run({items:[b2]})).skipped.length,1,'Local notes remain when remote version is unchanged');
+  assert.equal((await run({items:[b2]})).preserved.length,1,'Local notes remain when remote version is unchanged');
   const b3={...b,updated_at:'2026-10-03'};
-  assert.equal((await run({items:[b3]})).saved[0].name,'LAB1 (2).pdf');
+  assert.equal((await run({items:[b3]})).preserved.length,1);
+  assert.ok(!(await fs.readdir(folder)).includes('LAB1 (2).pdf'),'Local edits pause updates instead of accumulating copies');
   assert.equal(await fs.readFile(path.join(folder,'LAB1.pdf'),'utf8'),'my annotated notes');
-  assert.equal((await run({items:[{...a,updated_at:'2026-10-02'}]})).saved[0].name,'Intro (2).pdf','Adopted files never overwritten');
+  assert.equal((await run({items:[{...a,updated_at:'2026-10-02'}]})).saved[0].name,'Intro · one.pdf','Updates retain the resource filename');
   assert.equal(await fs.readFile(path.join(folder,'INTRO.pdf'),'utf8'),'original');
   await fs.unlink(path.join(folder,'Tool.pdf'));
   assert.equal((await run({items:[c]})).saved[0].name,'Tool.pdf','Missing tracked file restored');
@@ -91,12 +78,10 @@ try {
   const cancelled=new AbortController();cancelled.abort();
   assert.equal((await run({items:[a,b],signal:cancelled.signal})).remaining.length,2);
   // Drive the real controller and downloader together; storage stands in for IndexedDB.
-  Object.defineProperty(globalThis,'navigator',{value:{},configurable:true});
   const course={id:'course:notice',code:'EE291F',course_ids:['piazza:class']};
   const key=downloadKey('batch-owner',course.id);
   const stored=new Map([[key,{key,courseId:course.id,revision:'batch-owner',directory,auto:true,token:'folder-token',files:{}}]]);
-  const storage={all:async()=>[...stored.values()],get:async key=>stored.get(key),
-    update:async(key,change)=>{const next=change(stored.get(key));if(next)stored.set(key,next);}};
+  const storage=memoryStore(stored);
   let noticeMaterials=[fixture('notice-one'),fixture('notice-two')], noticeOwner='batch-owner', failFile='notice-two', abortOn='', fileCalls=0;
   let notificationAbort=new AbortController();
   const notices=[];
@@ -111,7 +96,7 @@ try {
   };
   const downloader=courseDownloader(context,{storage,request:noticeRequest});
   await downloader.refresh([course]);
-  assert.equal(notices.length,1);assert.match(notices[0],/EE291F.*已保存 1 份.*Synthetic course folder.*1 份未完成/);
+  assert.equal(notices.length,1);assert.match(notices[0],/EE291F.*已保存 1 份.*1 份未完成/);
   assert.deepEqual(stored.get(key).lastDownload.names,['notice-one.pdf']);
   const firstNotice=stored.get(key).lastDownload;
   await downloader.refresh([course]);

@@ -82,7 +82,8 @@ async def check(directory):
             requests.append((body, self.headers.get("Authorization")))
             study_task = any(tool['function']['name'] == 'study_query' for tool in body['tools'])
             names = {tool['function']['name'] for tool in body['tools']}
-            extension = 'group_submit' if 'group_submit' in names else 'mail_submit' if 'mail_submit' in names else 'campus_read' if 'campus_read' in names else None
+            name_matching = any('合成群名匹配验证' in str(message.get('content') or '') for message in body['messages'])
+            extension = 'group_match_submit' if name_matching and 'group_match_submit' in names else 'group_submit' if 'group_submit' in names else 'mail_submit' if 'mail_submit' in names else 'campus_read' if 'campus_read' in names else None
             first = not any(message["role"] == "tool" for message in body["messages"])
             if first:
                 started.set()
@@ -105,6 +106,8 @@ async def check(directory):
                     arguments = {'decision':{'bucket':'digest'}} if extension == 'mail_submit' else {'module_id':'courses','path':'/snapshot'}
                     if extension == 'group_submit':
                         arguments = {'result': {'items': []}}
+                    if extension == 'group_match_submit':
+                        arguments = {'result': {'matches': [{'group_id': 'synthetic-group', 'candidates': []}]}}
                     calls = [{'index':0,'id':'extension-call','type':'function','function':{'name':extension,'arguments':json.dumps(arguments)}}]
                 delta, finish = {"tool_calls": calls}, "tool_calls"
             else:
@@ -215,11 +218,13 @@ async def check(directory):
                     assert 'synthetic-tool-token' not in json.dumps(requests[-2:])
                     assert not any(path.exists() for path in workspaces)
                     assert any(frame['type'] == 'chunk' and frame['chunk']['type'] == 'text-delta' for frame in live)
-                    for alias, prefix, tools in [('mail-tools','MAIL',{'mail_submit'}),('background-tools','AGENT',{'campus_read','campus_mail','campus_classify','campus_propose','campus_notice','campus_sync'}),('group-tools','GROUP',{'group_submit'})]:
+                    for alias, prefix, tools in [('mail-tools','MAIL',{'mail_submit'}),('background-tools','AGENT',{'campus_read','campus_mail','campus_classify','campus_propose','campus_notice','campus_sync'}),('group-tools','GROUP',{'group_submit','group_match_submit'})]:
                         result = await asyncio.to_thread(app.state.ai.run, prompt='合成原生插件验证', plugins=[alias],
                             plugin_env={f'CAMPUS_PLUGIN_{prefix}_URL':f'http://127.0.0.1:{server.server_port}', f'CAMPUS_PLUGIN_{prefix}_TOKEN':'synthetic-tool-token'})
                         assert result['tools'][0]['is_error'] is False, result
                         assert {tool['function']['name'] for tool in requests[-1][0]['tools']} == tools
+                    matched = await asyncio.to_thread(app.state.ai.run, prompt='合成群名匹配验证', plugins=['group-tools'])
+                    assert matched['tools'][0]['name'] == 'group_match_submit' and not matched['tools'][0]['is_error'], matched
                     configured = await client.put('/api/v1/ai/settings', json={'provider':'synthetic-gateway','custom':True,
                         'model':'deepseek-flash','base_url':f'http://127.0.0.1:{server.server_port}',
                         'protocol':'openai-completions','api_key':'synthetic-harness-key'})

@@ -143,6 +143,10 @@ def summary(assignments):
 def create_router(context):
     router = APIRouter()
 
+    @router.get('/view-state')
+    def view_state():
+        return {'account_revision': account_revision(context)}
+
     def order_key(owner):
         return "assignment-order:" + owner
 

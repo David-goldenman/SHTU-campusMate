@@ -100,6 +100,9 @@ class Effects:
                 config, group = self.service.selected_group(owner, item['source'], item['group_id'])
                 if not config.get('enabled') or not config.get('allow_ai') or not group.get('auto_apply'):
                     raise HTTPException(409, '自动应用已关闭。')
+                trusted = set(group.get('trusted_senders', []))
+                if not item.get('citations') or any(ref.get('sender_id') not in trusted for ref in item['citations']):
+                    raise HTTPException(409, '可信发送者尚未指定或已变化，请核对后手动确认。')
             if item['action'] in {'question', 'uncertain'}:
                 raise HTTPException(409, '这条消息仍有歧义，请到学习事务或时间表手动确认具体安排。')
             if item.get('applied_content') == item['content_revision']:

@@ -1,6 +1,6 @@
-from .imap import DEFAULT_PORT as IMAP_DEFAULT_PORT, IMAP_HOST
+from .imap import DEFAULT_PORT as IMAP_DEFAULT_PORT, IMAP_HOST, ImapUnavailable
 from .protocols import LoginRequired, VerificationRequired
 from .routes import create_router
 from .service import AuthService
 
-__all__ = ["AuthService", "create_router", "LoginRequired", "VerificationRequired", "IMAP_HOST", "IMAP_DEFAULT_PORT"]
+__all__ = ["AuthService", "create_router", "LoginRequired", "VerificationRequired", "ImapUnavailable", "IMAP_HOST", "IMAP_DEFAULT_PORT"]

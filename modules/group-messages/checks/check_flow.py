@@ -91,6 +91,10 @@ async def check():
         await asyncio.to_thread(service._extract,task)
         item=service.items()['items'][0]
         assert item['automatic_ready'] and item['time_verified'] and item['status']=='pending'
+        # Removing trust after extraction must also block already-prepared updates.
+        service.save_source(owner, 'qq', {**config, 'selected': [{**group, 'trusted_senders': []}]})
+        await rejected(service.effects.apply(owner, item['id'], item['revision'], automatic=True))
+        service.save_source(owner, 'qq', config)
         await asyncio.to_thread(service._extract,task);assert len(ai_calls)==1, 'Unchanged content must not call AI'
         applied=await service.effects.apply(owner,item['id'],item['revision'],automatic=True)
         assert applied['target']['module']=='academic-assistant' and applied['receipt']['value']['after']['kind']=='plan'
@@ -176,6 +180,22 @@ async def check():
         assert max(len(row['text']) for row in batch['messages'])<=8000
         assert any(row['truncated'] for row in batch['messages'])
         context.ai.run=ai
+        # New UI defaults can be saved before initial sync exposes senders.
+        # They never bypass AI consent or the existing application trust gate.
+        pending_policy = {'id': 'g1', 'course_id': 'course1', 'auto_extract': True, 'auto_apply': True}
+        selection = dict(expected_revision=service.configuration(owner, 'qq')['revision'],
+                         groups=[pending_policy], enabled=True, interval_seconds=300)
+        await rejected(service.select('qq', models.Selection(**selection, allow_ai=False)), 422)
+        await service.select('qq', models.Selection(**selection, allow_ai=True))
+        assert service.configuration(owner, 'qq')['selected'][0]['trusted_senders'] == []
+        service.cancelled.clear()
+        cache.ingest(owner, 'qq', 'conn', 'g1', [raw('no-trust', '作业3在2026年10月25日23:59截止')], since)
+        message = cache.rows(owner, 'qq', 'conn', 'g1')['items'][0]
+        output['items'] = [finding(message, object_key='hw3', title='作业3', due_at='2026-10-25T23:59:00+08:00')]
+        await asyncio.to_thread(service._extract, {**task, 'manual': False})
+        pending = next(row for row in service.items()['items'] if row['object_key'] == 'hw3')
+        assert pending['status'] == 'pending' and not pending['automatic_ready']
+        await rejected(service.effects.apply(owner, pending['id'], pending['revision'], automatic=True))
         # Retained messages and accepted results survive construction/restart.
         restored_service=Service(context)
         assert restored_service.items()==service.items()

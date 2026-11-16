@@ -1,0 +1,10 @@
+.recording-dialog{width:min(1040px,94vw);max-width:94vw;padding:24px;box-sizing:border-box}
+.recording-dialog .dialog-body{padding:0}.recording-player{display:grid;gap:14px;min-width:0}
+.recording-controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap}.recording-controls label{display:grid;gap:7px;font-size:13px;color:var(--muted)}
+.recording-controls label:first-child{flex:1;min-width:180px}.recording-controls select{max-width:100%;min-height:42px}
+.recording-angles{display:flex;gap:8px;flex-wrap:wrap}.recording-angles button[aria-pressed=true]{border-color:var(--link);color:var(--link);background:var(--surface)}
+.recording-screen{background:#0b111c;border-radius:10px;overflow:hidden;aspect-ratio:16/9;max-height:52vh;display:grid;place-items:center}
+.recording-screen video{display:block;width:100%;height:100%;max-height:65vh;object-fit:contain;background:#0b111c}
+.recording-feedback{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:14px}.recording-feedback p{margin:0;color:var(--muted);flex:1}
+.recording-player>.field-hint{margin:0}.recording-player>a{font-size:13px;justify-self:start}
+@media(max-width:540px){.recording-dialog{padding:16px;width:96vw;max-width:96vw}.recording-controls{gap:10px}.recording-controls label:first-child{flex-basis:100%}.recording-player{gap:12px}.recording-angles button{font-size:12px;padding:8px 12px}}

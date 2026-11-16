@@ -26,8 +26,9 @@ function fixture(modules,categories, themeCatalog){
   if(path==='/modules')return json({modules,categories});
   if(path==='/modules/campus-agent/status'||path==='/modules/campus-agent/widget'||path==='/modules/notifications/agent/status')return json(agent());
   if(path==='/modules/mail/sync'){state.syncing=true;state.syncStarts=(state.syncStarts||0)+1;return json({queued:true,status:'syncing'},202);}
-  if(path==='/modules/mail/snapshot')return json({status:state.syncing?'syncing':'ready',data:{messages,issues:[]}});
-  if(path==='/modules/mail/intelligence')return json({messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
+  if(path==='/modules/mail/snapshot')return json({account_revision:'synthetic',session_revision:'initial',status:state.syncing?'syncing':'ready',data:{messages,issues:[],metadata:{uid_validity:'synthetic-inbox-1'}}});
+  if(path==='/modules/mail/auto-sync')return json({owner:'synthetic',session_revision:'initial',uid_validity:'synthetic-inbox-1',enabled:false,configured:true,state:'paused',revision:'synthetic-status-1'});
+  if(path==='/modules/mail/intelligence')return json({owner:'synthetic',session_revision:'initial',uid_validity:'synthetic-inbox-1',messages,preferences:state.prefs,buckets:{focus:'重点关注',recommend:'兴趣推荐',digest:'摘要',filter:'已筛选'},interests:{research:'科研讲座',clubs:'社团活动'}});
   if(path==='/modules/mail/message')return json({body_html:'<p>合成正文第一段<br>补充说明。</p><p>第二段单独说明活动安排。</p><ul><li>准备材料</li><li>阅读讲义</li></ul><table><tr><th>时间</th><th>地点</th></tr><tr><td>14:00</td><td>教学楼</td></tr></table>'});
   if(path==='/modules/mail/digests')return json({start:'2026-10-17',end:'2026-10-17',counts:{focus:0,recommend:1,digest:0,filter:0},coverage:{included_count:1,cached_count:1,inbox_total:1},entries:messages.map(item=>({...item,bucket:item.classification.bucket,category:item.classification.category,summary:item.classification.summary})),report:method==='POST'?{overview:'合成日总结：有一项科研活动。',generated_at:'2026-10-17T12:00:00Z',highlights:[{message_id:'mail:1',summary:'查看科研讲座安排。'}]}:null});
   if(path==='/modules/mail/preferences'){state.prefs=JSON.parse(options.body);return json({saved:true});}

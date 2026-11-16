@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 
 const base=process.argv[2]||'http://127.0.0.1:16666';
-const output=resolve('.codex/tmp/group-messages-ui'),profile=resolve(output,'browser-'+process.pid);
-await mkdir(profile,{recursive:true});
+const output=resolve('.codex/tmp/group-messages-ui');
+await mkdir(output,{recursive:true});
+const profile=await mkdtemp(resolve(output,'browser-'));
 function browser(action){
   const result=spawnSync(process.execPath,[resolve('scripts/browser.mjs')],{
     input:JSON.stringify({action,profile,url:'about:blank',headless:true}),encoding:'utf8',windowsHide:true,
@@ -18,12 +19,13 @@ function fixture(){
     {id:'old',name:'2025秋-电磁学'},{id:'unmatched',name:'合成未匹配群'}];
   const selected={id:'g1',name:groups[0].name,course_id:'c1',trusted_senders:[],auto_extract:false,auto_apply:false};
   const state=window.groupCheck={calls:[],owner:'owner1',items:[],sources:{wechat:{connected:true,connection:'conn',revision:'r1',enabled:false,groups,selected:[selected],interval_seconds:300,history_days:7,allow_ai:false,coverage:{},account_label:'合成微信'},qq:{connected:false}}};
+  state.matching={wechat:{state:'done',completed:0,total:0,result_revision:'m1',error:null}};
   window.fetch=async(url,options={})=>{
     const path=new URL(url,location.origin).pathname,method=options.method||'GET',body=options.body?JSON.parse(options.body):null;
     if(path==='/api/v1/bootstrap'){const value=await(await original(url,options)).json();delete value.settings.appearance;value.modules=value.modules.filter(row=>row.id==='group-messages');return json(value);}
     if(path.startsWith('/api/v1/modules/group-messages/')){
       const route=path.replace('/api/v1/modules/group-messages','');state.calls.push({route,method,body});
-      if(route==='/status')return json({sources:state.sources,account_revision:state.owner,ai:{enabled:true,model:'合成模型'},running:null,queued:false});
+      if(route==='/status')return json({sources:state.sources,matching:state.matching,account_revision:state.owner,ai:{enabled:true,model:'合成模型'},running:state.running||null,queued:!!state.queued_task,queued_task:state.queued_task||null});
       if(route==='/items')return json({items:state.items,account_revision:state.owner});
       if(route==='/courses'){
         const matches={};
@@ -31,6 +33,7 @@ function fixture(){
           const saved=(config.selected||[]).find(row=>row.id===group.id),status=saved?'saved':group.id==='old'?'other_term':group.id==='unmatched'?'unmatched':'automatic';
           return [group.id,{status,course_id:saved?.course_id||(status==='automatic'?(group.id==='g2'?'c2':'c1'):''),reason:saved?'沿用已保存的关联，可自行修改':status==='automatic'?'课程名称或代码一致':'需手动核对',candidates:[]}];
         }));
+        Object.assign(matches.wechat,state.semanticMatches||{});
         return json({items:[{id:'c1',title:'电磁学',code:'EE130',term:'2026-fall',current:true},{id:'c2',title:'电磁学课程设计',code:'EE130P',term:'2026-fall',current:true}],matches,account_revision:state.owner,current_semester:'2026-fall'});
       }
       if(route==='/senders')return json({items:[{id:'teacher',name:'合成老师'},{id:'student',name:'合成同学'}]});
@@ -42,6 +45,14 @@ function fixture(){
       }
       if(route==='/sources/wechat/pause'){state.sources.wechat.enabled=false;state.sources.wechat.revision='paused';return json({});}
       if(route.endsWith('/sync'))return json({queued:true});
+      if(route==='/sources/wechat/match'){
+        state.matching.wechat.state=method==='DELETE'?'cancelled':'queued';return json({});
+      }
+      if(route==='/wechat/connect'){
+        if(state.failConnect){state.failConnect=false;return json({detail:'合成连接失败，请重试。'},503);}
+        await new Promise(resolve=>{state.finishConnect=()=>{state.queued_task={kind:'connect',source:'wechat'};resolve();};});
+        return json({queued:true});
+      }
       if(route==='/qq/connect'){state.sources.qq={...structuredClone(state.sources.wechat),connected:true,groups:[{id:'q1',name:'合成QQ课程群'}],selected:[],revision:'qr1',interval_seconds:20,account_label:'QQ · 0123'};return json({queued:true});}
       if(route==='/extract'){
         state.items=[{id:'item1',revision:'i1',content_revision:'ic1',source:'wechat',group_name:'合成计算机课程群',kind:'assignment',action:'change',title:'作业1延期',summary:'作业1延期到10月22日23:59，请核对课程平台。',status:'pending',course:{title:'合成计算机'},due_at:'2026-10-22T23:59:00+08:00',time_verified:true,citations:[{message_id:'m1',quote:'作业1延期到2026年10月22日23:59截止',sender_name:'合成老师',sent_at:'2026-10-18T12:00:00+08:00'}]}];return json({queued:true});
@@ -74,8 +85,54 @@ try{
   await command('Page.addScriptToEvaluateOnNewDocument',{source:`(${fixture})()`});
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
   await command('Page.navigate',{url:base+'/#group-messages'});await ready();
+  // A second submit, polling and a reload must not start another authorization.
+  await evaluate("var form=document.querySelector('[data-source=wechat] [data-connect]');form.elements.database_dir.value='synthetic-db';form.elements.pid.innerHTML='<option value=123>合成微信</option>';form.elements.consent.checked=true;form.requestSubmit();form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))");
+  await wait("groupCheck.finishConnect && document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled");
+  assert.equal(await evaluate("groupCheck.calls.filter(row=>row.route==='/wechat/connect').length"),1,'Repeated submit must send one request');
+  await evaluate('groupCheck.finishConnect()');
+  await wait("document.querySelector('[data-source=wechat] [data-connection-feedback]')?.textContent.includes('排队')");
+  assert(await evaluate("document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled"));
+  await evaluate("groupCheck.queued_task=null;groupCheck.running={kind:'connect',source:'wechat',phase:'copying'};document.querySelector('[data-refresh]').click()");
+  await wait("document.querySelector('[data-source=wechat] [data-connection-feedback]')?.textContent.includes('读取')");
+  await evaluate("location.hash='settings'");await wait("!document.querySelector('.group-messages')");
+  await evaluate("location.hash='group-messages'");await ready();
+  assert(await evaluate("document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled"),'Remount must retain the server busy state');
+  await evaluate("groupCheck.running=null;document.querySelector('[data-refresh]').click()");
+  await wait("!document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled");
+  await evaluate("var form=document.querySelector('[data-source=wechat] [data-connect]');form.elements.database_dir.value='synthetic-db';form.elements.pid.innerHTML='<option value=123>合成微信</option>';form.elements.consent.checked=true;form.requestSubmit()");
+  await wait("groupCheck.calls.filter(row=>row.route==='/wechat/connect').length===2");
+  await evaluate('groupCheck.finishConnect();groupCheck.queued_task=null');
+  await wait("!document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled");
+  await evaluate("groupCheck.failConnect=true;var form=document.querySelector('[data-source=wechat] [data-connect]');form.elements.database_dir.value='synthetic-db';form.elements.pid.innerHTML='<option value=123>合成微信</option>';form.elements.consent.checked=true;form.requestSubmit()");
+  await wait("document.querySelector('[data-feedback]').textContent.includes('合成连接失败') && !document.querySelector('[data-source=wechat] [data-connect] [type=submit]').disabled");
+  assert.equal(await evaluate("document.querySelector('[data-source=wechat] [name=database_dir]').value"),'synthetic-db','Failure must retain the connection inputs');
   assert.equal(await evaluate("document.querySelectorAll('[data-gid]').length"),6);
+  await evaluate("groupCheck.semanticMatches={unmatched:{status:'suggested',course_id:'c1',method:'ai',reason:'合成AI简称依据',candidates:[{course_id:'c1',title:'电磁学'}]}};groupCheck.matching.wechat={state:'done',completed:1,total:1,result_revision:'m2'}");
+  await wait("document.querySelector('[data-gid=unmatched] [data-match-hint]')?.textContent.includes('AI 推荐')");
+  assert(await evaluate("document.querySelectorAll('[data-matching-course]').length>=2"),'Suggestions are grouped by course');
+  await evaluate("document.querySelector('[data-select-suggested]').click();var input=document.querySelector('[data-gid=unmatched] [data-course]');input.value='c2';input.dispatchEvent(new Event('change',{bubbles:true}));groupCheck.semanticMatches.unmatched.reason='合成AI更新理由';groupCheck.matching.wechat.result_revision='m3'");
+  await wait("!document.querySelector('[data-source=wechat] [data-new-matches]').hidden");
+  assert.equal(await evaluate("document.querySelector('[data-gid=unmatched] [data-course]').value"),'c2','Async matching must preserve the unsaved manual correction');
+  await evaluate("document.querySelector('[data-reset-selection]').click()");
+  assert.equal(await evaluate("document.querySelector('[data-gid=unmatched] [data-course]').value"),'c1');
+  await evaluate("groupCheck.matching.wechat.state='error';groupCheck.matching.wechat.error='合成匹配失败';");
+  await wait("!document.querySelector('[data-match-retry]').hidden");
+  await evaluate("document.querySelector('[data-match-retry]').click()");
+  await wait("!document.querySelector('[data-match-cancel]').hidden");
+  await evaluate("document.querySelector('[data-match-cancel]').click()");
+  await wait("groupCheck.calls.some(row=>row.route==='/sources/wechat/match'&&row.method==='DELETE')");
+  assert.equal(await evaluate("groupCheck.calls.find(row=>row.route==='/sources/wechat/match'&&row.method==='POST').body.expected_revision"),'r1');
+  await evaluate("groupCheck.semanticMatches={};groupCheck.matching.wechat={state:'done',completed:0,total:0,result_revision:'m4'};document.querySelector('[data-refresh]').click()");
+  await wait("!document.querySelector('[data-gid=unmatched]')");
   assert.equal(await evaluate("document.querySelector('[data-gid=g2] [data-course]').value"),'c2');
+  assert(await evaluate("!document.querySelector('[data-gid=g1] [data-auto-extract]').checked && !document.querySelector('[data-gid=g1] [data-auto-apply]').checked"),'Preserve saved disabled preferences');
+  await evaluate("document.querySelector('[data-gid=g2] [data-selected]').click()");
+  assert(await evaluate("document.querySelector('[data-gid=g2] [data-auto-extract]').checked && document.querySelector('[data-gid=g2] [data-auto-apply]').checked"),'New single selection enables both defaults');
+  await evaluate("document.querySelector('[data-gid=g2] [data-auto-extract]').click()");
+  assert(await evaluate("!document.querySelector('[data-gid=g2] [data-auto-apply]').checked"));
+  await evaluate("document.querySelector('[data-gid=g2] [data-auto-apply]').click()");
+  assert(await evaluate("document.querySelector('[data-gid=g2] [data-auto-extract]').checked"));
+  await evaluate("document.querySelector('[data-reset-selection]').click()");
   assert(await evaluate("!document.querySelector('[data-gid=old]') && !document.querySelector('[data-gid=unmatched]')"));
   await evaluate("document.querySelector('[data-source=wechat] [data-show-all]').click()");
   assert.equal(await evaluate("document.querySelectorAll('[data-gid]').length"),8);
@@ -83,6 +140,12 @@ try{
   assert(await evaluate("document.querySelector('[data-gid=g2] [data-selected]').checked"));
   assert(await evaluate("document.querySelector('[data-save-status]').textContent.includes('未保存') && !document.querySelector('[data-save-selection]').disabled"));
   assert.equal(await evaluate("groupCheck.calls.filter(row=>row.method==='PUT').length"),0,'Selecting groups never saves silently');
+  assert(await evaluate("[...document.querySelectorAll('[data-gid]:not([data-gid=g1])')].every(row=>row.querySelector('[data-auto-extract]').checked&&row.querySelector('[data-auto-apply]').checked)"),'Bulk selection uses the same defaults');
+  assert(await evaluate("document.querySelector('[data-gid=g2] summary').textContent.includes('待指定可信发送者')"));
+  await evaluate("document.querySelector('[data-save-selection]').click()");
+  assert(await evaluate("document.querySelector('[data-save-status]').textContent.includes('确认正文发送范围') && document.querySelector('.gm-sync-settings').open"));
+  assert.equal(await evaluate("groupCheck.calls.filter(row=>row.method==='PUT').length"),0,'AI consent remains explicit');
+  await evaluate("var allow=document.querySelector('[data-source=wechat] [name=allow_ai]');allow.checked=true;allow.dispatchEvent(new Event('change',{bubbles:true}))");
   await evaluate("groupCheck.failSave=true;document.querySelector('[data-save-selection]').click()");
   await wait("document.querySelector('[data-save-status]').textContent.includes('保存未完成')");
   assert.equal(await evaluate('groupCheck.sources.wechat.selected.length'),1);
@@ -91,6 +154,7 @@ try{
   await wait("document.querySelector('[data-save-selection]').disabled && document.querySelector('[data-selection-fields]').disabled");
   await wait("groupCheck.sources.wechat.selected.length===6 && document.querySelector('[data-save-status]').textContent.includes('已保存 6') && !document.querySelector('[data-selection-fields]').disabled");
   assert(await evaluate("document.querySelector('[data-save-selection]').disabled && document.querySelector('[data-reset-selection]').hidden"));
+  assert(await evaluate("groupCheck.sources.wechat.selected.filter(row=>row.id!=='g1').every(row=>row.auto_extract&&row.auto_apply&&!row.trusted_senders.length)"),'Defaults can be saved before senders are available');
   // Invalid associations stay editable and never reach the server.
   const savedWrites=await evaluate("groupCheck.calls.filter(row=>row.method==='PUT').length");
   await evaluate("var field=document.querySelector('[data-gid=g2] [data-course]');field.value='';field.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-save-selection]').click()");
@@ -105,8 +169,6 @@ try{
   await evaluate("document.querySelector('[data-close]').click();document.querySelector('[data-gid=g1] [data-senders]').click()");await wait("document.querySelector('[data-trust-form]')");
   await evaluate("document.querySelector('[name=sender][value=teacher]').checked=true;document.querySelector('[data-trust-form]').requestSubmit()");
   await evaluate("var root=document.querySelector('[data-gid=g1]');for(var attr of ['data-auto-extract','data-auto-apply']){var input=root.querySelector('['+attr+']');input.checked=true;input.dispatchEvent(new Event('change',{bubbles:true}));}document.querySelector('[data-save-selection]').click()");
-  assert(await evaluate("document.querySelector('[data-save-status]').textContent.includes('确认正文发送范围') && document.querySelector('.gm-sync-settings').open"));
-  await evaluate("var allow=document.querySelector('[data-source=wechat] [name=allow_ai]');allow.checked=true;allow.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('[data-save-selection]').click()");
   await wait("groupCheck.sources.wechat.enabled && groupCheck.sources.wechat.selected[0].auto_apply");
   assert.deepEqual(await evaluate('groupCheck.sources.wechat.selected[0].trusted_senders'),['teacher']);
   assert.equal(await evaluate("groupCheck.calls.find(row=>row.method==='PUT').body.expected_revision"),'r1');
@@ -160,5 +222,5 @@ try{
   assert.equal(await evaluate('groupCheck.calls.length'),count,'No polling after unmount');
   assert(await evaluate("!document.querySelector('dialog[open]') && !oldGroup.classList.contains('group-messages') && ![...document.querySelectorAll('link[rel=stylesheet]')].some(link=>link.href.includes('/group-messages/'))"));
   assert.deepEqual(errors,[]);
-  console.log('PASS: compact multi-group selection, explicit save/retry/reset, draft retention, course/AI validation, trust, evidence/apply/undo, QQ token clearing, four desktop/mobile themes and lifecycle cleanup');
+  console.log('PASS: connection duplicate/queue/progress/remount/retry, compact multi-group selection, explicit save/retry/reset, draft retention, course/AI validation, trust, evidence/apply/undo, QQ token clearing, four desktop/mobile themes and lifecycle cleanup');
 }finally{socket?.close();browser('close');}

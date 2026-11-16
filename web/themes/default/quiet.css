@@ -1,0 +1,61 @@
+/* Default's reading surfaces; other themes keep their own visual language. */
+:root[data-theme="default"][data-ui-theme] {
+  --bg:#f6f7f9;
+  --paper:#fff;
+  --surface-low:#f4f6f8;
+  --surface:#edf1f5;
+  --border:#e7ebf0;
+  --text:#354052;
+  --muted:#606e80;
+}
+
+html[data-theme="default"] .sidebar { background:#f0f3f7; color:var(--text); border-right:1px solid var(--border); --scroll-thumb:#c4ccd7; }
+html[data-theme="default"] .brand { color:var(--text); }
+html[data-theme="default"] .brand small { color:var(--muted); }
+html[data-theme="default"] #navigation a { color:var(--muted); border-radius:9px; font-weight:400; }
+html[data-theme="default"] #navigation a:hover { background:#e8edf3; color:var(--text); }
+html[data-theme="default"] #navigation a.active { background:#e1e8f1; color:#365477; font-weight:600; }
+html[data-theme="default"] .nav-icon { color:#6c8099; }
+html[data-theme="default"] .nav-divider { background:#dde4ec; }
+html[data-theme="default"] .sidebar-footer { border-color:var(--border); color:var(--muted); }
+html[data-theme="default"] .sidebar-bottom,html[data-theme="default"] .sidebar-bottom small { color:var(--muted); }
+html[data-theme="default"] .sidebar-appearance,html[data-theme="default"] .sidebar-appearance small { border-color:var(--border); color:var(--muted); }
+html[data-theme="default"] .sidebar-appearance:hover { background:#e8edf3; color:var(--text); }
+html[data-theme="default"] .topbar { border-bottom-color:transparent; }
+html[data-theme="default"] h1 { font-size:24px; font-weight:600; }
+html[data-theme="default"] .page-heading { margin-bottom:22px; }
+
+/* A single surface gives the assistant one clear point of emphasis. */
+html[data-theme="default"] .study-chat-card:not(.module-focused):has(.study-launcher) { border:0; background:transparent; }
+html[data-theme="default"] .study-chat-card:not(.module-focused) .academic-chat { padding:0; background:transparent; }
+html[data-theme="default"] .academic-chat .study-launcher { min-height:96px; padding:18px 22px; gap:14px; border:1px solid #e1e8f0; border-radius:12px; background:#edf2f7; }
+html[data-theme="default"] .academic-chat .study-launcher:hover { border-color:#a6b8cf; box-shadow:none; background:#e8eff6; }
+html[data-theme="default"] .academic-chat .study-launcher-icon { width:40px; height:40px; border:0; background:transparent; }
+html[data-theme="default"] .academic-chat .study-launcher-icon svg { width:26px; height:26px; }
+html[data-theme="default"] .academic-chat .study-launcher-title { font-size:17px; font-weight:600; }
+html[data-theme="default"] .academic-chat .study-launcher-badge { border:0; background:#e0e8f1; font-weight:500; }
+html[data-theme="default"] .academic-chat .study-launcher-description { font-size:13px; }
+html[data-theme="default"] .academic-chat .study-launcher-cta { min-height:44px; padding:9px 16px; font-size:13px; font-weight:500; }
+
+html[data-theme="default"] .overview-card { border-color:transparent; }
+html[data-theme="default"] .campus-overview .overview-focus-heading h2 { font-size:19px; font-weight:600; }
+html[data-theme="default"] .campus-overview .overview-focus-heading>.button-primary { background:transparent; border-color:transparent; color:var(--link); font-weight:500; }
+html[data-theme="default"] .campus-overview .overview-focus-heading>.button-primary:hover { background:var(--surface-low); }
+html[data-theme="default"] .campus-overview .overview-attention { padding:16px 0; margin-bottom:26px; border-top:0; }
+html[data-theme="default"] .campus-overview .overview-attention a { border-right:0; }
+html[data-theme="default"] .campus-overview .overview-attention span { color:var(--muted); }
+html[data-theme="default"] .campus-overview .overview-attention strong { font-size:23px; font-weight:600; }
+html[data-theme="default"] .campus-overview .overview-heading h3 { font-size:15px; font-weight:600; }
+html[data-theme="default"] .campus-overview .overview-task { padding-block:16px; }
+html[data-theme="default"] .campus-overview .overview-task h4 { font-weight:500; }
+html[data-theme="default"] .campus-overview .overview-task .deadline-stamp time { font-weight:600; }
+html[data-theme="default"] .campus-overview .overview-task .deadline-relative { font-weight:400; }
+html[data-theme="default"] .campus-overview .overview-agenda-item strong { font-weight:500; }
+
+@media(max-width:600px) {
+  html[data-theme="default"] h1 { font-size:22px; }
+  html[data-theme="default"] .academic-chat .study-launcher { padding:16px; gap:12px 10px; min-height:0; }
+  html[data-theme="default"] .academic-chat .study-launcher-description { font-size:12px; }
+  html[data-theme="default"] .campus-overview .overview-attention a { padding-inline:8px; }
+  html[data-theme="default"] .campus-overview .overview-attention strong { font-size:22px; }
+}

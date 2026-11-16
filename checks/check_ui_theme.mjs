@@ -44,6 +44,7 @@ function fixture(modules,categories, themeCatalog) {
     if(path==='/modules/academic-assistant/presets')return response({items:[{label:'本周作业',message:'合成问题'}]});
     if(path==='/modules/dashboard/sync')return response({status:'ready'});
     if(path==='/modules/assignments/sync')return response({status:'ready'});
+    if(path==='/modules/assignments/view-state')return response({account_revision:'synthetic-account'});
     if(path==='/modules/assignments/deadline') {
       const body=JSON.parse(options.body);state.deadlineWrites.push(body);
       if(body.due_at===null)delete state.dues[body.assignment_id];else state.dues[body.assignment_id]=body.due_at;
@@ -125,6 +126,7 @@ try {
   await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1060,deviceScaleFactor:1,mobile:false});
   await evaluate("document.querySelector('.overview-attention [data-tone=urgent]').click()");
   await wait("document.querySelector('.assignment-board [data-view=urgent][aria-pressed=true]')");
+  await wait("getComputedStyle(document.querySelector('[data-pending] .assignment-card')).display==='grid'");
   assert.equal(await evaluate("document.querySelectorAll('[data-pending] .assignment-card').length"),2,'Homepage urgency links apply the filter');
   assert(await evaluate("[...document.querySelectorAll('[data-pending] .assignment-card')].every(item=>item.dataset.priority==='urgent')"));
   assert(await evaluate("document.querySelector('[data-pending] .deadline-date') && document.querySelector('[data-pending] .deadline-relative') && document.querySelector('[data-pending] .assignment-card').getBoundingClientRect().height<120"),'Compact rows retain the date, time and remaining duration');

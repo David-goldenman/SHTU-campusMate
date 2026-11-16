@@ -1,0 +1,13 @@
+{
+  "name": "campusmate-desktop",
+  "productName": "campusMate",
+  "version": "0.2.0",
+  "description": "本机校园资料与学习工作台",
+  "author": "campusMate team",
+  "private": true,
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0"
+  }
+}

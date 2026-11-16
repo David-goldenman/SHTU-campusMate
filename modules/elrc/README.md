@@ -21,6 +21,9 @@
 | `POST /sync`（202） | 后台刷新来源课程、章节及录播目录 |
 | `GET /recording?course_id=...&recording_id=...` | 读取共享录播目录中的课次及流标识 |
 | `GET /transcript?stream_id=...` | 按已发现的流读取转写和学校摘要 |
+| `GET /playback?lesson_id=...` | 为当前账号目录中已知的录播打开临时播放会话，返回课次列表；缓存课次默认选中对应课堂 |
+| `GET /playback/{token}/sources?lesson=...` | 查询指定课次的教师、全景、屏幕画面，只返回本地播放入口 |
+| `GET/HEAD /playback/{token}/media/{source_id}` | 按 HTTP Range 读取视频；每次最多 4 MiB，支持进度拖动 |
 | `GET /catalog?semester=current` | 本地课程、学期、缓存计数；也支持 `all` 或目录中的学期 ID |
 | `POST /discover`，`{"semester":"current"}` | 从学校刷新课程目录 |
 | `GET /sync` | 最近一次同步状态及当前课次 |
@@ -37,8 +40,16 @@
 - 学校请求通过 `context.auth.authenticated_client("ids", target="elrc")`；不复制 QJQ 的独立登录、凭据或 Cookie 文件。
 - 缓存仅位于本模块 `context.data_dir`，进度使用 `context.store`。模块不保存账号秘密。
 - 按学校的 `detail.courseId` 和学期关联录播，避免同名课程串课；时间轴保持原项目的 100 纳秒转换（除以 10,000,000）。
-- 课件显示目录并引导打开学校课程页，不下载视频或绕过学校访问权限。
+- 课件显示目录并引导打开学校课程页。录播可在课程中心播放，仅访问学校已授权的教学社区地址；视频分段经过本地后台，不整段落盘，学校凭据和上游播放地址不发送到页面。
+- 播放会话只存在于内存，按账号版本隔离，闲置 30 分钟后过期，最多保留 8 个；每个会话最多保留 48 个近期画面入口。模块停止时清理会话，换号后旧入口失效。视频内容不进入业务缓存，不持久保存观看历史。
+- 不允许任意视频 URL；画面只能来自已知录播的学校查询结果，跳转仍限制在教学社区 HTTPS 地址。来源不支持分段、返回登录页或无权限时显示错误，并保留原站入口。
 - 微信适配器、聊天归档、原独立桌面安装器和私人运行数据未迁入。
+
+## 播放器参考
+
+课次到媒体地址的接口顺序、画面分类及切换时保留播放状态，参考 [TechPie 的 ELRC client](https://github.com/HeZeBang/TechPie-flutter/blob/ff73ca0d922221895d4f8396969f658671696ee6/lib/services/elrc_client.dart) 与 [播放器](https://github.com/HeZeBang/TechPie-flutter/blob/ff73ca0d922221895d4f8396969f658671696ee6/lib/pages/elrc_player_page.dart)，参考提交 `ff73ca0d922221895d4f8396969f658671696ee6`。本项目按现有 Python 服务、账号隔离与浏览器原生视频控件实现，没有引入 Flutter/WebView 运行时或 TechPie 的登录服务。
+
+`python modules/elrc/checks/check_playback.py` 使用合成学校响应，覆盖已知录播校验、课次匹配、画面查询、Range、换号、过期、错误与清理。真实学校播放还受当前账号权限、学校服务与网络状态影响。
 
 ## 验证
 

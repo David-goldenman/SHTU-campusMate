@@ -1,0 +1,6 @@
+@import url('./vendor/katex/katex.min.css');
+
+.markdown-math { display:inline-block; max-width:100%; padding:.15em .05em; vertical-align:middle; overflow:auto; overflow-wrap:normal; line-height:normal; }
+.markdown-math-display { display:block; margin:.8em 0; padding:.25em .1em; }
+.markdown-math-display .katex-display { min-width:max-content; margin:0; }
+.markdown-math-error { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; }

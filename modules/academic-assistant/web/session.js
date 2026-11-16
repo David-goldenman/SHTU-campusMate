@@ -1,10 +1,10 @@
 // The background mount owns transport; page mounts only observe the current turn.
 export function createChatSession() {
   let context, owner, turn;
-  const listeners = new Set(), drafts = new Map();
+  const listeners = new Set(), drafts = new Map(), composerModes = new Map();
   const notify = () => {for (const listener of listeners) listener(turn);};
   function reset() {
-    turn?.controller.abort();turn = undefined;drafts.clear();
+    turn?.controller.abort();turn = undefined;drafts.clear();composerModes.clear();
   }
   function attach(next) {
     reset();context = next;owner = undefined;
@@ -29,6 +29,8 @@ export function createChatSession() {
       if (!current.conversationId) {
         current.conversationId = (await transport.api('/conversations',{method:'POST',signal:current.controller.signal})).id;
         if (turn !== current) return;
+        composerModes.delete('');
+        if (current.composer.modeId) composerModes.set(current.conversationId,current.composer.modeId);
         notify();
       }
       await transport.api('/chat/stream',{method:'POST',body:{message:current.message,conversation_id:current.conversationId},signal:current.controller.signal,onEvent(value) {
@@ -49,22 +51,23 @@ export function createChatSession() {
     } catch (error) {
       current.status = current.controller.signal.aborted ? 'stopped' : 'error';
       current.error = (current.status === 'stopped' ? '已停止生成，问题保留在输入框中。' : error.message) + (current.changes.length ? ' 已保存的本地修改见回执，请勿重复执行。' : '');
-      if (turn === current) drafts.set(current.conversationId || '',current.message);
+      if (turn === current) drafts.set(current.conversationId || '',current.composer.text);
     } finally {
       if (turn === current) notify();
     }
   }
-  function start(identity, message, messages) {
+  function start(identity, message, messages, composer = {text:message,modeId:''}) {
     if (!context || context.signal.aborted) throw new Error('对话服务尚未就绪，请刷新页面后重试。');
     if (turn?.status === 'running') return;
     drafts.delete(identity || '');
-    turn = {conversationId:identity,message,messages:[...messages],text:'',steps:[],changes:[],approvals:[],status:'running',controller:new AbortController()};
+    if (composer.modeId) composerModes.set(identity || '',composer.modeId);else composerModes.delete(identity || '');
+    turn = {conversationId:identity,message,composer:{text:composer.text,modeId:composer.modeId || ''},messages:[...messages],text:'',steps:[],changes:[],approvals:[],status:'running',controller:new AbortController()};
     const current = turn;
     notify();
     current.finished = run(current,context);
     return current;
   }
-  return {attach,bindOwner,subscribe,start,drafts,
+  return {attach,bindOwner,subscribe,start,drafts,composerModes,
     get current() {return turn;},
     stop() {turn?.controller.abort();},
     forget(identity) {if (turn?.conversationId === identity && turn.status !== 'running') turn = undefined;},

@@ -111,7 +111,13 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat .study-error:empty { display:none; }
 .academic-chat [data-retry] { flex:none; font-size:12px; }
 .academic-chat .study-privacy { margin:10px auto 0; color:var(--muted); font-size:12px; text-align:center; }
-.academic-chat .study-starters { display:none; }
+.academic-chat .study-starters { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 10px; }
+.academic-chat .study-mode-preview { margin:8px 4px; padding:10px 12px; border-left:2px solid var(--nord9); background:var(--surface); border-radius:6px; font-size:13px; }
+.academic-chat .study-mode-preview p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.academic-chat .study-mode-preview details { margin-top:6px; color:var(--muted); }
+.academic-chat .study-mode-preview details p { margin-top:8px; }
+.academic-chat .study-mode-hint { margin:8px 4px; font-size:12px; }
+.academic-chat [data-mode-limit] { margin:6px 4px; font-size:12px; }
 .academic-chat .is-empty { justify-content:center; padding-bottom:clamp(40px,10vh,120px); }
 .academic-chat .is-empty .study-scroll { flex:none; }
 .academic-chat .is-empty .study-messages { height:auto; overflow:visible; padding:0 28px; }
@@ -120,10 +126,10 @@ main:has(.study-chat-card.module-focused)>.page-heading { display:none; }
 .academic-chat .study-welcome-mark { color:var(--link); font-size:37px; line-height:1; }
 .academic-chat .study-welcome h3 { margin:0; font-size:28px; line-height:1.5; font-weight:600; letter-spacing:-.4px; }
 .academic-chat .study-welcome p { margin:10px 0 0; color:var(--muted); font-size:14px; }
-.academic-chat .is-empty .study-starters { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; max-width:var(--study-width); margin:18px auto 0; }
-.academic-chat .study-starters button { display:flex; align-items:center; gap:14px; min-height:44px; padding:8px 16px; border:1px solid var(--border); border-radius:24px; background:var(--paper); color:var(--muted); font-size:13px; }
+.academic-chat .study-starters button { display:flex; align-items:center; min-height:36px; padding:7px 12px; border:1px solid var(--border); border-radius:20px; background:var(--paper); color:var(--muted); font-size:13px; }
 .academic-chat .study-starters button:hover { border-color:var(--nord9); background:var(--surface); color:var(--text); }
-.academic-chat .study-starters span { color:var(--link); }
+.academic-chat .study-starters button[aria-pressed=true] { color:var(--link); border-color:var(--nord9); background:var(--primary-container,var(--surface)); font-weight:600; }
+.academic-chat .study-starters button:disabled { cursor:default; opacity:.65; }
 .academic-chat .is-empty .study-privacy { margin-top:18px; }
 .academic-chat .study-progress { margin:0 0 16px; border:1px solid var(--border); border-radius:12px; color:var(--muted); font-size:13px; }
 .academic-chat .study-progress>summary { display:flex; align-items:center; gap:8px; min-height:44px; padding:10px 12px; }

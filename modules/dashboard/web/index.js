@@ -15,7 +15,7 @@ export async function mount(container,context) {
   const sourceNames = {timetable:'课表',blackboard:'Blackboard',gradescope:'Gradescope',ecourse:'E 云课堂',piazza:'Piazza',elrc:'教学社区',mail:'邮箱'};
   const typeNames = {class:'课程',deadline:'截止',quiz:'Quiz',presentation:'展示',exam:'考试',activity:'活动',lecture:'讲座',calendar:'校历'};
   function draw(body,snapshot) {
-    const labels = {ready:'已同步',partial:'部分数据可用',cached:'本地缓存',syncing:'同步中',error:'读取失败',not_connected:'未连接',login_required:'需要登录',verification_required:'需要验证'};
+    const labels = {ready:'已同步',partial:'部分数据可用',cached:'本地缓存',syncing:'同步中',error:'读取失败',not_synced:'等待首次同步',not_connected:'未连接',login_required:'需要登录',verification_required:'需要验证'};
     const metadata = snapshot.data.metadata.source_metadata || {};
     const waiting = Object.values(metadata).every(source => source.status === 'not_connected');
     const assignmentUnavailable = snapshot.assignment_coverage?.status === 'unavailable';
@@ -56,7 +56,7 @@ export async function mount(container,context) {
   const cleanup = await sourcePanel(container,context,(body,snapshot) => {
     latest=snapshot;host=body;draw(body,snapshot);
     container.append(container.querySelector('.source-toolbar'));
-  }, {snapshotPath:'/summary'});
+  }, {snapshotPath:'/summary',refreshEvent:'campus:mail-updated',cache:true});
   if (!context.signal.aborted) timer=setInterval(()=>{if(latest && !container.contains(document.activeElement))draw(host,latest);},60000);
   if (!context.signal.aborted && ['observatory','star-notes'].includes(context.theme?.id)) removeMoment = mountCampusMoment(container,'dashboard',context.signal);
   return () => {cleanup();dispose();};

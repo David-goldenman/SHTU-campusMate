@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .service import Notifications, ImportedNotice
@@ -41,12 +42,12 @@ def create_router(context):
     @router.put('/agent/settings')
     async def agent_settings(body: dict):
         response = await context.api('campus-agent', '/settings', method='PUT', body=body)
-        return response.json()
+        return JSONResponse(response.json(), status_code=response.status_code)
 
     @router.post('/agent/check', status_code=202)
     async def agent_check():
         response = await context.api('campus-agent', '/check', method='POST')
-        return response.json()
+        return JSONResponse(response.json(), status_code=response.status_code)
 
     @router.post('/proposals/{identity}/{action}')
     async def proposal(identity: str, action: str):

@@ -3,6 +3,15 @@ import {escape} from './shared.js';
 const names = {blackboard:'Blackboard',elrc:'虚拟教学社区',ecourse:'E 云课堂',timetable:'教务与课表'};
 const statuses = {ready:'已连接',not_connected:'待连接',login_required:'需要登录',verification_required:'需要验证',error:'暂不可用'};
 
+export function recoveryHint(provider) {
+  const recovery=provider.recovery?.status;
+  if (recovery==='running') return '正在恢复登录，其他读取会共用本次恢复结果。';
+  if (recovery==='paused') return '自动恢复已暂停。请更新凭据或主动重新连接，避免重复尝试已失效的登录。';
+  if (recovery==='manual_required') return '请打开官方登录窗口完成验证，其他已连接服务仍可使用。';
+  if (provider.id === 'coremail' && provider.imap?.configured) return 'IMAP 专用密码已加密保存，读取邮件时直接连接，无需每次在浏览器验证。';
+  return provider.automatic_recovery ? '同步前检查登录，过期后自动尝试恢复一次。' : provider.id === 'ids' ? '登录一次即可自动连接校内服务；绑定本机设备或保存密码后，可在统一登录过期时自动恢复。' : provider.id === 'coremail' ? '邮箱单独连接；会话失效时，请重新打开官方登录窗口。' : '当前使用平台独立账号。仅连接会话时，过期需重新登录；保存密码后可自动尝试恢复。';
+}
+
 export function schoolServices(provider) {
   const services = Object.keys(names).map(id => ({id,status:'not_connected',...(provider.services || []).find(item => item.id === id)}));
   const connection = provider.connection || {}, running = connection.status === 'connecting';
