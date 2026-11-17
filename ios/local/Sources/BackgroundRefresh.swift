@@ -141,13 +141,15 @@ enum BackgroundRefresh {
             throw Failure("本地服务尚未就绪")
         }
         let defaults = UserDefaults.standard
-        if !force, let last = defaults.object(forKey: lastPassKey) as? Double,
-           Date().timeIntervalSince1970 - last < passCooldown {
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        let recent = (defaults.object(forKey: lastPassKey) as? Double).map { Date().timeIntervalSince1970 - $0 < passCooldown } ?? false
+        let token = try await bootstrapToken(base)
+        guard force || !recent else {
+            // Nothing new to fetch, but keep the deterministic reminders fresh.
+            await scheduleDeadlines(base: base, token: token)
             return
         }
         defaults.set(Date().timeIntervalSince1970, forKey: lastPassKey)
-        let base = URL(string: "http://127.0.0.1:\(port)")!
-        let token = try await bootstrapToken(base)
         // Each call is optional: a disabled module answers 404/409 and that
         // must not stop the rest of the pass.
         for path in ["/api/v1/modules/mail/sync",
@@ -160,6 +162,53 @@ enum BackgroundRefresh {
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = payload["items"] as? [[String: Any]] else { return }
         await deliver(items)
+        await scheduleDeadlines(base: base, token: token)
+    }
+
+    /// Deadline reminders are scheduled with calendar triggers, so iOS fires
+    /// them even when campusMate has not been opened for days. Re-running is
+    /// idempotent: the identifier carries the item and the offset.
+    private static func scheduleDeadlines(base: URL, token: String) async {
+        guard let data = try? await call(base, "/api/v1/modules/assignments/snapshot", token: token),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let pending = payload["pending"] as? [[String: Any]] else { return }
+        let center = UNUserNotificationCenter.current()
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let fallback = ISO8601DateFormatter()
+        var scheduled = 0
+        for item in pending.prefix(20) {
+            guard let identity = item["id"] as? String,
+                  let title = item["title"] as? String,
+                  let text = item["due_at"] as? String,
+                  let due = parser.date(from: text) ?? fallback.date(from: text) else { continue }
+            let course = item["course_title"] as? String ?? ""
+            for (offset, label) in [(86_400.0, "还有 1 天"), (10_800.0, "还有 3 小时")] {
+                let fire = due.addingTimeInterval(-offset)
+                guard fire > Date().addingTimeInterval(60) else { continue }
+                let content = UNMutableNotificationContent()
+                content.title = "作业截止" + label
+                content.body = [course, title].filter { !$0.isEmpty }.joined(separator: " · ")
+                content.sound = .default
+                let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+                let request = UNNotificationRequest(identifier: "deadline:\(identity):\(Int(offset))",
+                                                    content: content,
+                                                    trigger: UNCalendarNotificationTrigger(dateMatching: parts, repeats: false))
+                try? await center.add(request)
+                scheduled += 1
+            }
+        }
+        if scheduled > 0 {
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "campusMate.deadlines.scheduled")
+        }
+    }
+
+    /// Called when the app becomes ready: refresh the reminders without a sync.
+    static func scheduleDeadlinesNow() async {
+        guard case .ready(let port) = LocalRuntime.shared.state else { return }
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        guard let token = try? await bootstrapToken(base) else { return }
+        await scheduleDeadlines(base: base, token: token)
     }
 
     private static func deliver(_ items: [[String: Any]]) async {

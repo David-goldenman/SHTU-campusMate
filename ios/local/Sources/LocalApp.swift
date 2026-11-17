@@ -101,6 +101,8 @@ struct RootView: View {
                 if case .ready = state {
                     pageIssue = nil
                     reloadToken += 1
+                    // Deterministic reminders only need the local API once.
+                    Task { await BackgroundRefresh.scheduleDeadlinesNow() }
                 }
             }
             .ignoresSafeArea(edges: .bottom)
