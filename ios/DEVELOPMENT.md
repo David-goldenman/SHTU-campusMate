@@ -44,8 +44,12 @@ dev 构建多一个侧边栏入口 **开发者模式**（`web/app.js`），里�
 
 ## 后台与通知
 
-- 后台同步由 `BGAppRefreshTask` 驱动（`Sources/BackgroundRefresh.swift`），在 `AppDelegate` 里注册，进后台与回前台都会重排；
-- 一次后台任务约 30 秒，只做"同步 + 读通知快照 + 投递本地通知"，失败的下次再来；
+- 后台同步由 `BGAppRefreshTask`（约 30 秒）与 `BGProcessingTask`（数分钟，系统择机）驱动
+  （`Sources/BackgroundRefresh.swift`），在 `AppDelegate` 里注册，进后台与回前台都会重排；
+- 一次刷新只做"同步 + 读通知快照 + 投递本地通知"：单次最多 3 条、5 分钟内不重复跑，
+  已投递/同内容（哈希）的通知绝不再发；
+- 服务线程可能在挂起期间结束：回前台先探活 `/api/v1/health`，失败就重新执行 `boot.py`
+  （新端口、页面自动重载），重启次数有上限，避免死循环；
 - iOS 不允许常驻后台，通知时效由系统调度决定；需要即时推送时只能引入服务端 APNs；
 - 新增后台动作时保持幂等，并在 `BackgroundRefresh.pass()` 里按"可选调用"处理模块未启用的 404/409。
 

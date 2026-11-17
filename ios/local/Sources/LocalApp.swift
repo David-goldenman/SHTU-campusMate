@@ -21,9 +21,17 @@ struct CampusMateLocalApp: App {
                         BackgroundRefresh.keepAlive()
                     case .active:
                         BackgroundRefresh.schedule(after: 10 * 60)
+                        runtime.startIfNeeded()
+                        // The page stays on screen while iOS suspends the app;
+                        // the interpreter may be gone, so probe once the app is
+                        // active and restart it when the port no longer answers.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { runtime.verify() }
                     default:
                         break
                     }
+                }
+                .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { _ in
+                    if scenePhase == .active { runtime.verify() }
                 }
         }
     }
@@ -87,6 +95,14 @@ struct RootView: View {
                 showImportAlert = true
             })
             .id(reloadToken)
+            .onReceive(runtime.$state) { state in
+                // A restarted interpreter listens on a new port; reload once it
+                // is ready so the page stops pointing at the dead one.
+                if case .ready = state {
+                    pageIssue = nil
+                    reloadToken += 1
+                }
+            }
             .ignoresSafeArea(edges: .bottom)
             .overlay(alignment: .top) {
                 if let pageIssue, !pageIssue.isEmpty {

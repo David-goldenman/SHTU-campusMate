@@ -14,8 +14,20 @@ enum BackgroundRefresh {
         (Bundle.main.bundleIdentifier ?? "edu.shanghaitech.campusmate.local.dev") + ".refresh"
     }
 
+    /// A longer, system-scheduled window (minutes instead of ~30 s), used when
+    /// iOS decides the device is idle enough — typically while charging.
+    static var processingIdentifier: String {
+        (Bundle.main.bundleIdentifier ?? "edu.shanghaitech.campusmate.local.dev") + ".sync"
+    }
+
     private static let notifiedKey = "campusMate.notified.notices"
+    private static let hashesKey = "campusMate.notified.hashes"
     private static let lastPassKey = "campusMate.background.lastPass"
+    /// A wake-up within this window is skipped: iOS may call the refresh task
+    /// and the background keep-alive back to back.
+    private static let passCooldown: TimeInterval = 5 * 60
+    /// Never flood the lock screen; the rest arrives on the next pass.
+    private static let batchLimit = 3
     private static var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     // MARK: - Registration
@@ -27,6 +39,13 @@ enum BackgroundRefresh {
                 return
             }
             handle(task)
+        }
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: processingIdentifier, using: nil) { task in
+            guard let task = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            handleProcessing(task)
         }
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
     }
@@ -40,6 +59,14 @@ enum BackgroundRefresh {
         request.earliestBeginDate = Date(timeIntervalSinceNow: seconds)
         try? BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskIdentifier)
         try? BGTaskScheduler.shared.submit(request)
+        // Processing tasks are allowed to run much longer but may wait hours
+        // for a convenient moment; ask for one roughly every four hours.
+        let processing = BGProcessingTaskRequest(identifier: processingIdentifier)
+        processing.requiresNetworkConnectivity = true
+        processing.requiresExternalPower = false
+        processing.earliestBeginDate = Date(timeIntervalSinceNow: 4 * 60 * 60)
+        try? BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: processingIdentifier)
+        try? BGTaskScheduler.shared.submit(processing)
     }
 
     /// Runs a short pass immediately; used when the app goes to the background
@@ -90,15 +117,35 @@ enum BackgroundRefresh {
 
     /// Manual trigger from the developer panel.
     static func runNow() async {
-        _ = try? await pass()
+        _ = try? await pass(force: true)
+    }
+
+    private static func handleProcessing(_ task: BGProcessingTask) {
+        schedule()
+        let work = Task { () -> Bool in
+            do {
+                try await pass(force: true)
+                return true
+            } catch {
+                return false
+            }
+        }
+        task.expirationHandler = { work.cancel() }
+        Task { task.setTaskCompleted(success: await work.value) }
     }
 
     // MARK: - One sync pass
 
-    private static func pass() async throws {
+    private static func pass(force: Bool = false) async throws {
         guard case .ready(let port) = LocalRuntime.shared.state else {
             throw Failure("本地服务尚未就绪")
         }
+        let defaults = UserDefaults.standard
+        if !force, let last = defaults.object(forKey: lastPassKey) as? Double,
+           Date().timeIntervalSince1970 - last < passCooldown {
+            return
+        }
+        defaults.set(Date().timeIntervalSince1970, forKey: lastPassKey)
         let base = URL(string: "http://127.0.0.1:\(port)")!
         let token = try await bootstrapToken(base)
         // Each call is optional: a disabled module answers 404/409 and that
@@ -112,30 +159,53 @@ enum BackgroundRefresh {
         guard let data = try? await call(base, "/api/v1/modules/notifications/snapshot", token: token),
               let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let items = payload["items"] as? [[String: Any]] else { return }
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastPassKey)
         await deliver(items)
     }
 
     private static func deliver(_ items: [[String: Any]]) async {
-        var notified = Set(UserDefaults.standard.stringArray(forKey: notifiedKey) ?? [])
+        let defaults = UserDefaults.standard
+        var notified = Set(defaults.stringArray(forKey: notifiedKey) ?? [])
+        var hashes = Set(defaults.stringArray(forKey: hashesKey) ?? [])
         let center = UNUserNotificationCenter.current()
+        // Notices that are still on the lock screen must not be posted again
+        // after a relaunch: the system keeps them across app starts.
+        let onScreen = Set(await center.deliveredNotifications().map(\.request.identifier))
+        var sent = 0
         for item in items {
+            guard sent < batchLimit else { break }
             guard let identity = item["id"] as? String,
                   item["read"] as? Bool != true,
                   item["expired"] as? Bool != true,
                   item["active"] as? Bool != false,
-                  !notified.contains(identity) else { continue }
+                  !notified.contains(identity),
+                  !onScreen.contains(identity) else { continue }
+            let title = item["title"] as? String ?? "campusMate"
+            let body = item["summary"] as? String ?? ""
+            // The notice id can change when the module regenerates its list;
+            // identical content must still only alert once.
+            let digest = contentHash(title + "\u{1F}" + body)
+            guard !hashes.contains(digest) else { continue }
             let content = UNMutableNotificationContent()
-            content.title = item["title"] as? String ?? "campusMate"
-            content.body = item["summary"] as? String ?? ""
+            content.title = title
+            content.body = body
             if item["importance"] as? String == "urgent" { content.sound = .default }
-            let request = UNNotificationRequest(identifier: identity, content: content, trigger: nil)
-            try? await center.add(request)
+            try? await center.add(UNNotificationRequest(identifier: identity, content: content, trigger: nil))
             notified.insert(identity)
+            hashes.insert(digest)
+            sent += 1
+            // Persist per notification: a crash must not replay the batch.
+            defaults.set(Array(notified.suffix(400)), forKey: notifiedKey)
+            defaults.set(Array(hashes.suffix(400)), forKey: hashesKey)
         }
-        // Keep the set from growing forever; notice ids are stable per revision.
-        let trimmed = Array(notified.suffix(400))
-        UserDefaults.standard.set(trimmed, forKey: notifiedKey)
+    }
+
+    private static func contentHash(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return String(hash, radix: 16)
     }
 
     // MARK: - Local API

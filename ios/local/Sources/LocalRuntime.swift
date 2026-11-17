@@ -8,7 +8,7 @@ final class LocalRuntime: ObservableObject {
     /// One runtime per process; background refresh reads its port.
     static let shared = LocalRuntime()
 
-    enum State {
+    enum State: Equatable {
         case idle
         case starting
         case ready(Int)
@@ -22,11 +22,38 @@ final class LocalRuntime: ObservableObject {
     @Published private(set) var showInfo = true
 
     private var started = false
+    private var booting = false
+    private var restarts = 0
     private var logPath = ""
     private var launchLogPath = ""
 
+    /// Called on launch and whenever the app comes back to the foreground.
+    /// iOS may end the interpreter thread while the app is suspended; the UI
+    /// then still shows the page, but every request fails, so boot it again.
+    func startIfNeeded() {
+        if case .ready = state { return }
+        if booting { return }
+        boot()
+    }
+
+    /// Restart after a health check failed, bounded so a broken build cannot
+    /// spin forever.
+    func recover() {
+        guard restarts < 3 else {
+            state = .failed("本地服务多次重启失败。\n\n\(Self.tail(of: logPath, lines: 12))")
+            return
+        }
+        restarts += 1
+        boot()
+    }
+
     func start() {
-        guard !started else { return }
+        startIfNeeded()
+    }
+
+    private func boot() {
+        guard !booting else { return }
+        booting = true
         started = true
         state = .starting
 
@@ -72,11 +99,16 @@ final class LocalRuntime: ObservableObject {
                 ?? bundle.appendingPathComponent("campusMateLocal").path
             let code = cm_start_python(home, script, portFile.path, executable, self.logPath)
             DispatchQueue.main.async {
+                self.booting = false
                 if code != 0 {
                     let tail = Self.tail(of: self.logPath, lines: 12)
                     self.state = .failed("Python 解释器启动失败（错误码 \(code)）。\n\n\(tail)")
                 } else {
-                    self.note("Python 退出（服务已停止）")
+                    // uvicorn ended: stay "failed" so the next foreground
+                    // activation runs boot() again instead of showing a page
+                    // that cannot reach its server.
+                    self.note("Python 退出（服务已停止），回到前台会重启")
+                    self.state = .failed("本地服务已停止，正在等待重启。")
                 }
             }
         }
@@ -135,6 +167,24 @@ final class LocalRuntime: ObservableObject {
         return text.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines).joined(separator: "\n")
     }
 
+    // MARK: - Watchdog
+
+    /// Verifies the port still answers; restarts Python when it does not.
+    func verify() {
+        guard case .ready(let port) = state, !booting else { return }
+        guard let url = URL(string: "http://127.0.0.1:\(port)/api/v1/health") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
+            DispatchQueue.main.async {
+                guard let self, case .ready = self.state else { return }
+                if (response as? HTTPURLResponse)?.statusCode == 200 { return }
+                self.note("服务无响应，准备重启")
+                self.recover()
+            }
+        }.resume()
+    }
+
     // MARK: - Readiness
 
     private func waitForPort(_ url: URL, attempts: Int) {
@@ -168,6 +218,7 @@ final class LocalRuntime: ObservableObject {
                 guard let self else { return }
                 if let http = response as? HTTPURLResponse, http.statusCode == 200 {
                     self.note("服务就绪 :\(port)")
+                    self.restarts = 0
                     self.state = .ready(port)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                         self.showInfo = false
